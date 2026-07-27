@@ -22,10 +22,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        fromService:
-          type: web
-          name: patchflow-frontend
-          property: url
+        value: https://patchflow-frontend.onrender.com
 
   # Next.js Frontend Service
   - type: web
@@ -37,13 +34,9 @@ services:
     startCommand: npm run start
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: patchflow-backend
-          property: url
+        value: https://patchflow-backend.onrender.com
 
 databases:
   - name: patchflow-db
     databaseName: chaos_agent
-    user: postgres
     region: oregon
