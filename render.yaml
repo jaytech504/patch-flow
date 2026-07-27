@@ -1,0 +1,49 @@
+services:
+  # FastAPI Backend Service
+  - type: web
+    name: patchflow-backend
+    env: python
+    region: oregon
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: patchflow-db
+          property: connectionString
+      - key: GEMMA_API_KEY
+        sync: false
+      - key: GEMMA_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai/
+      - key: GEMMA_MODEL
+        value: gemma-3-27b-it
+      - key: APP_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: patchflow-frontend
+          property: url
+
+  # Next.js Frontend Service
+  - type: web
+    name: patchflow-frontend
+    env: node
+    region: oregon
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: patchflow-backend
+          property: url
+
+databases:
+  - name: patchflow-db
+    databaseName: chaos_agent
+    user: postgres
+    region: oregon
