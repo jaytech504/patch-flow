@@ -293,7 +293,7 @@ The repo includes a deliberately vulnerable demo app (`demo_target/`) simulating
 
 | Layer | Technology |
 |-------|-----------|
-| **AI** | Gemma (gemma-3-27b-it) via Google AI Studio — tool-calling agentic loop |
+| **AI** | Gemma (gemma-4-26b-a4b-it) via Google AI Studio — tool-calling agentic loop |
 | **Backend** | FastAPI · Python 3.11 · async/await throughout |
 | **Database** | PostgreSQL with asyncpg + SQLAlchemy 2.0 (async) |
 | **Real-time** | WebSockets for live agent trace streaming |
