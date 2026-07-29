@@ -239,7 +239,7 @@ class BaseAgent(ABC):
                 tool_output=tool_output if isinstance(tool_output, (dict, list)) else None,
             )
             self.db.add(step)
-            await self.db.flush()
+            await self.db.commit()
 
     def _build_messages(self, task: str, context: dict = None) -> List[dict]:
         system = self.system_prompt

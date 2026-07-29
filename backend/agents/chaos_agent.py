@@ -103,7 +103,7 @@ Return JSON:
         session = await self.db.get(ChaosSession, self.session_id)
         if session:
             session.failures_injected = len(all_results)
-            await self.db.flush()
+            await self.db.commit()
 
         logger.info(f"[Chaos] Injected {len(all_results)} failures total")
         return all_results
@@ -166,7 +166,7 @@ Choose the most relevant failure modes to inject.""",
                     stack_trace_leaked=raw.get("stack_trace_leaked", False),
                 )
                 self.db.add(failure_record)
-                await self.db.flush()
+                await self.db.commit()
 
                 results.append({
                     "id": failure_record.id,
@@ -192,7 +192,7 @@ Choose the most relevant failure modes to inject.""",
         session = await self.db.get(ChaosSession, self.session_id)
         if session:
             session.status = status
-            await self.db.flush()
+            await self.db.commit()
 
     async def close(self):
         await self.proxy.close()

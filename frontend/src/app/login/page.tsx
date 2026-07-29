@@ -26,7 +26,7 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "An unexpected error occurred");
+      setError(`Failed to connect to backend at ${API_BASE_URL}. (${err.message || "Network Error"})`);
       setLoading(false);
     }
   };

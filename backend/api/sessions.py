@@ -145,6 +145,7 @@ async def start_session(
     # Persist only the chosen endpoints
     discovery = DiscoveryAgent(db, session_id)
     saved_endpoints = await discovery.save_selected_endpoints(filtered_endpoints)
+    await db.commit()
 
     # Invalidate cache entry
     draft_cache.delete(body.draft_id)
