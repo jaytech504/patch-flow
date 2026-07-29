@@ -93,13 +93,13 @@ Return JSON:
         for f in critical_findings + all_findings:
             sev = (f.get("severity") or "").upper()
             title = f.get("title", "")
-            if sev in ("CRITICAL", "HIGH") and title not in seen_titles:
+            if sev in ("CRITICAL", "HIGH", "MEDIUM") and title not in seen_titles:
                 seen_titles.add(title)
                 actionable_findings.append(f)
         actionable_findings = actionable_findings[:5]
 
         if not actionable_findings:
-            logger.warning("[Fix] No CRITICAL or HIGH findings — nothing to fix.")
+            logger.warning("[Fix] No CRITICAL, HIGH, or MEDIUM findings — nothing to fix.")
 
         # Try to clone repo if provided
         cloned_successfully = False
@@ -115,9 +115,21 @@ Return JSON:
         global_fixes = []
 
         if cloned_successfully:
-            # Process each critical/high finding — split by individual endpoint
+            # Process each critical/high/medium finding — split by individual endpoint
             for finding in actionable_findings:
                 affected_endpoints = finding.get("affected_endpoints", [])
+                if not affected_endpoints or any(str(ep).lower() in ("all", "all tested endpoints", "all endpoints") for ep in affected_endpoints):
+                    try:
+                        from backend.db.models import Endpoint
+                        from sqlalchemy import select
+                        stmt = select(Endpoint.path).where(Endpoint.session_id == self.session_id)
+                        res = await self.db.execute(stmt)
+                        session_eps = list(res.scalars().all())
+                        if session_eps:
+                            affected_endpoints = session_eps
+                    except Exception as ep_err:
+                        logger.warning(f"[Fix] Could not lookup session endpoints: {ep_err}")
+
                 if not affected_endpoints:
                     # No specific endpoints — generate a single vacuum fix
                     fallback_fix = await self._generate_vacuum_fix(finding)

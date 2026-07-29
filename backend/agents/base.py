@@ -273,13 +273,39 @@ class BaseAgent(ABC):
     def _parse_conclusion(self, content: str) -> dict:
         if not content:
             return {"summary": "No output."}
+        import re
+
+        # 1. Try fenced ```json { ... } ``` block first
+        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+        if match:
+            try:
+                res = robust_json_loads(match.group(1))
+                if isinstance(res, dict) and res:
+                    return res
+            except Exception:
+                pass
+
+        # 2. Try last valid { ... } JSON block
+        matches = list(re.finditer(r"(\{.*\})", content, re.DOTALL))
+        for m in reversed(matches):
+            try:
+                res = robust_json_loads(m.group(1))
+                if isinstance(res, dict) and res:
+                    return res
+            except Exception:
+                pass
+
+        # 3. Fallback to start/end finding
         try:
             start = content.find("{")
             end = content.rfind("}") + 1
             if start != -1 and end > start:
-                return robust_json_loads(content[start:end])
+                res = robust_json_loads(content[start:end])
+                if isinstance(res, dict) and res:
+                    return res
         except Exception:
             pass
+
         return {"summary": content}
 
     @abstractmethod
