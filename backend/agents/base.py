@@ -15,11 +15,29 @@ settings = get_settings()
 
 def robust_json_loads(s: str) -> dict:
     s = s.strip()
+
+    # 1. Standard json.loads with strict=False (allows raw newlines & control chars in strings)
     try:
-        return json.loads(s)
+        return json.loads(s, strict=False)
     except Exception:
         pass
 
+    # 2. Fix boolean/null keywords and parse with strict=False
+    try:
+        cleaned = s.replace("True", "true").replace("False", "false").replace("None", "null")
+        return json.loads(cleaned, strict=False)
+    except Exception:
+        pass
+
+    # 3. Fix trailing commas before } or ]
+    import re
+    try:
+        no_trailing_comma = re.sub(r',\s*([\}\]])', r'\1', s)
+        return json.loads(no_trailing_comma, strict=False)
+    except Exception:
+        pass
+
+    # 4. Try ast.literal_eval for Python-style dict outputs
     try:
         val = ast.literal_eval(s)
         if isinstance(val, dict):
@@ -27,12 +45,6 @@ def robust_json_loads(s: str) -> dict:
     except Exception:
         pass
 
-    try:
-        cleaned = s.replace("True", "true").replace("False", "false").replace("None", "null")
-        return json.loads(cleaned)
-    except Exception:
-        pass
-        
     try:
         pythonified = s.replace("true", "True").replace("false", "False").replace("null", "None")
         val = ast.literal_eval(pythonified)
