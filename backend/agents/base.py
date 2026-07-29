@@ -177,16 +177,42 @@ class BaseAgent(ABC):
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
-        response = await self.client.chat.completions.create(**kwargs)
-        # Log actual token usage returned by the API
-        if hasattr(response, "usage") and response.usage:
-            u = response.usage
-            logger.info(
-                f"[{self.name}] Token usage: "
-                f"prompt={u.prompt_tokens}, completion={u.completion_tokens}, "
-                f"total={u.total_tokens}"
-            )
-        return response
+
+        import asyncio as _asyncio
+        import re as _re
+
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            try:
+                response = await self.client.chat.completions.create(**kwargs)
+                # Log actual token usage returned by the API
+                if hasattr(response, "usage") and response.usage:
+                    u = response.usage
+                    logger.info(
+                        f"[{self.name}] Token usage: "
+                        f"prompt={u.prompt_tokens}, completion={u.completion_tokens}, "
+                        f"total={u.total_tokens}"
+                    )
+                return response
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    # Extract retry delay from error message if available
+                    wait = 60
+                    delay_match = _re.search(r"retry in (\d+(?:\.\d+)?)s", err_str, _re.IGNORECASE)
+                    if delay_match:
+                        wait = int(float(delay_match.group(1))) + 2
+                    else:
+                        wait = 30 * (attempt + 1)
+
+                    if attempt < max_retries:
+                        logger.warning(
+                            f"[{self.name}] Rate limited (429). "
+                            f"Waiting {wait}s before retry {attempt + 1}/{max_retries}..."
+                        )
+                        await _asyncio.sleep(wait)
+                        continue
+                raise
 
     def _estimate_message_chars(self, messages: List[dict]) -> int:
         total = 0
