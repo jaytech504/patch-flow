@@ -114,11 +114,21 @@ Return JSON:
         fixes = []
         global_fixes = []
 
+        def _is_placeholder_ep(ep: str) -> bool:
+            s = str(ep).lower().strip().replace("_", " ")
+            return (
+                s in ("all", "all endpoints", "all tested endpoints", "global", "system wide", "all_tested_endpoints", "all_endpoints")
+                or "all tested" in s
+                or "all endpoint" in s
+            )
+
         if cloned_successfully:
             # Process each critical/high/medium finding — split by individual endpoint
             for finding in actionable_findings:
-                affected_endpoints = finding.get("affected_endpoints", [])
-                if not affected_endpoints or any(str(ep).lower() in ("all", "all tested endpoints", "all endpoints") for ep in affected_endpoints):
+                raw_eps = finding.get("affected_endpoints", [])
+                has_placeholder = not raw_eps or any(_is_placeholder_ep(ep) for ep in raw_eps)
+
+                if has_placeholder:
                     try:
                         from backend.db.models import Endpoint
                         from sqlalchemy import select
@@ -127,8 +137,13 @@ Return JSON:
                         session_eps = list(res.scalars().all())
                         if session_eps:
                             affected_endpoints = session_eps
+                        else:
+                            affected_endpoints = [ep for ep in raw_eps if not _is_placeholder_ep(ep)]
                     except Exception as ep_err:
                         logger.warning(f"[Fix] Could not lookup session endpoints: {ep_err}")
+                        affected_endpoints = [ep for ep in raw_eps if not _is_placeholder_ep(ep)]
+                else:
+                    affected_endpoints = [ep for ep in raw_eps if not _is_placeholder_ep(ep)]
 
                 if not affected_endpoints:
                     # No specific endpoints — generate a single vacuum fix
