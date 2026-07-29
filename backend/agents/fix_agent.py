@@ -67,9 +67,9 @@ Return JSON:
 
     def __init__(self, db: AsyncSession, session_id: str, repo_url: str = None, github_token: str = None, framework: str = "fastapi"):
         super().__init__(db, session_id)
-        # Fix generation is expensive; keep outputs concise and reduce loops.
+        # Fix generation needs enough output tokens for full code_after payloads.
         self.max_iterations = 5
-        self.max_tokens_per_call = 1200
+        self.max_tokens_per_call = 4096
         self.framework = framework
         self.repo_url = repo_url
         self.repo_slug = self._parse_repo_slug(repo_url) if repo_url else None
@@ -233,6 +233,7 @@ Return JSON:
                                 else ""
                             )
                             candidate = await self.run(
+                                use_tools=False,
                                 task=f"""Generate a production-ready error handling fix for this SINGLE endpoint.
 
 Endpoint: {endpoint_path}
@@ -276,13 +277,23 @@ Return JSON:
                                 context={"endpoint": endpoint_path, "original_code": original_code}
                             )
 
-                            # Ensure metadata is correctly set
-                            candidate["file_path"] = file_path
-                            candidate["start_line"] = start_line
-                            candidate["end_line"] = end_line
-                            candidate["affected_endpoints"] = [endpoint_path]
-                            if not candidate.get("code_before"):
-                                candidate["code_before"] = original_code
+                            candidate = self._normalize_fix_candidate(
+                                candidate,
+                                fallback={
+                                    "finding_title": finding.get("title"),
+                                    "failure_modes": finding.get("failure_modes", []),
+                                    "severity": finding.get("severity", "HIGH"),
+                                    "file_path": file_path,
+                                    "start_line": start_line,
+                                    "end_line": end_line,
+                                    "affected_endpoints": [endpoint_path],
+                                    "code_before": original_code,
+                                },
+                            )
+                            if not candidate:
+                                generation_error = "LLM returned empty or invalid fix (no code_after)."
+                                logger.warning(f"[Fix] Empty fix candidate for {endpoint_path}")
+                                continue
 
                             # Apply candidate to current file state sequentially
                             applied, error_msg = self._apply_fix_to_repo_file(
@@ -529,6 +540,26 @@ Return JSON:
         details = stderr or stdout or f"{label} syntax check failed with exit code {proc.returncode}."
         return False, details
 
+    def _normalize_fix_candidate(self, candidate: dict, fallback: dict) -> dict | None:
+        """Validate and enrich a fix candidate from the LLM."""
+        if not candidate or candidate.get("status") == "max_iterations_reached":
+            return None
+        if candidate.get("error") in ("empty_llm_response", "unparseable_response"):
+            return None
+
+        code_after = candidate.get("code_after") or ""
+        if not str(code_after).strip():
+            return None
+
+        for key, value in fallback.items():
+            if not candidate.get(key):
+                candidate[key] = value
+
+        if not candidate.get("code_before"):
+            candidate["code_before"] = fallback.get("code_before", "")
+
+        return candidate
+
     async def revise_fixes(self, fixes_needing_revision: list[dict]) -> list[dict]:
         """
         Re-generate fixes that failed review, using the reviewer's feedback.
@@ -581,6 +612,7 @@ Return JSON:
             try:
                 lang_rules = self._get_lang_rules()
                 revised = await self.run(
+                    use_tools=False,
                     task=f"""A senior code reviewer has REJECTED your previous fix and provided specific feedback.
 You MUST address ALL of the reviewer's issues and generate a corrected fix.
 
@@ -635,20 +667,28 @@ Return JSON:
                     }
                 )
 
-                # Preserve metadata from the original fix
-                revised["file_path"] = fix.get("file_path")
-                revised["start_line"] = fix.get("start_line")
-                revised["end_line"] = fix.get("end_line")
-                revised["affected_endpoints"] = fix.get("affected_endpoints", [])
-
-                # Make sure code_before is preserved exactly
-                if not revised.get("code_before"):
-                    revised["code_before"] = fix.get("code_before", "")
-
-                # Make sure code_after is preserved — if the LLM didn't return
-                # a new code_after, keep the previous one so GitHub agent can apply it
-                if not revised.get("code_after"):
-                    revised["code_after"] = fix.get("code_after", "")
+                revised = self._normalize_fix_candidate(
+                    revised,
+                    fallback={
+                        "finding_title": fix.get("finding_title"),
+                        "failure_modes": fix.get("failure_modes", []),
+                        "severity": fix.get("severity", "HIGH"),
+                        "file_path": fix.get("file_path"),
+                        "start_line": fix.get("start_line"),
+                        "end_line": fix.get("end_line"),
+                        "affected_endpoints": fix.get("affected_endpoints", []),
+                        "code_before": fix.get("code_before", ""),
+                    },
+                )
+                if not revised:
+                    logger.warning(f"[Fix] Revision returned empty fix for {endpoint_label}")
+                    fix["review_status"] = "revision_failed"
+                    fix["review_feedback"] = (
+                        (fix.get("review_feedback") or "")
+                        + " Revision attempt returned empty code_after."
+                    ).strip()
+                    revised_fixes.append(fix)
+                    continue
 
                 revised["revision_attempt"] = fix.get("revision_attempt", 0) + 1
                 revised_fixes.append(revised)

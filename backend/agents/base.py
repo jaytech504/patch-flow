@@ -82,14 +82,20 @@ class BaseAgent(ABC):
     def register_tool(self, tool: Tool):
         self._tools[tool.name] = tool
 
-    async def run(self, task: str, context: dict = None) -> dict:
+    async def run(self, task: str, context: dict = None, use_tools: bool = True) -> dict:
         logger.info(f"[{self.name}] Starting: {task[:60]}...")
         messages = self._build_messages(task, context)
         max_iterations = self.max_iterations
+        empty_response_retries = 0
+        max_empty_retries = 2
 
         for i in range(max_iterations):
-            response = await self._call_gemma(messages)
+            response = await self._call_gemma(messages, use_tools=use_tools)
             message = response.choices[0].message
+            choice = response.choices[0]
+            usage = getattr(response, "usage", None)
+            completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
+            finish_reason = getattr(choice, "finish_reason", None)
 
             if message.content:
                 await self._log("thought", message.content)
@@ -154,16 +160,46 @@ class BaseAgent(ABC):
                     })
                 continue
 
-            # No tool calls = conclusion
+            # No tool calls = conclusion — but reject empty LLM responses
+            content = (message.content or "").strip()
+            if not content or completion_tokens == 0:
+                empty_response_retries += 1
+                logger.warning(
+                    f"[{self.name}] Empty LLM response "
+                    f"(completion_tokens={completion_tokens}, finish_reason={finish_reason}, "
+                    f"retry {empty_response_retries}/{max_empty_retries})"
+                )
+                if empty_response_retries <= max_empty_retries:
+                    import asyncio as _asyncio
+                    await _asyncio.sleep(5 * empty_response_retries)
+                    continue
+                return {
+                    "error": "empty_llm_response",
+                    "summary": "LLM returned no content.",
+                    "finish_reason": finish_reason,
+                }
+
             conclusion = self._parse_conclusion(message.content)
+            if conclusion.get("summary") == "No output." and not conclusion.get("code_after"):
+                empty_response_retries += 1
+                logger.warning(
+                    f"[{self.name}] Unparseable empty conclusion "
+                    f"(retry {empty_response_retries}/{max_empty_retries})"
+                )
+                if empty_response_retries <= max_empty_retries:
+                    import asyncio as _asyncio
+                    await _asyncio.sleep(5 * empty_response_retries)
+                    continue
+                return {"error": "unparseable_response", "summary": "Could not parse LLM output."}
+
             await self._log("conclusion", message.content)
             logger.info(f"[{self.name}] Done in {i+1} iterations.")
             return conclusion
 
         return {"status": "max_iterations_reached"}
 
-    async def _call_gemma(self, messages: List[dict]):
-        tools = [t.to_schema() for t in self._tools.values()]
+    async def _call_gemma(self, messages: List[dict], use_tools: bool = True):
+        tools = [t.to_schema() for t in self._tools.values()] if use_tools else []
         approx_chars = self._estimate_message_chars(messages)
         logger.info(
             f"[{self.name}] Gemma call budget: ~{approx_chars} prompt chars, "
