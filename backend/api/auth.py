@@ -33,6 +33,13 @@ async def github_login():
     Returns the GitHub OAuth authorization URL.
     The frontend redirects the user to this URL.
     """
+    from backend.core.config import get_settings
+    settings = get_settings()
+    if not settings.github_client_id:
+        raise HTTPException(
+            status_code=400,
+            detail="GITHUB_CLIENT_ID is not configured on backend environment variables."
+        )
     url = get_github_login_url()
     return {"url": url}
 

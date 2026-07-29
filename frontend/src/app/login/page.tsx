@@ -16,7 +16,8 @@ export default function LoginPage() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/github/login`);
       if (!response.ok) {
-        throw new Error("Failed to get login URL from backend");
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.detail || `Backend error (HTTP ${response.status})`);
       }
       const data = await response.json();
       if (data.url) {
