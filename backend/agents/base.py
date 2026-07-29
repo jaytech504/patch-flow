@@ -339,34 +339,69 @@ class BaseAgent(ABC):
             return {"summary": "No output."}
         import re
 
-        # 1. Try fenced ```json { ... } ``` block first
-        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
-        if match:
+        # 1. Try fenced ```json { ... } ``` blocks first
+        fenced_blocks = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL | re.IGNORECASE)
+        for block in fenced_blocks:
             try:
-                res = robust_json_loads(match.group(1))
+                res = robust_json_loads(block)
                 if isinstance(res, dict) and res:
                     return res
             except Exception:
                 pass
 
-        # 2. Try last valid { ... } JSON block
-        matches = list(re.finditer(r"(\{.*\})", content, re.DOTALL))
-        for m in reversed(matches):
+        # 2. String-aware nested brace parser to extract complete JSON objects { ... }
+        def extract_json_objects(text: str) -> list[str]:
+            objs = []
+            stack = 0
+            start_idx = -1
+            in_string = False
+            escape = False
+            for idx, ch in enumerate(text):
+                if in_string:
+                    if escape:
+                        escape = False
+                    elif ch == '\\':
+                        escape = True
+                    elif ch == '"':
+                        in_string = False
+                else:
+                    if ch == '"':
+                        in_string = True
+                    elif ch == '{':
+                        if stack == 0:
+                            start_idx = idx
+                        stack += 1
+                    elif ch == '}':
+                        if stack > 0:
+                            stack -= 1
+                            if stack == 0 and start_idx != -1:
+                                objs.append(text[start_idx : idx + 1])
+            return objs
+
+        candidates = extract_json_objects(content)
+        # Prioritize candidates containing key agent schema fields
+        for raw_obj in reversed(candidates):
             try:
-                res = robust_json_loads(m.group(1))
+                res = robust_json_loads(raw_obj)
+                if isinstance(res, dict) and any(k in res for k in ("code_after", "risk_score", "fixes", "finding_title", "critical_findings")):
+                    return res
+            except Exception:
+                pass
+
+        # Fallback to any valid dict parsed from candidates
+        for raw_obj in reversed(candidates):
+            try:
+                res = robust_json_loads(raw_obj)
                 if isinstance(res, dict) and res:
                     return res
             except Exception:
                 pass
 
-        # 3. Fallback to start/end finding
+        # 3. Fallback to raw content parse
         try:
-            start = content.find("{")
-            end = content.rfind("}") + 1
-            if start != -1 and end > start:
-                res = robust_json_loads(content[start:end])
-                if isinstance(res, dict) and res:
-                    return res
+            res = robust_json_loads(content)
+            if isinstance(res, dict):
+                return res
         except Exception:
             pass
 
