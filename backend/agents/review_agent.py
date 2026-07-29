@@ -459,6 +459,29 @@ Return your verdict as JSON:
                 ok, msg = self._run_syntax_command(["npx", "--yes", "tsc", "--noEmit", temp_path], "TypeScript")
                 if ok:
                     return True, ""
+                # Filter out TS2307 "Cannot find module" errors — these are caused
+                # by missing node_modules in the temp environment, NOT actual
+                # syntax errors in the generated fix.
+                if msg:
+                    real_errors = []
+                    for line in msg.splitlines():
+                        line_stripped = line.strip()
+                        if not line_stripped:
+                            continue
+                        # Skip module resolution errors (TS2307)
+                        if "TS2307" in line_stripped:
+                            continue
+                        # Skip "Cannot find name" from missing types (TS2304)
+                        if "TS2304" in line_stripped:
+                            continue
+                        # Skip declaration file errors (TS7016)
+                        if "TS7016" in line_stripped:
+                            continue
+                        real_errors.append(line_stripped)
+                    if not real_errors:
+                        # All errors were just missing module declarations
+                        return True, ""
+                    return False, "\n".join(real_errors[:5])
                 fallback_ok, fallback_msg = self._run_syntax_command(["node", "--check", temp_path], "Node.js")
                 if fallback_ok:
                     return True, ""

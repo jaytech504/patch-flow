@@ -645,6 +645,11 @@ Return JSON:
                 if not revised.get("code_before"):
                     revised["code_before"] = fix.get("code_before", "")
 
+                # Make sure code_after is preserved — if the LLM didn't return
+                # a new code_after, keep the previous one so GitHub agent can apply it
+                if not revised.get("code_after"):
+                    revised["code_after"] = fix.get("code_after", "")
+
                 revised["revision_attempt"] = fix.get("revision_attempt", 0) + 1
                 revised_fixes.append(revised)
 
