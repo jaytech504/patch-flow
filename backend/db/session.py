@@ -6,7 +6,12 @@ from backend.db.models import Base
 
 settings = get_settings()
 
-engine = create_async_engine(settings.database_url, echo=False, poolclass=NullPool)
+# Render provides DATABASE_URL as "postgresql://..." but asyncpg needs "postgresql+asyncpg://..."
+_db_url = settings.database_url
+if _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+engine = create_async_engine(_db_url, echo=False, poolclass=NullPool)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
