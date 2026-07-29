@@ -177,29 +177,57 @@ class BaseAgent(ABC):
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
-        try:
-            response = await self.client.chat.completions.create(**kwargs)
-        except Exception as e:
-            if "not found" in str(e).lower() or "404" in str(e):
-                fallback_models = ["gemma-4-26b-a4b-it", "gemma-2-27b-it", "gemini-2.5-flash", "gemini-1.5-flash"]
-                response = None
-                for fb_model in fallback_models:
-                    if fb_model == kwargs.get("model"):
+        import asyncio as _asyncio
+        import re as _re
+
+        max_retries = 3
+        response = None
+        for attempt in range(max_retries + 1):
+            try:
+                response = await self.client.chat.completions.create(**kwargs)
+                break
+            except Exception as e:
+                err_str = str(e)
+
+                # ── Handle 429 rate limit ──────────────────────────────
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    # Extract retry delay from error message if available
+                    delay_match = _re.search(r'retry\s+in\s+([\d.]+)', err_str, _re.IGNORECASE)
+                    wait_secs = float(delay_match.group(1)) if delay_match else (30 * (attempt + 1))
+                    wait_secs = min(wait_secs + 5, 120)  # add small buffer, cap at 2 min
+                    if attempt < max_retries:
+                        logger.warning(
+                            f"[{self.name}] Rate limited (429). "
+                            f"Waiting {wait_secs:.0f}s before retry {attempt + 1}/{max_retries}..."
+                        )
+                        await _asyncio.sleep(wait_secs)
                         continue
-                    logger.warning(f"[{self.name}] Model {kwargs['model']} failed with 404, trying fallback model {fb_model}...")
-                    kwargs["model"] = fb_model
-                    try:
-                        response = await self.client.chat.completions.create(**kwargs)
+                    else:
+                        logger.error(f"[{self.name}] Rate limit exceeded after {max_retries} retries.")
+                        raise e
+
+                # ── Handle 404 model not found ─────────────────────────
+                if "not found" in err_str.lower() or "404" in err_str:
+                    fallback_models = ["gemma-4-26b-a4b-it", "gemma-2-27b-it", "gemini-2.5-flash", "gemini-1.5-flash"]
+                    for fb_model in fallback_models:
+                        if fb_model == kwargs.get("model"):
+                            continue
+                        logger.warning(f"[{self.name}] Model {kwargs['model']} not found, trying {fb_model}...")
+                        kwargs["model"] = fb_model
+                        try:
+                            response = await self.client.chat.completions.create(**kwargs)
+                            break
+                        except Exception:
+                            continue
+                    if response is not None:
                         break
-                    except Exception:
-                        continue
-                if response is None:
                     raise e
-            else:
+
+                # ── Other errors: raise immediately ────────────────────
                 raise e
 
         # Log actual token usage returned by the API
-        if hasattr(response, "usage") and response.usage:
+        if response and hasattr(response, "usage") and response.usage:
             u = response.usage
             logger.info(
                 f"[{self.name}] Token usage: "
