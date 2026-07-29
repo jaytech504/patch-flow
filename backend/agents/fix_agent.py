@@ -1015,6 +1015,42 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
                         if end_idx == method_line_idx:
                             end_idx = min(len(lines), method_line_idx + 45)
 
+                        # If component block is too large (> 60 lines), extract a specific inner handler function
+                        if end_idx - start_idx > 60:
+                            inner_handler_start = -1
+                            for h_idx in range(start_idx, end_idx):
+                                line_text = lines[h_idx].strip()
+                                if any(kw in line_text for kw in [
+                                    "const handle", "function handle",
+                                    "const process", "function process",
+                                    "const fetch", "function fetch",
+                                    "const delete", "function delete",
+                                    "const save", "const update", "const submit",
+                                    "= async (", "async function", "try {"
+                                ]):
+                                    inner_handler_start = h_idx
+                                    break
+
+                            if inner_handler_start != -1:
+                                inner_brace = 0
+                                inner_found = False
+                                inner_end = inner_handler_start
+                                for s_idx in range(inner_handler_start, end_idx):
+                                    s_line = lines[s_idx]
+                                    inner_brace += s_line.count("{") - s_line.count("}")
+                                    if "{" in s_line:
+                                        inner_found = True
+                                    if inner_found and inner_brace <= 0:
+                                        inner_end = s_idx + 1
+                                        break
+                                if inner_end > inner_handler_start:
+                                    start_idx = inner_handler_start
+                                    end_idx = min(inner_end, start_idx + 50)
+                                else:
+                                    end_idx = start_idx + 45
+                            else:
+                                end_idx = start_idx + 45
+
                         return {
                             "file_path": str(f.relative_to(repo_path)).replace("\\", "/"),
                             "target_function": cap_name,
@@ -1023,12 +1059,27 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
                             "original_code": "\n".join(lines[start_idx:end_idx]),
                         }
                     elif "export default" in content or "export function" in content or "function" in content or "const" in content:
+                        handler_start = -1
+                        for h_idx, line in enumerate(lines):
+                            line_text = line.strip()
+                            if any(kw in line_text for kw in [
+                                "const handle", "function handle",
+                                "const process", "function process",
+                                "const fetch", "function fetch",
+                                "const delete", "function delete",
+                                "const save", "const update", "const submit",
+                                "= async (", "async function", "try {"
+                            ]):
+                                handler_start = h_idx
+                                break
+                        start_idx = handler_start if handler_start != -1 else 0
+                        end_idx = min(len(lines), start_idx + 45)
                         return {
                             "file_path": str(f.relative_to(repo_path)).replace("\\", "/"),
                             "target_function": cap_name,
-                            "start_line": 1,
-                            "end_line": min(len(lines), 60),
-                            "original_code": "\n".join(lines[:60]),
+                            "start_line": start_idx + 1,
+                            "end_line": end_idx,
+                            "original_code": "\n".join(lines[start_idx:end_idx]),
                         }
                     else:
                         continue
