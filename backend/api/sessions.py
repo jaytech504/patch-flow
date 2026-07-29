@@ -12,6 +12,7 @@ from backend.db.models import ChaosSession, SessionStatus, FailureResult, Endpoi
 from backend.agents.orchestrator import ChaosOrchestrator
 from backend.agents.discovery_agent import DiscoveryAgent
 from backend.auth.dependencies import get_current_user, get_optional_user
+from backend.core.websocket_manager import ws_manager
 
 router = APIRouter()
 

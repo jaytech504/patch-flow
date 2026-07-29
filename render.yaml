@@ -19,7 +19,7 @@ services:
       - key: GEMMA_BASE_URL
         value: https://generativelanguage.googleapis.com/v1beta/openai/
       - key: GEMMA_MODEL
-        value: gemma-3-27b-it
+        value: gemma-4-26b-a4b-it
       - key: APP_ENV
         value: production
       - key: JWT_SECRET

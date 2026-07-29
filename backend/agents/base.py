@@ -177,7 +177,27 @@ class BaseAgent(ABC):
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
-        response = await self.client.chat.completions.create(**kwargs)
+        try:
+            response = await self.client.chat.completions.create(**kwargs)
+        except Exception as e:
+            if "not found" in str(e).lower() or "404" in str(e):
+                fallback_models = ["gemma-4-26b-a4b-it", "gemma-2-27b-it", "gemini-2.5-flash", "gemini-1.5-flash"]
+                response = None
+                for fb_model in fallback_models:
+                    if fb_model == kwargs.get("model"):
+                        continue
+                    logger.warning(f"[{self.name}] Model {kwargs['model']} failed with 404, trying fallback model {fb_model}...")
+                    kwargs["model"] = fb_model
+                    try:
+                        response = await self.client.chat.completions.create(**kwargs)
+                        break
+                    except Exception:
+                        continue
+                if response is None:
+                    raise e
+            else:
+                raise e
+
         # Log actual token usage returned by the API
         if hasattr(response, "usage") and response.usage:
             u = response.usage

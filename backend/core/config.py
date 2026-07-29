@@ -5,7 +5,7 @@ from functools import lru_cache
 class Settings(BaseSettings):
     gemma_api_key: str = ""
     gemma_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
-    gemma_model: str = "gemma-3-27b-it"
+    gemma_model: str = "gemma-4-26b-a4b-it"
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/chaos_agent"
     app_env: str = "development"
     frontend_url: str = "http://localhost:3000"
