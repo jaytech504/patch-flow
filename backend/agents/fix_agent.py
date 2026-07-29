@@ -807,8 +807,10 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
             return """- CRITICAL: If you use `logger`, you MUST include BOTH `import logging` AND `logger = logging.getLogger(__name__)` in imports_needed. The import alone is NOT enough.
 - Use `if value is not None:` instead of `if value:` when the value could legitimately be 0."""
         elif self.language in ("javascript", "typescript"):
-            return """- CRITICAL: If you use a logger (like `console` or a logging library), make sure any required imports or setups are in imports_needed.
-- Use strict equality checks `value !== null && value !== undefined` instead of `if (value)` when the value could legitimately be 0 or an empty string."""
+            return """- CRITICAL: Use proper TypeScript/JavaScript async/await try-catch handling.
+- For Next.js App Router (route.ts/route.js): return structured JSON error responses (e.g. `NextResponse.json({ error: "Internal Server Error" }, { status: 500 })` or `Response.json(...)`).
+- For Supabase database queries: check for `{ data, error }`. If `error` occurs, do NOT let unhandled exceptions leak stack traces — handle it gracefully and return HTTP 500 (or 400 for bad parameters).
+- Ensure all required imports (e.g. `NextResponse`, `Response`) are listed in imports_needed."""
         elif self.language == "go":
             return """- CRITICAL: Make sure all packages needed (e.g. "log", "fmt") are included in imports_needed.
 - Handle zero values correctly according to Go idiom (e.g. checking for nil vs empty structs)."""
@@ -842,11 +844,122 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
 
         repo_path = Path(self._repo_path)
         
-        # Scan source files
+        # ── 1. React SPA Page Components & Next.js App/Pages Router ──────────
+        clean_path = path.strip("/ ")
+        path_parts = [p for p in clean_path.split("/") if p]
+        endpoint_name = path_parts[-1] if path_parts else clean_path
+        cap_name = endpoint_name.capitalize()
+        title_name = "".join(w.capitalize() for w in endpoint_name.replace("-", "_").split("_"))
+
+        nextjs_patterns = [
+            # React SPA Page components (e.g. src/pages/Dashboard.tsx, src/pages/Notes.tsx)
+            f"**/pages/{cap_name}.tsx",
+            f"**/pages/{cap_name}.jsx",
+            f"**/pages/{cap_name}.ts",
+            f"**/pages/{cap_name}.js",
+            f"**/pages/{title_name}.tsx",
+            f"**/pages/{title_name}.jsx",
+            f"**/pages/{endpoint_name}.tsx",
+            f"**/pages/{endpoint_name}.jsx",
+            f"**/src/pages/{cap_name}.tsx",
+            f"**/src/pages/{cap_name}.jsx",
+            f"**/views/{cap_name}.tsx",
+            f"**/components/{cap_name}.tsx",
+            # Next.js App Router & API Route patterns
+            f"**/app/{clean_path}/route.ts",
+            f"**/app/{clean_path}/route.js",
+            f"**/app/{clean_path}/route.tsx",
+            f"**/app/{clean_path}/route.jsx",
+            f"**/app/api/{clean_path}/route.ts",
+            f"**/app/api/{clean_path}/route.js",
+            f"**/pages/api/{clean_path}.ts",
+            f"**/pages/api/{clean_path}.js",
+            f"**/pages/api/{clean_path}/index.ts",
+            f"**/pages/api/{clean_path}/index.js",
+            f"**/supabase/functions/{clean_path}/index.ts",
+            f"**/supabase/functions/{clean_path}/index.js",
+            f"**/functions/{clean_path}/index.ts",
+        ]
+
+        for pattern in nextjs_patterns:
+            matches = list(repo_path.glob(pattern))
+            if not matches:
+                path_parts = clean_path.split("/")
+                glob_parts = ["*" if (p.startswith("{") or p.isdigit()) else p for p in path_parts]
+                wildcard_path = "/".join(glob_parts)
+                matches = (
+                    list(repo_path.glob(f"**/app/{wildcard_path}/route.ts")) +
+                    list(repo_path.glob(f"**/app/{wildcard_path}/route.js")) +
+                    list(repo_path.glob(f"**/pages/api/{wildcard_path}.ts"))
+                )
+
+            for f in matches:
+                if any(p in str(f) for p in [".git", "node_modules", ".next", "__pycache__", ".venv", "venv"]):
+                    continue
+                try:
+                    content = f.read_text(encoding="utf-8")
+                    lines = content.splitlines()
+                    target_method = method.upper()
+
+                    method_line_idx = -1
+                    for idx, line in enumerate(lines):
+                        if (
+                            f"function {target_method}" in line or
+                            f"const {target_method}" in line or
+                            f"function {cap_name}" in line or
+                            f"const {cap_name}" in line or
+                            f"function {title_name}" in line or
+                            f"const {title_name}" in line or
+                            "export default" in line
+                        ):
+                            method_line_idx = idx
+                            break
+
+                    if method_line_idx != -1:
+                        start_idx = method_line_idx
+                        while start_idx > 0 and lines[start_idx - 1].strip().startswith(("//", "/*", "*")):
+                            start_idx -= 1
+
+                        brace_count = 0
+                        found_braces = False
+                        end_idx = method_line_idx
+                        for scan_idx in range(method_line_idx, len(lines)):
+                            scan_line = lines[scan_idx]
+                            brace_count += scan_line.count("{") - scan_line.count("}")
+                            if "{" in scan_line:
+                                found_braces = True
+                            if found_braces and brace_count <= 0:
+                                end_idx = scan_idx + 1
+                                break
+                        if end_idx == method_line_idx:
+                            end_idx = min(len(lines), method_line_idx + 45)
+
+                        return {
+                            "file_path": str(f.relative_to(repo_path)).replace("\\", "/"),
+                            "target_function": cap_name,
+                            "start_line": start_idx + 1,
+                            "end_line": end_idx,
+                            "original_code": "\n".join(lines[start_idx:end_idx]),
+                        }
+                    elif "export default" in content or "export function" in content or "function" in content or "const" in content:
+                        return {
+                            "file_path": str(f.relative_to(repo_path)).replace("\\", "/"),
+                            "target_function": cap_name,
+                            "start_line": 1,
+                            "end_line": min(len(lines), 60),
+                            "original_code": "\n".join(lines[:60]),
+                        }
+                    else:
+                        continue
+                except Exception as e:
+                    logger.error(f"[Fix] Error reading route/page file {f}: {e}")
+                    continue
+
+        # ── 2. General source code scanning ──────────────────────────────────
         extensions = (".py", ".js", ".ts", ".tsx", ".go", ".java", ".rb")
         for ext in extensions:
             for f in repo_path.rglob(f"*{ext}"):
-                if any(p in str(f) for p in [".git", "node_modules", "__pycache__", "venv", "backend", "frontend", ".gemini", "artifacts", "scratch", "brain"]):
+                if any(p in str(f) for p in [".git", "node_modules", "__pycache__", ".venv", "venv", ".gemini", "artifacts", "scratch", "brain"]):
                     continue
                 try:
                     content = f.read_text(encoding="utf-8")
