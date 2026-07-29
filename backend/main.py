@@ -32,6 +32,7 @@ app.add_middleware(
     allow_origins=[
         settings.frontend_url,
         "http://localhost:3000",
+        "https://patchflow-frontend-n23j.onrender.com",
         "https://patchflow-frontend-n51l.onrender.com",
         "https://patchflow-frontend.onrender.com",
     ],

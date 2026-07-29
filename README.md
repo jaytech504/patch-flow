@@ -16,6 +16,8 @@
 
 Every agent is powered by **Gemma** (via Google AI Studio) and orchestrated through a tool-calling agentic loop with real-time WebSocket streaming to the dashboard.
 
+Repository: [https://github.com/jaytech504/patch-flow](https://github.com/jaytech504/patch-flow)
+
 ---
 
 ## ⚡ What It Does
@@ -42,18 +44,10 @@ PatchFlow is an autonomous multi-agent system that stress-tests your API for res
 
 ---
 
-## 🎬 Local Demo
+## 🌐 Live Application
 
-### Try it locally with the included demo target app
-
-The repo includes **Knowbite API** — a deliberately vulnerable FastAPI application with 7 intentional bugs (missing timeouts, leaked exceptions, unhandled errors). It serves as a realistic test target:
-
-```bash
-python run_demo.py                          # Without GitHub PRs
-python run_demo.py your-username/your-repo  # With GitHub PRs
-```
-
-The demo runner will start the vulnerable app, fire the full agent pipeline against it, and stream results to your dashboard.
+Access the live deployment on Render:
+👉 **[https://patchflow-frontend-n23j.onrender.com](https://patchflow-frontend-n23j.onrender.com)**
 
 ---
 
@@ -94,7 +88,7 @@ The demo runner will start the vulnerable app, fire the full agent pipeline agai
 | 2 | **Chaos** | Injects 18 failure modes (timeouts, connection drops, malformed responses, DB failures, etc.) against each endpoint and observes the response |
 | 3 | **Analyst** | Identifies failure patterns, classifies severity (CRITICAL / HIGH / MEDIUM / LOW), and calculates a risk score 0–100 |
 | 4 | **Fix** | Clones the repo, locates the exact handler function, and generates a production-ready code fix with proper error handling |
-| 5 | **Review** | Acts as a senior engineer — validates each fix against the full file context, requests revisions if needed (up to 2 rounds) |
+| 5 | **Review** | Acts as a senior engineer — validates each fix against the full file context, requests revisions if needed |
 | 6 | **GitHub** | Creates a branch, applies the fix, commits with a descriptive message, and opens a Pull Request with full context |
 
 ### 18 Failure Modes
@@ -106,9 +100,18 @@ The demo runner will start the vulnerable app, fire the full agent pipeline agai
 | **Data** | `malformed_json` · `empty_response` · `wrong_content_type` · `partial_response` · `null_fields` |
 | **Resource** | `db_connection_drop` · `db_timeout` · `db_constraint_violation` |
 
+### Multi-Stack & Framework Support
+
+PatchFlow analyzes and generates fixes for repositories built with:
+- **TypeScript / JavaScript**: Next.js (App Router & Pages Router), React SPAs, Supabase Edge Functions, Express, Fastify, NestJS
+- **Python**: FastAPI, Flask, Django
+- **Go**: Standard `net/http`, Gin, Fiber
+- **Ruby**: Ruby on Rails
+- **Java**: Spring Boot
+
 ---
 
-## 🚀 Quick Start
+## 💻 Local Setup Guide
 
 ### Prerequisites
 
@@ -121,8 +124,8 @@ The demo runner will start the vulnerable app, fire the full agent pipeline agai
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/jaytech504/chaos-agent.git
-cd chaos-agent
+git clone https://github.com/jaytech504/patch-flow.git
+cd patch-flow
 ```
 
 ### 2. Set up the backend
@@ -133,7 +136,7 @@ cd backend
 pip install -r requirements.txt
 cd ..
 
-# Create the database (it will auto-create tables on first run)
+# Create PostgreSQL database (tables will be auto-created on first run)
 psql -U postgres -c "CREATE DATABASE chaos_agent;"
 ```
 
@@ -147,11 +150,7 @@ cd ..
 
 ### 4. Configure environment variables
 
-```bash
-cp backend/.env.example .env
-```
-
-Edit `.env` and fill in the required values:
+Create a `.env` file in the root directory:
 
 ```env
 # ── Required ──────────────────────────────────────────────
@@ -173,46 +172,66 @@ JWT_ALGORITHM=HS256
 JWT_EXPIRE_HOURS=24
 ```
 
-> **GitHub OAuth App Setup**: Go to [GitHub Developer Settings](https://github.com/settings/developers) → New OAuth App.
-> Set the callback URL to `http://localhost:3000/auth/callback`.
+> **GitHub OAuth Setup**: Go to [GitHub Developer Settings](https://github.com/settings/developers) → OAuth Apps.
+> - **Homepage URL**: `http://localhost:3000`
+> - **Authorization callback URL**: `http://localhost:3000/auth/callback`
 
 ### 5. Start the application
 
 ```bash
-# Terminal 1 — Backend
+# Terminal 1 — Backend (FastAPI)
 uvicorn backend.main:app --reload --port 8000
 
-# Terminal 2 — Frontend
+# Terminal 2 — Frontend (Next.js)
 cd frontend
 npm run dev
 ```
 
-Open **http://localhost:3000** — you'll see the PatchFlow landing page. Click "Login with GitHub" to authenticate, then create a new session from the dashboard.
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
 ---
 
-## 🖥️ Frontend
+## ☁️ Render Cloud Deployment Guide
 
-The PatchFlow frontend is a full-featured Next.js 16 application with a premium developer-tool aesthetic.
+PatchFlow includes a pre-configured [`render.yaml`](render.yaml) blueprint for 1-click deployment on Render's Free tier.
+
+### Render Setup Steps
+
+1. Push your repository to GitHub:
+   ```bash
+   git add .
+   git commit -m "Deploy to Render"
+   git push origin main
+   ```
+2. Go to [Render Dashboard](https://dashboard.render.com) → **New +** → **Blueprint**.
+3. Connect `https://github.com/jaytech504/patch-flow`.
+4. Render will create:
+   - **`patchflow-db`**: Managed PostgreSQL Database (Free Tier)
+   - **`patchflow-backend`**: FastAPI Python Web Service (Free Tier)
+   - **`patchflow-frontend`**: Next.js Node Web Service (Free Tier)
+5. Set `GEMMA_API_KEY`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_TOKEN` under **`patchflow-backend`** → **Environment**.
+6. Set `NEXT_PUBLIC_API_URL` under **`patchflow-frontend`** → **Environment**.
+
+> **GitHub OAuth App for Cloud**:
+> - **Homepage URL**: `https://patchflow-frontend-n51l.onrender.com`
+> - **Authorization callback URL**: `https://patchflow-frontend-n51l.onrender.com/auth/callback`
+
+---
+
+## 🖥️ Frontend Overview
+
+The PatchFlow frontend is a Next.js 16 application built with TypeScript, Tailwind CSS v4, and Lucide icons.
 
 ### Pages
 
 | Page | Description |
 |------|-------------|
-| **Landing** (`/`) | Marketing page with feature cards, animated terminal demo, and how-it-works section |
+| **Landing** (`/`) | Product overview, feature cards, and terminal demo |
 | **Login** (`/login`) | GitHub OAuth single sign-on |
-| **Dashboard** (`/dashboard`) | Analytics strip (tests run, failures found, fixes generated, avg risk score) + session list |
-| **New Session** (`/sessions/new`) | Two-step form: configure target + select discovered endpoints |
-| **Live Session** (`/sessions/[id]`) | Real-time WebSocket agent trace — watch the pipeline run live |
-| **Reliability Report** (`/sessions/[id]/report`) | Risk score, expandable findings, GitHub-styled PR cards, side-by-side code diffs |
-
-### Endpoint Discovery Options
-
-When creating a new session, you can provide endpoints via:
-1. **OpenAPI URL** — paste a link to your OpenAPI spec
-2. **File Upload** — drag & drop an OpenAPI JSON/YAML file
-3. **Postman Collection** — upload a Postman Collection v2.1 JSON
-4. **Manual Entry** — add endpoints one by one (method + path)
+| **Dashboard** (`/dashboard`) | Analytics strip (tests run, failures found, fixes generated) + session history |
+| **New Session** (`/sessions/new`) | Target setup + endpoint selector (OpenAPI, Postman, file upload, manual entry) |
+| **Live Session** (`/sessions/[id]`) | Real-time WebSocket agent trace — live step logs and failure pills |
+| **Reliability Report** (`/sessions/[id]/report`) | Risk score, expandable findings, GitHub PR cards, side-by-side code diffs |
 
 ---
 
@@ -222,7 +241,7 @@ When creating a new session, you can provide endpoints via:
 POST   /api/sessions/start           Start a new chaos session
 GET    /api/sessions                  List all sessions
 GET    /api/sessions/{id}             Session detail + failures + PRs
-POST   /api/sessions/{id}/rerun       Re-run a session
+POST   /api/sessions/{id}/retry       Re-run a session
 
 GET    /api/reports/session/{id}      Get report ID for a session
 GET    /api/reports/{id}              Full report with fixes and findings
@@ -230,6 +249,7 @@ GET    /api/reports/{id}              Full report with fixes and findings
 POST   /api/discovery/preview/url     Preview endpoints from OpenAPI URL
 POST   /api/discovery/preview/spec-file  Preview from uploaded spec file
 POST   /api/discovery/preview/postman Preview from Postman collection
+POST   /api/discovery/preview/manual  Preview manual endpoint entries
 
 GET    /api/auth/github/login         Start GitHub OAuth flow
 GET    /api/auth/github/callback      OAuth callback handler
@@ -237,7 +257,6 @@ GET    /api/auth/repos                List user's GitHub repositories
 
 GET    /api/github                    List all PRs
 POST   /api/github/webhook            GitHub webhook receiver
-POST   /api/github/{id}/sync          Manually sync PR status
 
 WS     /ws/{session_id}               Live agent trace stream (WebSocket)
 
@@ -246,76 +265,19 @@ GET    /health                        Health check
 
 ---
 
-## 🔧 GitHub Integration
-
-PatchFlow uses each user's GitHub OAuth token to open PRs on their behalf. When a user authenticates via "Login with GitHub", the OAuth flow requests `repo`, `read:user`, and `user:email` scopes. This token is used for all GitHub operations.
-
-A static `GITHUB_TOKEN` in `.env` serves as a fallback for development/demo use when OAuth is not configured.
-
-### How PRs Are Created
-
-1. **Clone** — the agent clones your repo to a temp directory
-2. **Locate** — finds the exact function handler for the vulnerable endpoint
-3. **Fix** — generates error handling code (try/catch, timeouts, retries)
-4. **Review** — a Review Agent validates the fix against the full file context
-5. **Branch** — creates `chaos-agent/fix-{name}-{session-id}`
-6. **Commit** — descriptive message: `fix: Add timeout handling for payment API`
-7. **Open PR** — full description with what was found and why the fix works
-
-### Webhook (Optional)
-
-For real-time PR merge notifications in the dashboard:
-
-1. Go to your repo → **Settings → Webhooks → Add webhook**
-2. Payload URL: `https://your-server.com/api/github/webhook`
-3. Content type: `application/json`
-4. Events: select **Pull requests**
-
----
-
-## 🧪 Demo Target: Knowbite API
-
-The repo includes a deliberately vulnerable demo app (`demo_target/`) simulating an ed-tech platform with 7 intentional bugs:
-
-| Route | Vulnerability |
-|-------|--------------|
-| `GET /users/{id}` | No exception handling — raises raw `KeyError` |
-| `POST /users` | No duplicate check, no DB error handling |
-| `GET /users/{id}/recommendations` | External API call with no timeout or retry |
-| `POST /enroll` | Leaks raw exception messages (DB schema exposed) |
-| `POST /payments/process` | External payment API with no timeout/retry/429 handling |
-| `GET /courses/{id}/content` | External CDN call with `timeout=None` |
-| `GET /courses/{id}/analytics` | No null/empty response handling, crashes on missing keys |
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **AI** | Gemma (gemma-4-26b-a4b-it) via Google AI Studio — tool-calling agentic loop |
-| **Backend** | FastAPI · Python 3.11 · async/await throughout |
-| **Database** | PostgreSQL with asyncpg + SQLAlchemy 2.0 (async) |
-| **Real-time** | WebSockets for live agent trace streaming |
-| **GitHub** | PyGithub + GitPython for cloning, branching, and PR creation |
-| **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · shadcn/ui · Framer Motion |
-| **Auth** | GitHub OAuth 2.0 → JWT sessions |
-
----
-
 ## 📂 Project Structure
 
 ```
-chaos-agent/
+patch-flow/
 ├── backend/
-│   ├── agents/              # 6 autonomous AI agents
+│   ├── agents/              # 6 autonomous AI agents (Gemma powered)
 │   │   ├── base.py          # BaseAgent — Gemma tool-calling loop
 │   │   ├── discovery_agent.py
 │   │   ├── chaos_agent.py
 │   │   ├── analyst_agent.py
-│   │   ├── fix_agent.py
-│   │   ├── review_agent.py
-│   │   ├── github_agent.py
+│   │   ├── fix_agent.py     # Code locator & multi-stack fix generator
+│   │   ├── review_agent.py  # Senior engineer code reviewer
+│   │   ├── github_agent.py  # Git branching & PR generator
 │   │   └── orchestrator.py  # Pipeline coordinator
 │   ├── api/                 # FastAPI route handlers
 │   ├── auth/                # GitHub OAuth + JWT
@@ -330,9 +292,7 @@ chaos-agent/
 │   │   ├── components/      # UI components (navbar, terminal, etc.)
 │   │   └── lib/             # Utilities + API config
 │   └── package.json
-├── demo_target/             # Deliberately vulnerable demo API
-├── run_demo.py              # One-command demo runner
-└── .env.example             # Environment variable template
+└── render.yaml              # Render Blueprint deployment config
 ```
 
 ---

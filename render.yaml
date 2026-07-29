@@ -25,7 +25,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://patchflow-frontend-n51l.onrender.com
+        value: https://patchflow-frontend-n23j.onrender.com
 
   # Next.js Frontend Service (Free Tier)
   - type: web
