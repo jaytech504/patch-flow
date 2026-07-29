@@ -542,12 +542,12 @@ class DiscoveryAgent:
             self.db.add(db_endpoint)
             saved.append(db_endpoint)
 
-        await self.db.commit()
+        await self.db.flush()
 
         session = await self.db.get(ChaosSession, self.session_id)
         if session:
             session.endpoints_found = len(saved)
-            await self.db.commit()
+            await self.db.flush()
 
         logger.info(f"[Discovery] Saved {len(saved)} endpoints")
         return [

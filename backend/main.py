@@ -29,14 +29,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.frontend_url,
-        "http://localhost:3000",
-        "https://patchflow-frontend-n23j.onrender.com",
-        "https://patchflow-frontend-n51l.onrender.com",
-        "https://patchflow-frontend.onrender.com",
-    ],
-    allow_origin_regex=r"https://.*\.onrender\.com",
+    allow_origins=[settings.frontend_url, "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

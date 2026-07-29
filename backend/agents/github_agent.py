@@ -20,7 +20,7 @@ class GitHubAgent(BaseAgent):
 
     For each critical/high finding:
     1. Clones the target repo to a temp directory
-    2. Asks Gemma to locate the exact file and line that needs the fix
+    2. Asks Qwen to locate the exact file and line that needs the fix
     3. Applies the fix code to the correct location
     4. Creates a new branch
     5. Commits the change with a descriptive message
@@ -163,7 +163,7 @@ Return JSON:
                 end = min(total, max(start, end_line))
 
             display_lines = all_lines[start - 1 : end]
-            # Return with line numbers so Gemma can reference them
+            # Return with line numbers so Qwen can reference them
             numbered = "\n".join(
                 f"{i + start:4d} | {line}"
                 for i, line in enumerate(display_lines)

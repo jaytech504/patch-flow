@@ -15,29 +15,11 @@ settings = get_settings()
 
 def robust_json_loads(s: str) -> dict:
     s = s.strip()
-
-    # 1. Standard json.loads with strict=False (allows raw newlines & control chars in strings)
     try:
-        return json.loads(s, strict=False)
+        return json.loads(s)
     except Exception:
         pass
 
-    # 2. Fix boolean/null keywords and parse with strict=False
-    try:
-        cleaned = s.replace("True", "true").replace("False", "false").replace("None", "null")
-        return json.loads(cleaned, strict=False)
-    except Exception:
-        pass
-
-    # 3. Fix trailing commas before } or ]
-    import re
-    try:
-        no_trailing_comma = re.sub(r',\s*([\}\]])', r'\1', s)
-        return json.loads(no_trailing_comma, strict=False)
-    except Exception:
-        pass
-
-    # 4. Try ast.literal_eval for Python-style dict outputs
     try:
         val = ast.literal_eval(s)
         if isinstance(val, dict):
@@ -45,6 +27,12 @@ def robust_json_loads(s: str) -> dict:
     except Exception:
         pass
 
+    try:
+        cleaned = s.replace("True", "true").replace("False", "false").replace("None", "null")
+        return json.loads(cleaned)
+    except Exception:
+        pass
+        
     try:
         pythonified = s.replace("true", "True").replace("false", "False").replace("null", "None")
         val = ast.literal_eval(pythonified)
@@ -94,20 +82,14 @@ class BaseAgent(ABC):
     def register_tool(self, tool: Tool):
         self._tools[tool.name] = tool
 
-    async def run(self, task: str, context: dict = None, use_tools: bool = True) -> dict:
+    async def run(self, task: str, context: dict = None) -> dict:
         logger.info(f"[{self.name}] Starting: {task[:60]}...")
         messages = self._build_messages(task, context)
         max_iterations = self.max_iterations
-        empty_response_retries = 0
-        max_empty_retries = 2
 
         for i in range(max_iterations):
-            response = await self._call_gemma(messages, use_tools=use_tools)
+            response = await self._call_gemma(messages)
             message = response.choices[0].message
-            choice = response.choices[0]
-            usage = getattr(response, "usage", None)
-            completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
-            finish_reason = getattr(choice, "finish_reason", None)
 
             if message.content:
                 await self._log("thought", message.content)
@@ -172,46 +154,16 @@ class BaseAgent(ABC):
                     })
                 continue
 
-            # No tool calls = conclusion — but reject empty LLM responses
-            content = (message.content or "").strip()
-            if not content or completion_tokens == 0:
-                empty_response_retries += 1
-                logger.warning(
-                    f"[{self.name}] Empty LLM response "
-                    f"(completion_tokens={completion_tokens}, finish_reason={finish_reason}, "
-                    f"retry {empty_response_retries}/{max_empty_retries})"
-                )
-                if empty_response_retries <= max_empty_retries:
-                    import asyncio as _asyncio
-                    await _asyncio.sleep(5 * empty_response_retries)
-                    continue
-                return {
-                    "error": "empty_llm_response",
-                    "summary": "LLM returned no content.",
-                    "finish_reason": finish_reason,
-                }
-
+            # No tool calls = conclusion
             conclusion = self._parse_conclusion(message.content)
-            if conclusion.get("summary") == "No output." and not conclusion.get("code_after"):
-                empty_response_retries += 1
-                logger.warning(
-                    f"[{self.name}] Unparseable empty conclusion "
-                    f"(retry {empty_response_retries}/{max_empty_retries})"
-                )
-                if empty_response_retries <= max_empty_retries:
-                    import asyncio as _asyncio
-                    await _asyncio.sleep(5 * empty_response_retries)
-                    continue
-                return {"error": "unparseable_response", "summary": "Could not parse LLM output."}
-
             await self._log("conclusion", message.content)
             logger.info(f"[{self.name}] Done in {i+1} iterations.")
             return conclusion
 
         return {"status": "max_iterations_reached"}
 
-    async def _call_gemma(self, messages: List[dict], use_tools: bool = True):
-        tools = [t.to_schema() for t in self._tools.values()] if use_tools else []
+    async def _call_gemma(self, messages: List[dict]):
+        tools = [t.to_schema() for t in self._tools.values()]
         approx_chars = self._estimate_message_chars(messages)
         logger.info(
             f"[{self.name}] Gemma call budget: ~{approx_chars} prompt chars, "
@@ -220,62 +172,14 @@ class BaseAgent(ABC):
         kwargs = {
             "model": settings.gemma_model,
             "messages": messages,
-            "max_tokens": min(self.max_tokens_per_call, 1500),
+            "max_tokens": self.max_tokens_per_call,
         }
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
-        import asyncio as _asyncio
-        import re as _re
-
-        max_retries = 3
-        response = None
-        for attempt in range(max_retries + 1):
-            try:
-                response = await self.client.chat.completions.create(**kwargs)
-                break
-            except Exception as e:
-                err_str = str(e)
-
-                # ── Handle 429 rate limit ──────────────────────────────
-                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    # Extract retry delay from error message if available
-                    delay_match = _re.search(r'retry\s+in\s+([\d.]+)', err_str, _re.IGNORECASE)
-                    wait_secs = float(delay_match.group(1)) if delay_match else (30 * (attempt + 1))
-                    wait_secs = min(wait_secs + 5, 120)  # add small buffer, cap at 2 min
-                    if attempt < max_retries:
-                        logger.warning(
-                            f"[{self.name}] Rate limited (429). "
-                            f"Waiting {wait_secs:.0f}s before retry {attempt + 1}/{max_retries}..."
-                        )
-                        await _asyncio.sleep(wait_secs)
-                        continue
-                    else:
-                        logger.error(f"[{self.name}] Rate limit exceeded after {max_retries} retries.")
-                        raise e
-
-                # ── Handle 404 model not found ─────────────────────────
-                if "not found" in err_str.lower() or "404" in err_str:
-                    fallback_models = ["gemma-4-26b-a4b-it", "gemma-2-27b-it", "gemini-2.5-flash", "gemini-1.5-flash"]
-                    for fb_model in fallback_models:
-                        if fb_model == kwargs.get("model"):
-                            continue
-                        logger.warning(f"[{self.name}] Model {kwargs['model']} not found, trying {fb_model}...")
-                        kwargs["model"] = fb_model
-                        try:
-                            response = await self.client.chat.completions.create(**kwargs)
-                            break
-                        except Exception:
-                            continue
-                    if response is not None:
-                        break
-                    raise e
-
-                # ── Other errors: raise immediately ────────────────────
-                raise e
-
+        response = await self.client.chat.completions.create(**kwargs)
         # Log actual token usage returned by the API
-        if response and hasattr(response, "usage") and response.usage:
+        if hasattr(response, "usage") and response.usage:
             u = response.usage
             logger.info(
                 f"[{self.name}] Token usage: "
@@ -335,7 +239,7 @@ class BaseAgent(ABC):
                 tool_output=tool_output if isinstance(tool_output, (dict, list)) else None,
             )
             self.db.add(step)
-            await self.db.commit()
+            await self.db.flush()
 
     def _build_messages(self, task: str, context: dict = None) -> List[dict]:
         system = self.system_prompt
@@ -349,74 +253,13 @@ class BaseAgent(ABC):
     def _parse_conclusion(self, content: str) -> dict:
         if not content:
             return {"summary": "No output."}
-        import re
-
-        # 1. Try fenced ```json { ... } ``` blocks first
-        fenced_blocks = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL | re.IGNORECASE)
-        for block in fenced_blocks:
-            try:
-                res = robust_json_loads(block)
-                if isinstance(res, dict) and res:
-                    return res
-            except Exception:
-                pass
-
-        # 2. String-aware nested brace parser to extract complete JSON objects { ... }
-        def extract_json_objects(text: str) -> list[str]:
-            objs = []
-            stack = 0
-            start_idx = -1
-            in_string = False
-            escape = False
-            for idx, ch in enumerate(text):
-                if in_string:
-                    if escape:
-                        escape = False
-                    elif ch == '\\':
-                        escape = True
-                    elif ch == '"':
-                        in_string = False
-                else:
-                    if ch == '"':
-                        in_string = True
-                    elif ch == '{':
-                        if stack == 0:
-                            start_idx = idx
-                        stack += 1
-                    elif ch == '}':
-                        if stack > 0:
-                            stack -= 1
-                            if stack == 0 and start_idx != -1:
-                                objs.append(text[start_idx : idx + 1])
-            return objs
-
-        candidates = extract_json_objects(content)
-        # Prioritize candidates containing key agent schema fields
-        for raw_obj in reversed(candidates):
-            try:
-                res = robust_json_loads(raw_obj)
-                if isinstance(res, dict) and any(k in res for k in ("code_after", "risk_score", "fixes", "finding_title", "critical_findings")):
-                    return res
-            except Exception:
-                pass
-
-        # Fallback to any valid dict parsed from candidates
-        for raw_obj in reversed(candidates):
-            try:
-                res = robust_json_loads(raw_obj)
-                if isinstance(res, dict) and res:
-                    return res
-            except Exception:
-                pass
-
-        # 3. Fallback to raw content parse
         try:
-            res = robust_json_loads(content)
-            if isinstance(res, dict):
-                return res
+            start = content.find("{")
+            end = content.rfind("}") + 1
+            if start != -1 and end > start:
+                return robust_json_loads(content[start:end])
         except Exception:
             pass
-
         return {"summary": content}
 
     @abstractmethod

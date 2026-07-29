@@ -101,7 +101,7 @@ class ChaosOrchestrator:
             session = await self.db.get(ChaosSession, self.session_id)
             if session:
                 session.unhandled_count = len(unhandled)
-                await self.db.commit()
+                await self.db.flush()
 
             # ── Stage 2: Analysis ─────────────────────────────────────────────
             await ws_manager.emit_status(
@@ -230,7 +230,7 @@ class ChaosOrchestrator:
                 session.status = SessionStatus.COMPLETE
                 from datetime import datetime
                 session.completed_at = datetime.utcnow()
-                await self.db.commit()
+                await self.db.flush()
 
             # Emit "complete" status first so the stage bar updates,
             # then "report_ready" which triggers the completion modal.

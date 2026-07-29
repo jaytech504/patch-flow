@@ -67,9 +67,9 @@ Return JSON:
 
     def __init__(self, db: AsyncSession, session_id: str, repo_url: str = None, github_token: str = None, framework: str = "fastapi"):
         super().__init__(db, session_id)
-        # Fix generation output token budget (1500 tokens is ~120 lines of code, well within provider limits)
+        # Fix generation is expensive; keep outputs concise and reduce loops.
         self.max_iterations = 5
-        self.max_tokens_per_call = 1500
+        self.max_tokens_per_call = 1200
         self.framework = framework
         self.repo_url = repo_url
         self.repo_slug = self._parse_repo_slug(repo_url) if repo_url else None
@@ -93,13 +93,13 @@ Return JSON:
         for f in critical_findings + all_findings:
             sev = (f.get("severity") or "").upper()
             title = f.get("title", "")
-            if sev in ("CRITICAL", "HIGH", "MEDIUM") and title not in seen_titles:
+            if sev in ("CRITICAL", "HIGH") and title not in seen_titles:
                 seen_titles.add(title)
                 actionable_findings.append(f)
         actionable_findings = actionable_findings[:5]
 
         if not actionable_findings:
-            logger.warning("[Fix] No CRITICAL, HIGH, or MEDIUM findings — nothing to fix.")
+            logger.warning("[Fix] No CRITICAL or HIGH findings — nothing to fix.")
 
         # Try to clone repo if provided
         cloned_successfully = False
@@ -114,37 +114,10 @@ Return JSON:
         fixes = []
         global_fixes = []
 
-        def _is_placeholder_ep(ep: str) -> bool:
-            s = str(ep).lower().strip().replace("_", " ")
-            return (
-                s in ("all", "all endpoints", "all tested endpoints", "global", "system wide", "all_tested_endpoints", "all_endpoints")
-                or "all tested" in s
-                or "all endpoint" in s
-            )
-
         if cloned_successfully:
-            # Process each critical/high/medium finding — split by individual endpoint
+            # Process each critical/high finding — split by individual endpoint
             for finding in actionable_findings:
-                raw_eps = finding.get("affected_endpoints", [])
-                has_placeholder = not raw_eps or any(_is_placeholder_ep(ep) for ep in raw_eps)
-
-                if has_placeholder:
-                    try:
-                        from backend.db.models import Endpoint
-                        from sqlalchemy import select
-                        stmt = select(Endpoint.path).where(Endpoint.session_id == self.session_id)
-                        res = await self.db.execute(stmt)
-                        session_eps = list(res.scalars().all())
-                        if session_eps:
-                            affected_endpoints = session_eps
-                        else:
-                            affected_endpoints = [ep for ep in raw_eps if not _is_placeholder_ep(ep)]
-                    except Exception as ep_err:
-                        logger.warning(f"[Fix] Could not lookup session endpoints: {ep_err}")
-                        affected_endpoints = [ep for ep in raw_eps if not _is_placeholder_ep(ep)]
-                else:
-                    affected_endpoints = [ep for ep in raw_eps if not _is_placeholder_ep(ep)]
-
+                affected_endpoints = finding.get("affected_endpoints", [])
                 if not affected_endpoints:
                     # No specific endpoints — generate a single vacuum fix
                     fallback_fix = await self._generate_vacuum_fix(finding)
@@ -248,7 +221,6 @@ Return JSON:
                                 else ""
                             )
                             candidate = await self.run(
-                                use_tools=False,
                                 task=f"""Generate a production-ready error handling fix for this SINGLE endpoint.
 
 Endpoint: {endpoint_path}
@@ -292,23 +264,13 @@ Return JSON:
                                 context={"endpoint": endpoint_path, "original_code": original_code}
                             )
 
-                            candidate = self._normalize_fix_candidate(
-                                candidate,
-                                fallback={
-                                    "finding_title": finding.get("title"),
-                                    "failure_modes": finding.get("failure_modes", []),
-                                    "severity": finding.get("severity", "HIGH"),
-                                    "file_path": file_path,
-                                    "start_line": start_line,
-                                    "end_line": end_line,
-                                    "affected_endpoints": [endpoint_path],
-                                    "code_before": original_code,
-                                },
-                            )
-                            if not candidate:
-                                generation_error = "LLM returned empty or invalid fix (no code_after)."
-                                logger.warning(f"[Fix] Empty fix candidate for {endpoint_path}")
-                                continue
+                            # Ensure metadata is correctly set
+                            candidate["file_path"] = file_path
+                            candidate["start_line"] = start_line
+                            candidate["end_line"] = end_line
+                            candidate["affected_endpoints"] = [endpoint_path]
+                            if not candidate.get("code_before"):
+                                candidate["code_before"] = original_code
 
                             # Apply candidate to current file state sequentially
                             applied, error_msg = self._apply_fix_to_repo_file(
@@ -496,33 +458,9 @@ Return JSON:
             return self._run_syntax_command(["node", "--check", str(full_path)], "Node.js")
 
         if ext in {".ts", ".tsx"}:
-            # Run tsc --noEmit for TypeScript syntax checks
             ok, msg = self._run_syntax_command(["npx", "--yes", "tsc", "--noEmit", str(full_path)], "TypeScript")
             if ok:
                 return True, ""
-            # Filter out TS2307 "Cannot find module" errors — these are caused
-            # by missing node_modules in the temp clone directory, NOT actual
-            # syntax errors in the generated fix.
-            if msg:
-                real_errors = []
-                for line in msg.splitlines():
-                    line_stripped = line.strip()
-                    if not line_stripped:
-                        continue
-                    # Skip module resolution errors (TS2307) and related errors
-                    if "TS2307" in line_stripped:
-                        continue
-                    # Skip "Cannot find name" errors that are likely from missing types (TS2304)
-                    if "TS2304" in line_stripped:
-                        continue
-                    # Skip declaration file errors (TS7016)
-                    if "TS7016" in line_stripped:
-                        continue
-                    real_errors.append(line_stripped)
-                if not real_errors:
-                    # All errors were just missing module declarations — fix is syntactically valid
-                    return True, ""
-                return False, "\n".join(real_errors[:5])
             # Fallback to Node check when TS toolchain is unavailable.
             fallback_ok, fallback_msg = self._run_syntax_command(["node", "--check", str(full_path)], "Node.js")
             if fallback_ok:
@@ -554,26 +492,6 @@ Return JSON:
         stdout = (proc.stdout or "").strip()
         details = stderr or stdout or f"{label} syntax check failed with exit code {proc.returncode}."
         return False, details
-
-    def _normalize_fix_candidate(self, candidate: dict, fallback: dict) -> dict | None:
-        """Validate and enrich a fix candidate from the LLM."""
-        if not candidate or candidate.get("status") == "max_iterations_reached":
-            return None
-        if candidate.get("error") in ("empty_llm_response", "unparseable_response"):
-            return None
-
-        code_after = candidate.get("code_after") or ""
-        if not str(code_after).strip():
-            return None
-
-        for key, value in fallback.items():
-            if not candidate.get(key):
-                candidate[key] = value
-
-        if not candidate.get("code_before"):
-            candidate["code_before"] = fallback.get("code_before", "")
-
-        return candidate
 
     async def revise_fixes(self, fixes_needing_revision: list[dict]) -> list[dict]:
         """
@@ -627,7 +545,6 @@ Return JSON:
             try:
                 lang_rules = self._get_lang_rules()
                 revised = await self.run(
-                    use_tools=False,
                     task=f"""A senior code reviewer has REJECTED your previous fix and provided specific feedback.
 You MUST address ALL of the reviewer's issues and generate a corrected fix.
 
@@ -682,28 +599,15 @@ Return JSON:
                     }
                 )
 
-                revised = self._normalize_fix_candidate(
-                    revised,
-                    fallback={
-                        "finding_title": fix.get("finding_title"),
-                        "failure_modes": fix.get("failure_modes", []),
-                        "severity": fix.get("severity", "HIGH"),
-                        "file_path": fix.get("file_path"),
-                        "start_line": fix.get("start_line"),
-                        "end_line": fix.get("end_line"),
-                        "affected_endpoints": fix.get("affected_endpoints", []),
-                        "code_before": fix.get("code_before", ""),
-                    },
-                )
-                if not revised:
-                    logger.warning(f"[Fix] Revision returned empty fix for {endpoint_label}")
-                    fix["review_status"] = "revision_failed"
-                    fix["review_feedback"] = (
-                        (fix.get("review_feedback") or "")
-                        + " Revision attempt returned empty code_after."
-                    ).strip()
-                    revised_fixes.append(fix)
-                    continue
+                # Preserve metadata from the original fix
+                revised["file_path"] = fix.get("file_path")
+                revised["start_line"] = fix.get("start_line")
+                revised["end_line"] = fix.get("end_line")
+                revised["affected_endpoints"] = fix.get("affected_endpoints", [])
+
+                # Make sure code_before is preserved exactly
+                if not revised.get("code_before"):
+                    revised["code_before"] = fix.get("code_before", "")
 
                 revised["revision_attempt"] = fix.get("revision_attempt", 0) + 1
                 revised_fixes.append(revised)
@@ -903,10 +807,8 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
             return """- CRITICAL: If you use `logger`, you MUST include BOTH `import logging` AND `logger = logging.getLogger(__name__)` in imports_needed. The import alone is NOT enough.
 - Use `if value is not None:` instead of `if value:` when the value could legitimately be 0."""
         elif self.language in ("javascript", "typescript"):
-            return """- CRITICAL: Use proper TypeScript/JavaScript async/await try-catch handling.
-- For Next.js App Router (route.ts/route.js): return structured JSON error responses (e.g. `NextResponse.json({ error: "Internal Server Error" }, { status: 500 })` or `Response.json(...)`).
-- For Supabase database queries: check for `{ data, error }`. If `error` occurs, do NOT let unhandled exceptions leak stack traces — handle it gracefully and return HTTP 500 (or 400 for bad parameters).
-- Ensure all required imports (e.g. `NextResponse`, `Response`) are listed in imports_needed."""
+            return """- CRITICAL: If you use a logger (like `console` or a logging library), make sure any required imports or setups are in imports_needed.
+- Use strict equality checks `value !== null && value !== undefined` instead of `if (value)` when the value could legitimately be 0 or an empty string."""
         elif self.language == "go":
             return """- CRITICAL: Make sure all packages needed (e.g. "log", "fmt") are included in imports_needed.
 - Handle zero values correctly according to Go idiom (e.g. checking for nil vs empty structs)."""
@@ -940,173 +842,11 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
 
         repo_path = Path(self._repo_path)
         
-        # ── 1. React SPA Page Components & Next.js App/Pages Router ──────────
-        clean_path = path.strip("/ ")
-        path_parts = [p for p in clean_path.split("/") if p]
-        endpoint_name = path_parts[-1] if path_parts else clean_path
-        cap_name = endpoint_name.capitalize()
-        title_name = "".join(w.capitalize() for w in endpoint_name.replace("-", "_").split("_"))
-
-        nextjs_patterns = [
-            # React SPA Page components (e.g. src/pages/Dashboard.tsx, src/pages/Notes.tsx)
-            f"**/pages/{cap_name}.tsx",
-            f"**/pages/{cap_name}.jsx",
-            f"**/pages/{cap_name}.ts",
-            f"**/pages/{cap_name}.js",
-            f"**/pages/{title_name}.tsx",
-            f"**/pages/{title_name}.jsx",
-            f"**/pages/{endpoint_name}.tsx",
-            f"**/pages/{endpoint_name}.jsx",
-            f"**/src/pages/{cap_name}.tsx",
-            f"**/src/pages/{cap_name}.jsx",
-            f"**/views/{cap_name}.tsx",
-            f"**/components/{cap_name}.tsx",
-            # Next.js App Router & API Route patterns
-            f"**/app/{clean_path}/route.ts",
-            f"**/app/{clean_path}/route.js",
-            f"**/app/{clean_path}/route.tsx",
-            f"**/app/{clean_path}/route.jsx",
-            f"**/app/api/{clean_path}/route.ts",
-            f"**/app/api/{clean_path}/route.js",
-            f"**/pages/api/{clean_path}.ts",
-            f"**/pages/api/{clean_path}.js",
-            f"**/pages/api/{clean_path}/index.ts",
-            f"**/pages/api/{clean_path}/index.js",
-            f"**/supabase/functions/{clean_path}/index.ts",
-            f"**/supabase/functions/{clean_path}/index.js",
-            f"**/functions/{clean_path}/index.ts",
-        ]
-
-        for pattern in nextjs_patterns:
-            matches = list(repo_path.glob(pattern))
-            if not matches:
-                path_parts = clean_path.split("/")
-                glob_parts = ["*" if (p.startswith("{") or p.isdigit()) else p for p in path_parts]
-                wildcard_path = "/".join(glob_parts)
-                matches = (
-                    list(repo_path.glob(f"**/app/{wildcard_path}/route.ts")) +
-                    list(repo_path.glob(f"**/app/{wildcard_path}/route.js")) +
-                    list(repo_path.glob(f"**/pages/api/{wildcard_path}.ts"))
-                )
-
-            for f in matches:
-                if any(p in str(f) for p in [".git", "node_modules", ".next", "__pycache__", ".venv", "venv"]):
-                    continue
-                try:
-                    content = f.read_text(encoding="utf-8")
-                    lines = content.splitlines()
-                    target_method = method.upper()
-
-                    method_line_idx = -1
-                    for idx, line in enumerate(lines):
-                        if (
-                            f"function {target_method}" in line or
-                            f"const {target_method}" in line or
-                            f"function {cap_name}" in line or
-                            f"const {cap_name}" in line or
-                            f"function {title_name}" in line or
-                            f"const {title_name}" in line or
-                            "export default" in line
-                        ):
-                            method_line_idx = idx
-                            break
-
-                    if method_line_idx != -1:
-                        start_idx = method_line_idx
-                        while start_idx > 0 and lines[start_idx - 1].strip().startswith(("//", "/*", "*")):
-                            start_idx -= 1
-
-                        brace_count = 0
-                        found_braces = False
-                        end_idx = method_line_idx
-                        for scan_idx in range(method_line_idx, len(lines)):
-                            scan_line = lines[scan_idx]
-                            brace_count += scan_line.count("{") - scan_line.count("}")
-                            if "{" in scan_line:
-                                found_braces = True
-                            if found_braces and brace_count <= 0:
-                                end_idx = scan_idx + 1
-                                break
-                        if end_idx == method_line_idx:
-                            end_idx = min(len(lines), method_line_idx + 45)
-
-                        # If component block is too large (> 60 lines), extract a specific inner handler function
-                        if end_idx - start_idx > 60:
-                            inner_handler_start = -1
-                            for h_idx in range(start_idx, end_idx):
-                                line_text = lines[h_idx].strip()
-                                if any(kw in line_text for kw in [
-                                    "const handle", "function handle",
-                                    "const process", "function process",
-                                    "const fetch", "function fetch",
-                                    "const delete", "function delete",
-                                    "const save", "const update", "const submit",
-                                    "= async (", "async function", "try {"
-                                ]):
-                                    inner_handler_start = h_idx
-                                    break
-
-                            if inner_handler_start != -1:
-                                inner_brace = 0
-                                inner_found = False
-                                inner_end = inner_handler_start
-                                for s_idx in range(inner_handler_start, end_idx):
-                                    s_line = lines[s_idx]
-                                    inner_brace += s_line.count("{") - s_line.count("}")
-                                    if "{" in s_line:
-                                        inner_found = True
-                                    if inner_found and inner_brace <= 0:
-                                        inner_end = s_idx + 1
-                                        break
-                                if inner_end > inner_handler_start:
-                                    start_idx = inner_handler_start
-                                    end_idx = min(inner_end, start_idx + 50)
-                                else:
-                                    end_idx = start_idx + 45
-                            else:
-                                end_idx = start_idx + 45
-
-                        return {
-                            "file_path": str(f.relative_to(repo_path)).replace("\\", "/"),
-                            "target_function": cap_name,
-                            "start_line": start_idx + 1,
-                            "end_line": end_idx,
-                            "original_code": "\n".join(lines[start_idx:end_idx]),
-                        }
-                    elif "export default" in content or "export function" in content or "function" in content or "const" in content:
-                        handler_start = -1
-                        for h_idx, line in enumerate(lines):
-                            line_text = line.strip()
-                            if any(kw in line_text for kw in [
-                                "const handle", "function handle",
-                                "const process", "function process",
-                                "const fetch", "function fetch",
-                                "const delete", "function delete",
-                                "const save", "const update", "const submit",
-                                "= async (", "async function", "try {"
-                            ]):
-                                handler_start = h_idx
-                                break
-                        start_idx = handler_start if handler_start != -1 else 0
-                        end_idx = min(len(lines), start_idx + 45)
-                        return {
-                            "file_path": str(f.relative_to(repo_path)).replace("\\", "/"),
-                            "target_function": cap_name,
-                            "start_line": start_idx + 1,
-                            "end_line": end_idx,
-                            "original_code": "\n".join(lines[start_idx:end_idx]),
-                        }
-                    else:
-                        continue
-                except Exception as e:
-                    logger.error(f"[Fix] Error reading route/page file {f}: {e}")
-                    continue
-
-        # ── 2. General source code scanning ──────────────────────────────────
+        # Scan source files
         extensions = (".py", ".js", ".ts", ".tsx", ".go", ".java", ".rb")
         for ext in extensions:
             for f in repo_path.rglob(f"*{ext}"):
-                if any(p in str(f) for p in [".git", "node_modules", "__pycache__", ".venv", "venv", ".gemini", "artifacts", "scratch", "brain"]):
+                if any(p in str(f) for p in [".git", "node_modules", "__pycache__", "venv", "backend", "frontend", ".gemini", "artifacts", "scratch", "brain"]):
                     continue
                 try:
                     content = f.read_text(encoding="utf-8")
@@ -1300,7 +1040,7 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
                 end = min(total, max(start, end_line))
 
             display_lines = all_lines[start - 1 : end]
-            # Return with line numbers so Gemma can reference them
+            # Return with line numbers so Qwen can reference them
             numbered = "\n".join(
                 f"{i + start:4d} | {line}"
                 for i, line in enumerate(display_lines)

@@ -29,8 +29,6 @@ Severity levels:
 - MEDIUM: app degrades but doesn't crash
 - LOW: app handles gracefully but could improve
 
-IMPORTANT for "affected_endpoints": Always list the exact endpoint paths (e.g. ["/dashboard", "/notes"]). Do NOT use generic placeholder strings like "all_tested_endpoints".
-
 Return JSON:
 {
   "risk_score": 75,

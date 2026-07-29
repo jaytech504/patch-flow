@@ -6,12 +6,12 @@ from backend.db.models import Base
 
 settings = get_settings()
 
-engine = create_async_engine(settings.formatted_database_url, echo=False, poolclass=NullPool)
+engine = create_async_engine(settings.database_url, echo=False, poolclass=NullPool)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def ensure_db_exists():
-    db_url = settings.formatted_database_url
+    db_url = settings.database_url
     if not db_url:
         return
     

@@ -12,7 +12,7 @@ from backend.core.websocket_manager import ws_manager
 class ChaosAgent(BaseAgent):
     """
     Selects and injects failure modes against each endpoint.
-    Uses Gemma to reason about which failures are most relevant
+    Uses Qwen to reason about which failures are most relevant
     based on the endpoint's dependencies.
     """
     name = "chaos"
@@ -103,14 +103,14 @@ Return JSON:
         session = await self.db.get(ChaosSession, self.session_id)
         if session:
             session.failures_injected = len(all_results)
-            await self.db.commit()
+            await self.db.flush()
 
         logger.info(f"[Chaos] Injected {len(all_results)} failures total")
         return all_results
 
     async def _chaos_endpoint(self, endpoint: dict) -> list[dict]:
         """Select and inject relevant failures for one endpoint."""
-        # Ask Gemma which failures to use for this endpoint
+        # Ask Qwen which failures to use for this endpoint
         selection_result = await self.run(
             task=f"""Select failure modes for endpoint {endpoint['method']} {endpoint['path']}.
 Dependencies: {endpoint.get('dependencies', [])}
@@ -166,7 +166,7 @@ Choose the most relevant failure modes to inject.""",
                     stack_trace_leaked=raw.get("stack_trace_leaked", False),
                 )
                 self.db.add(failure_record)
-                await self.db.commit()
+                await self.db.flush()
 
                 results.append({
                     "id": failure_record.id,
@@ -192,7 +192,7 @@ Choose the most relevant failure modes to inject.""",
         session = await self.db.get(ChaosSession, self.session_id)
         if session:
             session.status = status
-            await self.db.commit()
+            await self.db.flush()
 
     async def close(self):
         await self.proxy.close()

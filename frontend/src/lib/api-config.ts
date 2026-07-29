@@ -6,8 +6,8 @@
  * Production example:  http://your-server-ip  (set at `npm run build` time)
  */
 
-const rawUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-export const API_BASE_URL = rawUrl.replace(/\/+$/, "");
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 /**
  * Derive the WebSocket base URL from the API base URL.

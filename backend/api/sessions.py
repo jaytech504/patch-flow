@@ -12,7 +12,6 @@ from backend.db.models import ChaosSession, SessionStatus, FailureResult, Endpoi
 from backend.agents.orchestrator import ChaosOrchestrator
 from backend.agents.discovery_agent import DiscoveryAgent
 from backend.auth.dependencies import get_current_user, get_optional_user
-from backend.core.websocket_manager import ws_manager
 
 router = APIRouter()
 
@@ -146,7 +145,6 @@ async def start_session(
     # Persist only the chosen endpoints
     discovery = DiscoveryAgent(db, session_id)
     saved_endpoints = await discovery.save_selected_endpoints(filtered_endpoints)
-    await db.commit()
 
     # Invalidate cache entry
     draft_cache.delete(body.draft_id)
