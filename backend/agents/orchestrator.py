@@ -139,7 +139,7 @@ class ChaosOrchestrator:
                     github_token=effective_token,
                 )
 
-                max_review_rounds = 3
+                max_review_rounds = 2
                 for review_round in range(max_review_rounds):
                     fix_result = await reviewer.handle(fix_result)
 

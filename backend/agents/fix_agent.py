@@ -67,9 +67,9 @@ Return JSON:
 
     def __init__(self, db: AsyncSession, session_id: str, repo_url: str = None, github_token: str = None, framework: str = "fastapi"):
         super().__init__(db, session_id)
-        # Fix generation needs enough output tokens for full code_after payloads.
+        # Fix generation output token budget (1500 tokens is ~120 lines of code, well within provider limits)
         self.max_iterations = 5
-        self.max_tokens_per_call = 4096
+        self.max_tokens_per_call = 1500
         self.framework = framework
         self.repo_url = repo_url
         self.repo_slug = self._parse_repo_slug(repo_url) if repo_url else None

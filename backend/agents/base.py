@@ -220,7 +220,7 @@ class BaseAgent(ABC):
         kwargs = {
             "model": settings.gemma_model,
             "messages": messages,
-            "max_tokens": self.max_tokens_per_call,
+            "max_tokens": min(self.max_tokens_per_call, 1500),
         }
         if tools:
             kwargs["tools"] = tools
