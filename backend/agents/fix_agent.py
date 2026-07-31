@@ -69,7 +69,7 @@ Return JSON:
         super().__init__(db, session_id)
         # Fix generation is expensive; keep outputs concise and reduce loops.
         self.max_iterations = 5
-        self.max_tokens_per_call = 1200
+        self.max_tokens_per_call = 2048
         self.framework = framework
         self.repo_url = repo_url
         self.repo_slug = self._parse_repo_slug(repo_url) if repo_url else None
@@ -263,6 +263,12 @@ Return JSON:
 }}""",
                                 context={"endpoint": endpoint_path, "original_code": original_code}
                             )
+
+                            # Reject candidates with no actual fix code
+                            if not candidate.get("code_after", "").strip():
+                                generation_error = "LLM returned no code_after in response."
+                                logger.warning(f"[Fix] Empty code_after for {endpoint_path}, retrying...")
+                                continue
 
                             # Ensure metadata is correctly set
                             candidate["file_path"] = file_path
