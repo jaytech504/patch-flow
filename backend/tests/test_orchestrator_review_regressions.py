@@ -35,6 +35,11 @@ class _ReviewAgentHarness(ReviewAgent):
         return {"verdict": "validated", "issues": []}
 
 
+class _MalformedReviewAgentHarness(_ReviewAgentHarness):
+    async def run(self, task: str, context: dict = None) -> dict:
+        return {"status": "invalid_model_output"}
+
+
 class OrchestratorMergeTests(unittest.TestCase):
     def setUp(self):
         self.orch = ChaosOrchestrator(db=None, session_id="test-session")
@@ -106,6 +111,21 @@ class OrchestratorMergeTests(unittest.TestCase):
 
 
 class ReviewAgentRegressionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_review_fails_closed_for_malformed_model_output(self):
+        reviewer = _MalformedReviewAgentHarness(file_content="def handler():\n    return 1\n")
+        result = await reviewer.handle({
+            "fixes": [{
+                "finding_title": "Safe handler",
+                "file_path": "app.py",
+                "code_before": "def handler():\n    return 1\n",
+                "code_after": "def handler():\n    return 1\n",
+                "affected_endpoints": ["/health"],
+            }]
+        })
+        self.assertEqual(len(result["fixes"]), 0)
+        self.assertEqual(len(result["needs_revision"]), 1)
+        self.assertEqual(result["needs_revision"][0]["review_status"], "revision_needed")
+
     async def test_review_requires_full_file_context(self):
         reviewer = _ReviewAgentHarness(file_content="")
         fix_result = {

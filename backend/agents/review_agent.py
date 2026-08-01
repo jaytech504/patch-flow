@@ -241,10 +241,20 @@ Return your verdict as JSON:
                 }
             )
 
-            verdict = review_result.get("verdict", "validated").lower()
+            # A malformed or incomplete model response must never approve a
+            # production change. Review fails closed and asks for a revision.
+            verdict = str(review_result.get("verdict", "revision_needed")).lower()
             issues = review_result.get("issues", [])
+            if not isinstance(issues, list):
+                issues = [str(issues)]
 
-            if verdict == "revision_needed" and issues:
+            if verdict not in {"validated", "revision_needed"}:
+                issues.insert(0, "Reviewer returned an invalid structured verdict.")
+                verdict = "revision_needed"
+
+            if verdict == "revision_needed":
+                if not issues:
+                    issues = ["Reviewer could not validate the fix; regenerate it with a valid review response."]
                 logger.info(
                     f"[Review] Fix for {endpoint_label} NEEDS REVISION: "
                     f"{'; '.join(issues)}"

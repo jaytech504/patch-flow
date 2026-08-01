@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     gemma_api_key: str = ""
     gemma_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     gemma_model: str = "gemma-4-26b-a4b-it"
+    # PatchFlow needs machine-readable agent responses, not exposed reasoning.
+    # Gemma 4 accepts "minimal" to disable its thinking mode.
+    gemma_thinking_level: str = "minimal"
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/chaos_agent"
     app_env: str = "development"
     frontend_url: str = "http://localhost:3000"

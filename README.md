@@ -121,6 +121,8 @@ Create a `.env` file in the root:
 GEMMA_API_KEY=your-gemma-api-key
 GEMMA_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 GEMMA_MODEL=gemma-4-26b-a4b-it
+# Keep agent replies machine-readable; use high only when you explicitly need visible reasoning.
+GEMMA_THINKING_LEVEL=minimal
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/chaos_agent
 GITHUB_CLIENT_ID=your_oauth_client_id
 GITHUB_CLIENT_SECRET=your_oauth_secret

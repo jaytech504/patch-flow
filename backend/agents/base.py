@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List
@@ -90,9 +91,14 @@ class BaseAgent(ABC):
         for i in range(max_iterations):
             response = await self._call_gemma(messages)
             message = response.choices[0].message
+            raw_content = message.content or ""
+            content = self._extract_final_content(raw_content)
 
-            if message.content:
-                await self._log("thought", message.content)
+            # Do not persist or stream raw model reasoning. Besides exposing
+            # unnecessary chain-of-thought, Gemma thought-channel tokens can
+            # corrupt the structured response expected by downstream agents.
+            if raw_content:
+                await self._log("model_output", "Structured model response received.")
 
             if message.tool_calls:
                 # Sanitize tool call arguments before adding to history.
@@ -127,7 +133,7 @@ class BaseAgent(ABC):
 
                 messages.append({
                     "role": "assistant",
-                    "content": message.content,
+                    "content": content,
                     "tool_calls": sanitized_tool_calls,
                 })
 
@@ -155,12 +161,30 @@ class BaseAgent(ABC):
                 continue
 
             # No tool calls = conclusion
-            conclusion = self._parse_conclusion(message.content)
-            await self._log("conclusion", message.content)
+            conclusion = self._parse_conclusion(content)
+            if conclusion.get("_parse_error"):
+                logger.warning(f"[{self.name}] Invalid structured response; requesting a JSON-only retry.")
+                messages.extend([
+                    {"role": "assistant", "content": content},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Your previous response was not a valid JSON object. "
+                            "Return only the requested JSON object, with no reasoning, "
+                            "thought blocks, Markdown fences, or surrounding text."
+                        ),
+                    },
+                ])
+                continue
+
+            await self._log("conclusion", "Structured response parsed successfully.")
             logger.info(f"[{self.name}] Done in {i+1} iterations.")
             return conclusion
 
-        return {"status": "max_iterations_reached"}
+        return {
+            "status": "invalid_model_output",
+            "_parse_error": "The model did not return valid JSON within the retry budget.",
+        }
 
     async def _call_gemma(self, messages: List[dict]):
         tools = [t.to_schema() for t in self._tools.values()]
@@ -173,6 +197,16 @@ class BaseAgent(ABC):
             "model": settings.gemma_model,
             "messages": messages,
             "max_tokens": self.max_tokens_per_call,
+            # Google exposes Gemma thinking controls through the OpenAI
+            # compatibility endpoint under this vendor extension.
+            "extra_body": {
+                "google": {
+                    "thinking_config": {
+                        "thinking_level": settings.gemma_thinking_level,
+                        "include_thoughts": False,
+                    }
+                }
+            },
         }
         if tools:
             kwargs["tools"] = tools
@@ -278,13 +312,9 @@ class BaseAgent(ABC):
 
     def _parse_conclusion(self, content: str) -> dict:
         if not content:
-            return {"summary": "No output."}
-        import re
+            return {"_parse_error": "Model returned no content."}
 
-        # 1. Strip out <thought>...</thought> sections if present
-        cleaned = re.sub(r"<thought>.*?</thought>", "", content, flags=re.DOTALL).strip()
-        if not cleaned:
-            cleaned = content  # Fallback if stripping emptied the string
+        cleaned = self._extract_final_content(content)
 
         # 2. Try fenced ```json { ... } ``` block first
         fenced_match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", cleaned, re.DOTALL)
@@ -294,25 +324,42 @@ class BaseAgent(ABC):
             except Exception:
                 pass
 
-        # 3. Try finding outer brace bounds in the cleaned text
-        start = cleaned.find("{")
-        end = cleaned.rfind("}") + 1
-        if start != -1 and end > start:
+        # 3. Decode from every possible object start. This avoids treating a
+        # brace in explanatory text as part of the final JSON object.
+        decoder = json.JSONDecoder(strict=False)
+        for match in re.finditer(r"\{", cleaned):
             try:
-                return robust_json_loads(cleaned[start:end])
+                value, _ = decoder.raw_decode(cleaned[match.start():])
+                if isinstance(value, dict):
+                    return value
             except Exception:
                 pass
 
-        # 4. Fallback to original content brace bounds if cleaned failed
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start != -1 and end > start:
-            try:
-                return robust_json_loads(content[start:end])
-            except Exception:
-                pass
+        return {"_parse_error": "Model response did not contain a valid JSON object."}
 
-        return {"summary": content}
+    @staticmethod
+    def _extract_final_content(content: str) -> str:
+        """Return Gemma's final channel, never its reasoning channel."""
+        if not content:
+            return ""
+
+        # Hosted and local Gemma responses can use either explicit XML-like
+        # thought tags or Gemma's channel tokens. Prefer only the final channel.
+        final_match = re.search(
+            r"<\|channel\|>\s*final\s*(.*)$", content,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        if final_match:
+            content = final_match.group(1)
+
+        content = re.sub(r"<thought>.*?</thought>", "", content, flags=re.DOTALL | re.IGNORECASE)
+        content = re.sub(
+            r"<\|channel\|>\s*(?:thought|analysis)\b.*?(?=<\|channel\|>|$)",
+            "",
+            content,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        return content.strip()
 
     @abstractmethod
     async def handle(self, *args, **kwargs) -> dict:
