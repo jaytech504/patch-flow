@@ -79,6 +79,41 @@ Return JSON:
         self.language = "python"
         self.detected_framework = framework
 
+    @staticmethod
+    def _normalise_fix_candidate(response: dict) -> dict:
+        """Accept both single-fix and system-prompt-wrapped fix responses.
+
+        The agent's general contract uses {"fixes": [...]}, while targeted
+        generation asks for one fix object. Gemma can legitimately follow the
+        general contract, so unwrap it before deciding that code_after is empty.
+        """
+        if not isinstance(response, dict):
+            return {}
+
+        candidate = response
+        wrapped_fixes = response.get("fixes")
+        if isinstance(wrapped_fixes, list):
+            candidates = [item for item in wrapped_fixes if isinstance(item, dict)]
+            if candidates:
+                candidate = next(
+                    (
+                        item for item in candidates
+                        if isinstance(item.get("code_after") or item.get("fixed_code"), str)
+                    ),
+                    candidates[0],
+                )
+
+        candidate = dict(candidate)
+        if not candidate.get("code_after") and candidate.get("fixed_code"):
+            candidate["code_after"] = candidate["fixed_code"]
+        if not candidate.get("code_before") and candidate.get("original_code"):
+            candidate["code_before"] = candidate["original_code"]
+        if not isinstance(candidate.get("code_after", ""), str):
+            candidate["code_after"] = ""
+        if not isinstance(candidate.get("imports_needed", []), list):
+            candidate["imports_needed"] = []
+        return candidate
+
     async def handle(self, analysis: dict, failure_results: list[dict]) -> dict:
         await self._update_session_status(SessionStatus.FIXING)
 
@@ -265,11 +300,15 @@ Return JSON:
 }}""",
                                 context={"endpoint": endpoint_path, "original_code": original_code}
                             )
+                            candidate = self._normalise_fix_candidate(candidate)
 
                             # Reject candidates with no actual fix code
                             if not candidate.get("code_after", "").strip():
                                 generation_error = "LLM returned no code_after in response."
-                                logger.warning(f"[Fix] Empty code_after for {endpoint_path}, retrying...")
+                                logger.warning(
+                                    f"[Fix] Empty code_after for {endpoint_path}, retrying. "
+                                    f"Response keys: {sorted(candidate.keys())}"
+                                )
                                 continue
 
                             # Ensure metadata is correctly set
@@ -606,6 +645,7 @@ Return JSON:
                         "original_fix": fix,
                     }
                 )
+                revised = self._normalise_fix_candidate(revised)
 
                 # Preserve metadata from the original fix
                 revised["file_path"] = fix.get("file_path")
