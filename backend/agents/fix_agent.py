@@ -69,7 +69,7 @@ Return JSON:
         super().__init__(db, session_id)
         # Fix generation is expensive; keep outputs concise and reduce loops.
         self.max_iterations = 5
-        self.max_tokens_per_call = 2048
+        self.max_tokens_per_call = 4096
         self.framework = framework
         self.repo_url = repo_url
         self.repo_slug = self._parse_repo_slug(repo_url) if repo_url else None
@@ -247,6 +247,8 @@ Rules:
 - Put ALL needed imports in the "imports_needed" array. Do NOT put import statements inside code_after.
 - The imports_needed array must contain ONLY actual import lines (e.g. "import logging", "from fastapi import HTTPException"). Do NOT include non-import setup like "logger = logging.getLogger(__name__)" — put those in code_after if needed.
 - Generate against the CURRENT full file state above (not a stale snapshot).{retry_block}
+
+IMPORTANT: Output ONLY the JSON below. Do NOT write lengthy analysis or reasoning. Go straight to the JSON.
 
 Return JSON:
 {{

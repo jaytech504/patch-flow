@@ -16,7 +16,7 @@ settings = get_settings()
 def robust_json_loads(s: str) -> dict:
     s = s.strip()
     try:
-        return json.loads(s)
+        return json.loads(s, strict=False)
     except Exception:
         pass
 
@@ -29,7 +29,7 @@ def robust_json_loads(s: str) -> dict:
 
     try:
         cleaned = s.replace("True", "true").replace("False", "false").replace("None", "null")
-        return json.loads(cleaned)
+        return json.loads(cleaned, strict=False)
     except Exception:
         pass
         
@@ -279,13 +279,39 @@ class BaseAgent(ABC):
     def _parse_conclusion(self, content: str) -> dict:
         if not content:
             return {"summary": "No output."}
-        try:
-            start = content.find("{")
-            end = content.rfind("}") + 1
-            if start != -1 and end > start:
+        import re
+
+        # 1. Strip out <thought>...</thought> sections if present
+        cleaned = re.sub(r"<thought>.*?</thought>", "", content, flags=re.DOTALL).strip()
+        if not cleaned:
+            cleaned = content  # Fallback if stripping emptied the string
+
+        # 2. Try fenced ```json { ... } ``` block first
+        fenced_match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", cleaned, re.DOTALL)
+        if fenced_match:
+            try:
+                return robust_json_loads(fenced_match.group(1))
+            except Exception:
+                pass
+
+        # 3. Try finding outer brace bounds in the cleaned text
+        start = cleaned.find("{")
+        end = cleaned.rfind("}") + 1
+        if start != -1 and end > start:
+            try:
+                return robust_json_loads(cleaned[start:end])
+            except Exception:
+                pass
+
+        # 4. Fallback to original content brace bounds if cleaned failed
+        start = content.find("{")
+        end = content.rfind("}") + 1
+        if start != -1 and end > start:
+            try:
                 return robust_json_loads(content[start:end])
-        except Exception:
-            pass
+            except Exception:
+                pass
+
         return {"summary": content}
 
     @abstractmethod
