@@ -200,12 +200,18 @@ class BaseAgent(ABC):
             # Google exposes Gemma thinking controls through the OpenAI
             # compatibility endpoint under this vendor extension.
             "extra_body": {
-                "google": {
-                    "thinking_config": {
-                        "thinking_level": settings.gemma_thinking_level,
-                        "include_thoughts": False,
+                # The Python OpenAI client merges `extra_body` into the
+                # request. Google expects its extension inside the API's
+                # `extra_body` envelope, rather than a top-level `google`
+                # key.
+                "extra_body": {
+                    "google": {
+                        "thinking_config": {
+                            "thinking_level": settings.gemma_thinking_level,
+                            "include_thoughts": False,
+                        }
                     }
-                }
+                },
             },
         }
         if tools:
