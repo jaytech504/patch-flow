@@ -15,7 +15,8 @@ import {
   ChevronDown,
   ChevronRight,
   AlertTriangle,
-  Info
+  Info,
+  Lightbulb
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -786,6 +787,19 @@ export default function NewSessionPage() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-6 pb-24">
+                  {/* No-repo notice banner */}
+                  {!selectedRepo && (
+                    <div className="flex items-start gap-3 p-[12px_16px] bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl">
+                      <Lightbulb className="h-4 w-4 text-[#2563EB] shrink-0 mt-0.5" />
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[13px] font-semibold text-[#1D4ED8]">Running without a repository</span>
+                        <span className="text-[12px] text-[#3B82F6] leading-relaxed">
+                          No GitHub repo was selected. PatchFlow will scan your endpoints and generate <strong>recommendations</strong> showing exactly what to fix and how — but no code will be committed and no pull requests will be opened. Connect a repo on the previous step to get automated PRs.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Bulk Actions Bar */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-200 rounded-xl">
                     <div className="flex flex-wrap gap-2">

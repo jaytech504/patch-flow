@@ -10,7 +10,7 @@ router = APIRouter()
 
 def _serialise_fix(fix: dict) -> dict:
     """
-    Normalise a fix dict for the frontend, ensuring every Phase 1 field
+    Normalise a fix dict for the frontend, ensuring every Phase 1+2 field
     is present so the UI doesn't need defensive .get() chains.
     """
     return {
@@ -28,12 +28,14 @@ def _serialise_fix(fix: dict) -> dict:
         "code_before": fix.get("code_before", ""),
         "code_after": fix.get("code_after", ""),
         "imports_needed": fix.get("imports_needed", []),
-        # Unified diff (Phase 1 — empty string when not generated)
+        # Unified diff (empty string when not generated)
         "unified_diff": fix.get("unified_diff", ""),
         # Narrative
         "explanation": fix.get("explanation", ""),
         # Lifecycle status
         "status": fix.get("status", "generated"),
+        # fix_mode: 'patch' = applied to real repo file, 'recommendation' = no repo
+        "fix_mode": fix.get("fix_mode", "patch"),
         # Validation report from PatchValidator
         "validation": fix.get("validation") or {},
         # Review outcome

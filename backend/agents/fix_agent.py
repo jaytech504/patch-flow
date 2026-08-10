@@ -350,6 +350,7 @@ Return JSON:
                                     f"({fail_codes}) — marking validation_failed, skipping apply."
                                 )
                                 candidate["status"] = FixStatus.VALIDATION_FAILED.value
+                                candidate["fix_mode"] = "patch"
                                 candidate["skip_reason"] = (
                                     f"PatchValidator errors: {fail_codes}"
                                 )
@@ -394,6 +395,7 @@ Return JSON:
                             fix_candidate.status = FixStatus.GENERATED
                             fix_candidate.unified_diff = fix_candidate.compute_unified_diff()
                             candidate = fix_candidate.to_dict()
+                            candidate["fix_mode"] = "patch"   # ← real repo patch
 
                             tailored_result = candidate
                             break
@@ -743,18 +745,43 @@ Return JSON:
         return revised_fixes
 
     async def _generate_vacuum_fix(self, finding: dict) -> list[dict]:
-        """Generate a fallback isolated template fix for a single finding."""
+        """
+        Generate a recommendation fix for a single finding when no repo is available.
+
+        Without access to the real codebase we cannot produce a precise patch, so
+        we generate a framework-specific, copy-paste-ready recommendation: a
+        realistic before/after example that shows exactly what pattern to apply,
+        plus a plain-English explanation of why the failure is dangerous and what
+        the correct handler looks like.  fix_mode is set to 'recommendation' so
+        the UI can clearly distinguish these from applied repo patches.
+        """
+        framework = self.framework
         result = await self.run(
-            task=f"""Generate production-ready error handling code fixes for this finding.
+            task=f"""You are generating a concrete error-handling recommendation for an API that
+failed a chaos test.  You do NOT have access to the real source files, so you
+must produce a realistic, framework-specific example that an engineer can adapt
+directly to their codebase.
 
-Framework: {self.framework}
+Framework: {framework}
 Finding:
-- Severity: {finding.get('severity', 'UNKNOWN')}
-- Title: {finding.get('title', 'Unnamed finding')}
-- Endpoints: {finding.get('affected_endpoints', [])}
-- Failure modes: {finding.get('failure_modes', [])}
+  Severity   : {finding.get('severity', 'UNKNOWN')}
+  Title      : {finding.get('title', 'Unnamed finding')}
+  Endpoints  : {finding.get('affected_endpoints', [])}
+  Failure modes tested: {finding.get('failure_modes', [])}
+  Evidence   : {finding.get('evidence', finding.get('description', ''))}
 
-Return JSON with a 'fixes' list, matching:
+Rules:
+- code_before must be a REALISTIC example of vulnerable code a developer might
+  actually write for this framework — not a placeholder comment.
+- code_after must be a complete, copy-paste-ready replacement with proper error
+  handling for every failure mode listed above.
+- imports_needed must list every import that code_after requires.
+- explanation must cover: (1) why the gap is dangerous, (2) what each failure
+  mode does to the app, (3) exactly what the fix does and why it is correct.
+- Do NOT use placeholder strings like "your_function" or "# add your logic here".
+  Use realistic names that match the endpoint path.
+
+Return JSON:
 {{
   "fixes": [
     {{
@@ -762,59 +789,100 @@ Return JSON with a 'fixes' list, matching:
       "failure_modes": {finding.get('failure_modes', [])},
       "affected_endpoints": {finding.get('affected_endpoints', [])},
       "severity": "{finding.get('severity', 'UNKNOWN')}",
-      "explanation": "Why this is dangerous and what the fix does",
-      "code_before": "# vulnerable code example",
-      "code_after": "# fixed code with proper error handling",
-      "language": "python",
-      "fix_type": "exception_handler"
+      "explanation": "Detailed explanation covering danger, failure modes, and fix rationale",
+      "code_before": "realistic vulnerable handler code",
+      "code_after": "complete fixed handler code with all error handling",
+      "language": "{self.language}",
+      "fix_type": "exception_handler",
+      "imports_needed": ["every import needed by code_after"]
     }}
   ]
 }}""",
             context={"finding": finding}
         )
-        raw_fixes = result.get("fixes", [])
-        # Stamp GENERATED status and compute diffs on vacuum fixes too
+        raw_fixes = result.get("fixes", []) if isinstance(result, dict) else []
         stamped = []
         for f in raw_fixes:
             fc = FixCandidate.from_dict(f)
             fc.status = FixStatus.GENERATED
             fc.unified_diff = fc.compute_unified_diff()
-            stamped.append(fc.to_dict())
+            d = fc.to_dict()
+            d["fix_mode"] = "recommendation"   # ← no repo: this is guidance, not a patch
+            stamped.append(d)
         return stamped
 
     async def _generate_vacuum_all_fixes(self, analysis: dict, critical_findings: list[dict], all_findings: list[dict]) -> dict:
-        """Existing implementation of FixAgent running in a vacuum."""
-        fixes_result = await self.run(
-            task=f"""Generate production-ready error handling code fixes for these findings.
+        """
+        Generate recommendation fixes for all findings when no repo is available.
 
-Framework: {self.framework}
+        Produces framework-specific, copy-paste-ready before/after examples
+        rather than generic advice patterns.  Each fix is labelled with
+        fix_mode='recommendation' so the UI and PR gate can handle it correctly
+        (recommendations are never committed to a repo).
+        """
+        framework = self.framework
+        fixes_result = await self.run(
+            task=f"""You are generating concrete error-handling recommendations for an API that
+failed multiple chaos tests.  You do NOT have access to the real source files,
+so you must produce realistic, framework-specific examples an engineer can adapt
+directly to their codebase.
+
+Framework: {framework}
 Risk Score: {analysis.get('risk_score', 'unknown')}
 
-Critical findings requiring fixes:
+Findings that need fixes (CRITICAL and HIGH severity):
 {self._format_findings(critical_findings)}
 
-All findings:
-{self._format_findings(all_findings[:8])}
+Additional findings:
+{self._format_findings(all_findings[:5])}
 
 Patterns identified:
 {chr(10).join(analysis.get('patterns', []))}
 
-Generate specific, copy-paste ready code fixes for each finding.
-Prioritise the CRITICAL and HIGH severity findings first.""",
+Rules for EVERY fix in the list:
+- code_before must be a REALISTIC example of vulnerable code — not a placeholder
+  comment.  Use endpoint paths from the finding as function/route names.
+- code_after must be complete, copy-paste-ready with full error handling for
+  every failure mode listed in that finding.
+- imports_needed must list every import that code_after requires.
+- explanation must cover: (1) why the gap is dangerous, (2) what each failure
+  mode does to the app, (3) exactly what the fix does and why it is correct.
+- Prioritise CRITICAL findings first, then HIGH.
+- Do NOT write generic advice like "add try/except" — write the actual handler.
+
+Return JSON:
+{{
+  "fixes": [
+    {{
+      "finding_title": "exact finding title",
+      "failure_modes": ["list", "of", "failure", "modes"],
+      "affected_endpoints": ["/endpoint/path"],
+      "severity": "CRITICAL|HIGH|MEDIUM|LOW",
+      "explanation": "Detailed explanation covering danger, failure modes, and fix rationale",
+      "code_before": "realistic vulnerable handler",
+      "code_after": "complete fixed handler with all error handling",
+      "language": "{self.language}",
+      "fix_type": "exception_handler",
+      "imports_needed": ["every import needed by code_after"]
+    }}
+  ],
+  "global_fixes": []
+}}""",
             context={
-                "framework": self.framework,
+                "framework": framework,
                 "risk_score": analysis.get("risk_score"),
                 "findings_count": len(critical_findings) + len(all_findings),
             }
         )
-        # Stamp GENERATED status and compute diffs on all vacuum fixes
         raw_fixes = fixes_result.get("fixes", []) if isinstance(fixes_result, dict) else []
         stamped = []
         for f in raw_fixes:
             fc = FixCandidate.from_dict(f)
             fc.status = FixStatus.GENERATED
             fc.unified_diff = fc.compute_unified_diff()
-            stamped.append(fc.to_dict())
+            d = fc.to_dict()
+            d["fix_mode"] = "recommendation"   # ← no repo: this is guidance, not a patch
+            stamped.append(d)
         return {
             "fixes": stamped,
             "global_fixes": fixes_result.get("global_fixes", []) if isinstance(fixes_result, dict) else [],
