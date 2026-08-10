@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.agents.base import BaseAgent, Tool
 from backend.core.config import get_settings
+from backend.core.models import FixStatus
 from backend.core.websocket_manager import ws_manager
 from backend.db.models import PullRequest
 
@@ -481,14 +482,64 @@ This PR consolidates **{len(fixes_applied)}** error-handling fix(es) identified 
             self._cleanup()
             return []
 
-        # Apply all fixes to the single clone
+        # ── Validation gate ───────────────────────────────────────────────────
+        # Only fixes that passed review (validated) or were generated without a
+        # review step (generated) are eligible for a PR.
+        # Fixes blocked by PatchValidator or still needing revision are marked
+        # pr_skipped and excluded from the commit.
+        _ELIGIBLE_STATUSES = {FixStatus.VALIDATED.value, FixStatus.GENERATED.value}
+        _BLOCKED_STATUSES = {FixStatus.VALIDATION_FAILED.value, FixStatus.NEEDS_REVIEW.value}
+
+        eligible_fixes: list[dict] = []
+        skipped_fixes: list[dict] = []
+
+        for fix in fixes:
+            fix_status = fix.get("status", FixStatus.GENERATED.value)
+            if fix_status in _BLOCKED_STATUSES:
+                reason = fix.get("skip_reason") or fix.get("review_feedback") or (
+                    f"Fix status is '{fix_status}' — blocked from PR creation."
+                )
+                fix = {**fix, "status": FixStatus.PR_SKIPPED.value, "skip_reason": reason}
+                skipped_fixes.append(fix)
+                logger.info(
+                    f"[GitHub] Skipping fix for "
+                    f"{', '.join(fix.get('affected_endpoints', ['?']))} "
+                    f"— {fix_status}: {reason[:120]}"
+                )
+            else:
+                eligible_fixes.append(fix)
+
+        if skipped_fixes:
+            await ws_manager.broadcast(self.session_id, "fixes_skipped", {
+                "count": len(skipped_fixes),
+                "fixes": [
+                    {
+                        "finding_title": f.get("finding_title", ""),
+                        "affected_endpoints": f.get("affected_endpoints", []),
+                        "status": f.get("status"),
+                        "skip_reason": f.get("skip_reason", ""),
+                    }
+                    for f in skipped_fixes
+                ],
+            })
+
+        if not eligible_fixes:
+            logger.warning("[GitHub] All fixes were blocked by the validation gate — no PR created.")
+            self._cleanup()
+            await ws_manager.emit_status(
+                self.session_id, "github_skipped",
+                f"No eligible fixes — {len(skipped_fixes)} fix(es) blocked by validation."
+            )
+            return []
+
+        # Apply all eligible fixes to the single clone
         applied_fixes = []
         files_changed = set()
 
         # Sort fixes by file_path then start_line descending so that
         # line-range replacements don't shift line numbers for later fixes in the same file
         sorted_fixes = sorted(
-            fixes,
+            eligible_fixes,
             key=lambda f: (f.get("file_path", ""), -(f.get("start_line", 0) or 0))
         )
 
@@ -598,5 +649,6 @@ This PR consolidates **{len(fixes_applied)}** error-handling fix(es) identified 
             "pr_title": pr_title,
             "files_changed": list(files_changed),
             "fixes_applied": len(applied_fixes),
+            "fixes_skipped": len(skipped_fixes),
         }]
 

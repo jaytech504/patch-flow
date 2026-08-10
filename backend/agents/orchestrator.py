@@ -6,6 +6,7 @@ from backend.agents.analyst_agent import AnalystAgent
 from backend.agents.fix_agent import FixAgent
 from backend.agents.review_agent import ReviewAgent
 from backend.agents.github_agent import GitHubAgent
+from backend.core.models import FixStatus
 from backend.core.websocket_manager import ws_manager
 from backend.core.config import get_settings
 from backend.db.models import ChaosSession, SessionStatus
@@ -45,10 +46,17 @@ class ChaosOrchestrator:
     ) -> list[dict]:
         """
         Merge revised fixes by identity:
-        - keep already validated fixes
+        - keep already validated fixes unchanged
         - replace each rejected fix with its revised counterpart if present
+          and the revised fix is not itself blocked (validation_failed)
         - if a revised fix cannot be matched, include it once (no duplicate append)
+
+        A revised fix that carries validation_failed is not promoted — the
+        original rejected fix is kept with its needs_review status so the
+        next review round or the final exclusion logic can handle it.
         """
+        _BLOCKED = {FixStatus.VALIDATION_FAILED.value}
+
         revised_by_id = {
             self._fix_identity(fx): fx
             for fx in revised_fixes
@@ -56,17 +64,29 @@ class ChaosOrchestrator:
         rejected_ids = {self._fix_identity(fx) for fx in rejected_fixes}
 
         merged: list[dict] = list(validated_fixes)
-        used_ids = set()
+        used_ids: set = set()
+
         for old_fix in rejected_fixes:
             identity = self._fix_identity(old_fix)
             replacement = revised_by_id.get(identity)
-            if replacement:
+            if replacement and replacement.get("status") not in _BLOCKED:
                 merged.append(replacement)
                 used_ids.add(identity)
+            else:
+                # Revision was blocked or missing — keep original so it
+                # surfaces in the next review round or unresolved_fixes.
+                merged.append(old_fix)
+                if replacement:
+                    logger.warning(
+                        f"[Orchestrator] Revised fix for "
+                        f"{old_fix.get('affected_endpoints')} is still "
+                        f"validation_failed — keeping original for re-review."
+                    )
 
         for identity, revised in revised_by_id.items():
             if identity not in used_ids and identity not in rejected_ids:
-                merged.append(revised)
+                if revised.get("status") not in _BLOCKED:
+                    merged.append(revised)
 
         return merged
 
@@ -145,7 +165,6 @@ class ChaosOrchestrator:
 
                     needs_revision = fix_result.get("needs_revision", [])
                     if not needs_revision:
-                        # All fixes validated — proceed
                         logger.info(
                             f"[Orchestrator] Review round {review_round + 1}: "
                             f"all fixes validated ✓"
@@ -161,7 +180,6 @@ class ChaosOrchestrator:
                         f"Revising {len(needs_revision)} fix(es) based on review feedback..."
                     )
 
-                    # Send rejected fixes back to FixAgent for revision
                     revised_fixer = FixAgent(
                         self.db, self.session_id,
                         repo_url=github_repo,
@@ -169,13 +187,17 @@ class ChaosOrchestrator:
                     )
                     revised_fixes = await revised_fixer.revise_fixes(needs_revision)
 
-                    # Merge revisions by identity so revised fixes replace rejected ones
+                    # Merge revisions by identity — status-aware so
+                    # validation_failed revisions don't displace good fixes.
                     fix_result["fixes"] = self._merge_revised_fixes(
                         validated_fixes=fix_result.get("fixes", []),
                         rejected_fixes=needs_revision,
                         revised_fixes=revised_fixes,
                     )
-                    fix_result["fixes_count"] = len(fix_result["fixes"])
+                    fix_result["fixes_count"] = len([
+                        f for f in fix_result["fixes"]
+                        if f.get("status") not in {FixStatus.VALIDATION_FAILED.value}
+                    ])
 
                     # Clear the needs_revision list for the next review round
                     fix_result.pop("needs_revision", None)
@@ -185,14 +207,16 @@ class ChaosOrchestrator:
                         f"Re-reviewing revised fixes (round {review_round + 2})..."
                     )
                 else:
-                    # Max rounds reached — do not auto-merge rejected fixes as validated.
+                    # Max rounds reached — exclude any fixes still needing revision.
                     remaining = fix_result.pop("needs_revision", [])
                     if remaining:
                         logger.warning(
                             f"[Orchestrator] Max review rounds reached. "
-                            f"{len(remaining)} fix(es) still need revision and were excluded from validated fixes."
+                            f"{len(remaining)} fix(es) still need revision — excluded."
                         )
-                        fix_result["unresolved_fixes"] = remaining
+                        # Carry them as unresolved so the report can show them
+                        existing_skipped = fix_result.get("skipped_fixes", [])
+                        fix_result["skipped_fixes"] = existing_skipped + remaining
                         fix_result["fixes_count"] = len(fix_result.get("fixes", []))
 
                 review_stats = fix_result.get("review_stats", {})
@@ -204,6 +228,7 @@ class ChaosOrchestrator:
 
             # ── Stage 4: GitHub PRs ───────────────────────────────────────────
             prs_opened = []
+            prs_skipped_count = 0
             if github_repo and effective_token:
                 await ws_manager.emit_status(
                     self.session_id, "opening_prs",
@@ -218,6 +243,9 @@ class ChaosOrchestrator:
                     analysis=analysis,
                     report_id=fix_result.get("report_id"),
                 )
+                # Accumulate PR-level skip count for the summary
+                for pr in prs_opened:
+                    prs_skipped_count += pr.get("fixes_skipped", 0)
             elif github_repo and not effective_token:
                 await ws_manager.emit_status(
                     self.session_id, "github_skipped",
@@ -228,9 +256,17 @@ class ChaosOrchestrator:
             session = await self.db.get(ChaosSession, self.session_id)
             if session:
                 session.status = SessionStatus.COMPLETE
+                session.prs_opened = len(prs_opened)
+                session.risk_score = analysis.get("risk_score", 0)
                 from datetime import datetime
                 session.completed_at = datetime.utcnow()
                 await self.db.flush()
+
+            # Total skipped = validation_failed + needs_review (unresolved) + pr_skipped
+            total_skipped = (
+                len(fix_result.get("skipped_fixes", []))
+                + prs_skipped_count
+            )
 
             # Emit "complete" status first so the stage bar updates,
             # then "report_ready" which triggers the completion modal.
@@ -238,6 +274,7 @@ class ChaosOrchestrator:
                 self.session_id, "complete",
                 f"Done. Risk score: {analysis.get('risk_score', 0)}/100 | "
                 f"{len(prs_opened)} PR(s) opened"
+                + (f" | {total_skipped} fix(es) skipped" if total_skipped else "")
             )
 
             if fix_result.get("report_id"):
@@ -253,6 +290,7 @@ class ChaosOrchestrator:
                 "failures_injected": len(failure_results),
                 "unhandled_count": len(unhandled),
                 "fixes_generated": fix_result.get("fixes_count", 0),
+                "fixes_skipped": total_skipped,
                 "risk_score": analysis.get("risk_score", 0),
                 "prs_opened": len(prs_opened),
             }

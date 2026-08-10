@@ -2,6 +2,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.agents.base import BaseAgent, Tool
+from backend.core.models import AnalysisResult
 from backend.db.models import ChaosSession, SessionStatus, FailureResult, FailureStatus
 from sqlalchemy import select
 
@@ -12,6 +13,9 @@ class AnalystAgent(BaseAgent):
     - Patterns across failures (e.g. all DB failures unhandled)
     - Most critical gaps
     - Risk scoring
+
+    Returns a validated AnalysisResult; also yields a plain dict via
+    .to_dict() so the rest of the pipeline keeps working unchanged.
     """
     name = "analyst"
     system_prompt = """You are the Analyst Agent in a chaos engineering system.
@@ -50,6 +54,10 @@ Return JSON:
         super().__init__(db, session_id)
 
     async def handle(self, failure_results: list[dict]) -> dict:
+        """
+        Run analysis and return a validated AnalysisResult serialised to dict.
+        Callers that previously consumed a raw dict are unaffected.
+        """
         await self._update_session_status(SessionStatus.ANALYSING)
 
         # Group results for analysis
@@ -58,7 +66,7 @@ Return JSON:
         degraded = [r for r in failure_results if r["result"] == "degraded"]
         leaked = [r for r in failure_results if r.get("error_leaked")]
 
-        analysis = await self.run(
+        raw = await self.run(
             task=f"""Analyse these chaos engineering results:
 
 Total failures injected: {len(failure_results)}
@@ -81,8 +89,34 @@ Produce a comprehensive risk analysis with specific findings and patterns.""",
             }
         )
 
-        logger.info(f"[Analyst] Risk score: {analysis.get('risk_score', 'N/A')}")
-        return analysis
+        # Validate and coerce through the typed model.
+        # If the LLM output is malformed in some fields (e.g. bad severity
+        # string, missing risk_score), the model's validators normalise them
+        # rather than letting silent KeyErrors propagate downstream.
+        try:
+            result = AnalysisResult.from_dict(raw)
+        except Exception as e:
+            logger.warning(
+                f"[Analyst] AnalysisResult validation failed ({e}); "
+                "falling back to raw dict with defaults."
+            )
+            # Build a safe fallback so the pipeline can always continue
+            result = AnalysisResult(
+                risk_score=raw.get("risk_score", 0) if isinstance(raw, dict) else 0,
+                summary=raw.get("summary", "") if isinstance(raw, dict) else "",
+                critical_findings=[],
+                all_findings=[],
+                patterns=[],
+            )
+
+        logger.info(f"[Analyst] Risk score: {result.risk_score} | "
+                    f"critical={len(result.critical_findings)} "
+                    f"all={len(result.all_findings)}")
+
+        # Return a plain dict — downstream agents (FixAgent, Orchestrator,
+        # FixAgent._save_report) all call .get() on this value, so the shape
+        # must be preserved.  to_dict() produces exactly that shape.
+        return result.to_dict()
 
     def _format_results(self, results: list[dict]) -> str:
         if not results:

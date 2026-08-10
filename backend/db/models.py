@@ -132,6 +132,7 @@ class Report(Base):
     critical_findings = Column(JSON, default=list)
     all_findings = Column(JSON, default=list)
     fixes = Column(JSON, default=list)
+    skipped_fixes = Column(JSON, default=list)   # fixes blocked by validation gate
     risk_score = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 

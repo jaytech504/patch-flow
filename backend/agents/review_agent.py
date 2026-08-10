@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.agents.base import BaseAgent, Tool
 from backend.core.config import get_settings
+from backend.core.models import FixStatus, ReviewVerdict
 
 settings = get_settings()
 
@@ -141,6 +142,7 @@ Return JSON:
                 # Without full-file context, this review must fail closed.
                 logger.warning(f"[Review] Cannot read {file_path} — revision required")
                 fix["review_status"] = "revision_needed"
+                fix["status"] = FixStatus.NEEDS_REVIEW.value
                 fix["review_feedback"] = (
                     "Review requires full-file context. Could not read target file; "
                     "regenerate fix with valid file_path and coherent replacement block."
@@ -164,6 +166,7 @@ Return JSON:
                     f"{'; '.join(precheck)}"
                 )
                 fix["review_status"] = "revision_needed"
+                fix["status"] = FixStatus.NEEDS_REVIEW.value
                 fix["review_feedback"] = (
                     "Fix deterministic structural/syntax issues before resubmitting: "
                     + "; ".join(precheck)
@@ -241,20 +244,24 @@ Return your verdict as JSON:
                 }
             )
 
-            # A malformed or incomplete model response must never approve a
-            # production change. Review fails closed and asks for a revision.
-            verdict = str(review_result.get("verdict", "revision_needed")).lower()
-            issues = review_result.get("issues", [])
-            if not isinstance(issues, list):
-                issues = [str(issues)]
+            # Parse and validate the LLM response through the typed model.
+            # ReviewVerdict.fail_closed() is used whenever the model returns
+            # something we cannot trust (wrong shape, unknown verdict string).
+            try:
+                verdict_model = ReviewVerdict.model_validate(review_result)
+            except Exception as parse_err:
+                logger.warning(
+                    f"[Review] Could not parse ReviewVerdict for {endpoint_label}: "
+                    f"{parse_err} — failing closed."
+                )
+                verdict_model = ReviewVerdict.fail_closed(
+                    "Reviewer returned a malformed response; regenerate the fix."
+                )
 
-            if verdict not in {"validated", "revision_needed"}:
-                issues.insert(0, "Reviewer returned an invalid structured verdict.")
-                verdict = "revision_needed"
-
-            if verdict == "revision_needed":
-                if not issues:
-                    issues = ["Reviewer could not validate the fix; regenerate it with a valid review response."]
+            if verdict_model.verdict == "revision_needed":
+                issues = verdict_model.issues or [
+                    "Reviewer could not validate the fix; regenerate it with a valid review response."
+                ]
                 logger.info(
                     f"[Review] Fix for {endpoint_label} NEEDS REVISION: "
                     f"{'; '.join(issues)}"
@@ -264,9 +271,9 @@ Return your verdict as JSON:
                     f"❌ Revision needed for {endpoint_label}: {'; '.join(issues)}"
                 )
                 fix["review_status"] = "revision_needed"
-                fix["review_feedback"] = review_result.get(
-                    "revision_instructions",
-                    "; ".join(issues)
+                fix["status"] = FixStatus.NEEDS_REVIEW.value
+                fix["review_feedback"] = (
+                    verdict_model.revision_instructions or "; ".join(issues)
                 )
                 fix["review_issues"] = issues
                 needs_revision.append(fix)
@@ -274,6 +281,7 @@ Return your verdict as JSON:
                 logger.info(f"[Review] Fix for {endpoint_label} VALIDATED ✓")
                 await self._log("result", f"✅ Validated fix for {endpoint_label}")
                 fix["review_status"] = "validated"
+                fix["status"] = FixStatus.VALIDATED.value
                 reviewed_fixes.append(fix)
 
         # Cleanup clone

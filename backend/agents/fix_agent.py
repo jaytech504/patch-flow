@@ -11,6 +11,8 @@ from sqlalchemy import select
 
 from backend.agents.base import BaseAgent, Tool
 from backend.core.config import get_settings
+from backend.core.models import FixCandidate, FixStatus, SourceSnapshot
+from backend.core.patch_validation import PatchValidator
 from backend.db.models import FailureResult, ChaosSession, SessionStatus, Report
 
 settings = get_settings()
@@ -225,6 +227,18 @@ Return JSON:
                             logger.warning(f"[Fix] Could not locate {endpoint_path}. Skipping.")
                             continue
 
+                        # ── Immutable source snapshot ─────────────────────────
+                        # Captured once before any fix is applied to this file.
+                        # Used as the authoritative code_before — the LLM's
+                        # code_before is accepted only if it matches; otherwise
+                        # the snapshot takes precedence.
+                        snapshot = SourceSnapshot(
+                            file_path=file_path,
+                            start_line=start_line or 0,
+                            end_line=end_line or 0,
+                            content=original_code,
+                        )
+
                         generation_error = ""
                         max_attempts = 3
                         tailored_result = None
@@ -311,13 +325,42 @@ Return JSON:
                                 )
                                 continue
 
-                            # Ensure metadata is correctly set
+                            # Enforce immutable snapshot: code_before must come from
+                            # the snapshot, not the LLM (which may hallucinate it).
                             candidate["file_path"] = file_path
                             candidate["start_line"] = start_line
                             candidate["end_line"] = end_line
                             candidate["affected_endpoints"] = [endpoint_path]
-                            if not candidate.get("code_before"):
-                                candidate["code_before"] = original_code
+                            candidate["code_before"] = snapshot.content
+
+                            # ── PatchValidator — now a hard gate ─────────────
+                            # A FAILED validation (missing file_path, empty code,
+                            # unsafe path, secret leakage) blocks the fix from
+                            # being applied or promoted to a PR.  Warnings are
+                            # logged but do not block.
+                            validation = PatchValidator.validate(candidate)
+                            candidate["validation"] = validation.model_dump()
+
+                            if validation.status == "failed":
+                                fail_codes = ", ".join(
+                                    c.code for c in validation.checks if c.severity == "error"
+                                )
+                                logger.warning(
+                                    f"[Fix] Patch validation FAILED for {endpoint_path} "
+                                    f"({fail_codes}) — marking validation_failed, skipping apply."
+                                )
+                                candidate["status"] = FixStatus.VALIDATION_FAILED.value
+                                candidate["skip_reason"] = (
+                                    f"PatchValidator errors: {fail_codes}"
+                                )
+                                tailored_result = candidate
+                                break
+                            elif validation.status == "warnings":
+                                warn_codes = ", ".join(c.code for c in validation.checks)
+                                logger.warning(
+                                    f"[Fix] Patch validation warnings for {endpoint_path}: "
+                                    f"{warn_codes}"
+                                )
 
                             # Apply candidate to current file state sequentially
                             applied, error_msg = self._apply_fix_to_repo_file(
@@ -333,7 +376,7 @@ Return JSON:
                                 logger.warning(f"[Fix] Candidate fix could not be applied for {endpoint_path}: {generation_error}")
                                 continue
 
-                            # Validate full updated file syntax for Python before accepting
+                            # Validate full updated file syntax before accepting
                             valid_syntax, syntax_err = self._validate_repo_file_syntax(file_path)
                             if not valid_syntax:
                                 generation_error = syntax_err
@@ -341,6 +384,16 @@ Return JSON:
                                     self._set_repo_file_content(file_path, raw_file_state)
                                 logger.warning(f"[Fix] Syntax validation failed for {file_path}: {syntax_err}")
                                 continue
+
+                            # ── Compute unified diff ──────────────────────────
+                            # Generated after the fix is successfully applied so
+                            # the diff reflects the exact change that will land
+                            # in the PR, including any import additions.
+                            fix_candidate = FixCandidate.from_dict(candidate)
+                            fix_candidate.source_snapshot = snapshot
+                            fix_candidate.status = FixStatus.GENERATED
+                            fix_candidate.unified_diff = fix_candidate.compute_unified_diff()
+                            candidate = fix_candidate.to_dict()
 
                             tailored_result = candidate
                             break
@@ -350,7 +403,11 @@ Return JSON:
                             continue
 
                         fixes.append(tailored_result)
-                        logger.info(f"[Fix] Generated fix for {endpoint_path} @ {file_path}:{start_line}-{end_line}")
+                        status_label = tailored_result.get("status", FixStatus.GENERATED.value)
+                        logger.info(
+                            f"[Fix] Fix for {endpoint_path} @ {file_path}:{start_line}-{end_line} "
+                            f"— status={status_label}"
+                        )
 
                     except Exception as e:
                         logger.error(f"[Fix] Failed fix for endpoint '{endpoint_path}': {e}")
@@ -375,11 +432,18 @@ Return JSON:
         # Build and save final report
         report = await self._save_report(analysis, fixes_result)
 
-        logger.info(f"[Fix] Generated {len(fixes)} fixes. Report: {report.id}")
+        applied = [f for f in fixes if f.get("status") != FixStatus.VALIDATION_FAILED.value]
+        blocked = [f for f in fixes if f.get("status") == FixStatus.VALIDATION_FAILED.value]
+
+        logger.info(
+            f"[Fix] {len(applied)} fixes ready, {len(blocked)} blocked by validation. "
+            f"Report: {report.id}"
+        )
         return {
             "report_id": report.id,
-            "fixes_count": len(fixes),
-            "fixes": fixes,
+            "fixes_count": len(applied),
+            "fixes": applied,
+            "skipped_fixes": blocked,
             "global_fixes": global_fixes,
         }
 
@@ -653,11 +717,15 @@ Return JSON:
                 revised["end_line"] = fix.get("end_line")
                 revised["affected_endpoints"] = fix.get("affected_endpoints", [])
 
-                # Make sure code_before is preserved exactly
-                if not revised.get("code_before"):
-                    revised["code_before"] = fix.get("code_before", "")
+                # Make sure code_before is preserved exactly (immutable snapshot)
+                revised["code_before"] = fix.get("code_before", "")
 
-                revised["revision_attempt"] = fix.get("revision_attempt", 0) + 1
+                # Compute a fresh diff for the revised fix
+                revised_fc = FixCandidate.from_dict(revised)
+                revised_fc.status = FixStatus.GENERATED
+                revised_fc.unified_diff = revised_fc.compute_unified_diff()
+                revised_fc.revision_attempt = fix.get("revision_attempt", 0) + 1
+                revised = revised_fc.to_dict()
                 revised_fixes.append(revised)
 
                 logger.info(f"[Fix] Revised fix for {endpoint_label}")
@@ -704,7 +772,15 @@ Return JSON with a 'fixes' list, matching:
 }}""",
             context={"finding": finding}
         )
-        return result.get("fixes", [])
+        raw_fixes = result.get("fixes", [])
+        # Stamp GENERATED status and compute diffs on vacuum fixes too
+        stamped = []
+        for f in raw_fixes:
+            fc = FixCandidate.from_dict(f)
+            fc.status = FixStatus.GENERATED
+            fc.unified_diff = fc.compute_unified_diff()
+            stamped.append(fc.to_dict())
+        return stamped
 
     async def _generate_vacuum_all_fixes(self, analysis: dict, critical_findings: list[dict], all_findings: list[dict]) -> dict:
         """Existing implementation of FixAgent running in a vacuum."""
@@ -731,7 +807,18 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
                 "findings_count": len(critical_findings) + len(all_findings),
             }
         )
-        return fixes_result
+        # Stamp GENERATED status and compute diffs on all vacuum fixes
+        raw_fixes = fixes_result.get("fixes", []) if isinstance(fixes_result, dict) else []
+        stamped = []
+        for f in raw_fixes:
+            fc = FixCandidate.from_dict(f)
+            fc.status = FixStatus.GENERATED
+            fc.unified_diff = fc.compute_unified_diff()
+            stamped.append(fc.to_dict())
+        return {
+            "fixes": stamped,
+            "global_fixes": fixes_result.get("global_fixes", []) if isinstance(fixes_result, dict) else [],
+        }
 
     def _parse_repo_slug(self, repo_url: str) -> str:
         """Extract owner/repo from any GitHub URL format."""
@@ -1158,8 +1245,15 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
             return {"error": str(e)}
 
     async def _attach_fixes_to_results(self, fixes: list[dict], failure_results: list[dict]):
-        """Link fix code to the specific FailureResult records."""
+        """Link fix code to the specific FailureResult records.
+        
+        Only fixes that have been applied (status != validation_failed) are linked.
+        """
         for fix in fixes:
+            # Skip fixes that never made it through the validation gate
+            if fix.get("status") == FixStatus.VALIDATION_FAILED.value:
+                continue
+
             affected_modes = fix.get("failure_modes", [])
             # Normalize paths: strip trailing slashes for comparison
             affected_paths_norm = {p.rstrip("/") for p in fix.get("affected_endpoints", [])}
@@ -1178,8 +1272,18 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
     async def _save_report(self, analysis: dict, fixes_result: dict) -> Report:
         session = await self.db.get(ChaosSession, self.session_id)
 
-        fixes = fixes_result.get("fixes", [])
-        fix_count = len(fixes)
+        all_fixes = fixes_result.get("fixes", [])
+
+        # Separate applied fixes from validation-failed ones
+        applied_fixes = [
+            f for f in all_fixes
+            if f.get("status") != FixStatus.VALIDATION_FAILED.value
+        ]
+        skipped_fixes = [
+            f for f in all_fixes
+            if f.get("status") == FixStatus.VALIDATION_FAILED.value
+        ]
+        fix_count = len(applied_fixes)
 
         # Keep status as FIXING — the orchestrator will set COMPLETE
         # after Review and GitHub agents finish.  Setting COMPLETE here
@@ -1189,13 +1293,22 @@ Prioritise the CRITICAL and HIGH severity findings first.""",
             session.fixes_generated = fix_count
             await self.db.flush()
 
+        # Store all fixes (applied + global) in the fixes column.
+        # Skipped fixes go into skipped_fixes so the UI can show a
+        # "Why no PR?" panel without cluttering the main fixes list.
+        all_storable = (
+            applied_fixes
+            + fixes_result.get("global_fixes", [])
+        )
+
         report = Report(
             id=str(uuid.uuid4()),
             session_id=self.session_id,
             summary=analysis.get("summary", ""),
             critical_findings=analysis.get("critical_findings", []),
             all_findings=analysis.get("all_findings", []),
-            fixes=fixes + fixes_result.get("global_fixes", []),
+            fixes=all_storable,
+            skipped_fixes=skipped_fixes,
             risk_score=analysis.get("risk_score", 0),
         )
         self.db.add(report)

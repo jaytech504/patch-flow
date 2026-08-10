@@ -46,6 +46,21 @@ async def init_db():
     await ensure_db_exists()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # ── Incremental migrations ────────────────────────────────────────────
+        # create_all does not ALTER existing tables, so new columns must be
+        # added explicitly.  Each statement is wrapped in its own savepoint so
+        # a "column already exists" error on a re-deploy doesn't abort the
+        # rest of startup.
+        migrations = [
+            # Phase 1 — skipped_fixes column on reports table
+            "ALTER TABLE reports ADD COLUMN IF NOT EXISTS skipped_fixes JSONB DEFAULT '[]'::jsonb",
+        ]
+        for sql in migrations:
+            try:
+                await conn.execute(__import__("sqlalchemy").text(sql))
+            except Exception as exc:
+                # Log but do not abort startup — column may already exist
+                print(f"Migration note (non-fatal): {exc}")
 
 
 async def get_db():
