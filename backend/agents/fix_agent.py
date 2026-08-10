@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from backend.agents.base import BaseAgent, Tool
+from backend.core.adapters import FrameworkAdapter, detect_framework, all_path_variants, get_adapter
 from backend.core.config import get_settings
 from backend.core.models import FixCandidate, FixStatus, SourceSnapshot
 from backend.core.patch_validation import PatchValidator
@@ -80,6 +81,7 @@ Return JSON:
         self._repo_path = None
         self.language = "python"
         self.detected_framework = framework
+        self._adapter: FrameworkAdapter | None = get_adapter(framework)
 
     @staticmethod
     def _normalise_fix_candidate(response: dict) -> dict:
@@ -936,225 +938,206 @@ Return JSON:
         if not self._repo_path or not os.path.exists(self._repo_path):
             return
 
+        adapter = detect_framework(self._repo_path)
+        if adapter:
+            self._adapter = adapter
+            self.detected_framework = adapter.name
+            self.language = adapter.language
+            logger.info(f"[Fix] Detected framework: {adapter.display_name} ({adapter.language})")
+            return
+
+        # Fallback: plain language detection without a known framework
         import json
-
-        # 1. Check for Node.js (JavaScript/TypeScript)
-        package_json_path = os.path.join(self._repo_path, "package.json")
-        if os.path.exists(package_json_path):
+        if os.path.exists(os.path.join(self._repo_path, "package.json")):
             self.language = "javascript"
-            self.detected_framework = "express"  # default fallback for node
-            try:
-                with open(package_json_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-                    if "express" in deps:
-                        self.detected_framework = "express"
-                    elif "fastify" in deps:
-                        self.detected_framework = "fastify"
-                    elif "@nestjs/core" in deps:
-                        self.detected_framework = "nestjs"
-                    elif "next" in deps:
-                        self.detected_framework = "nextjs"
-            except Exception as e:
-                logger.error(f"[Fix] Error reading package.json: {e}")
-
-            # Check if typescript is used
-            tsconfig = os.path.join(self._repo_path, "tsconfig.json")
-            if os.path.exists(tsconfig):
+            self.detected_framework = "express"
+            if os.path.exists(os.path.join(self._repo_path, "tsconfig.json")):
                 self.language = "typescript"
             return
-
-        # 2. Check for Python
-        py_indicators = ["requirements.txt", "pyproject.toml", "Pipfile", "setup.py"]
-        has_py_file = any(os.path.exists(os.path.join(self._repo_path, ind)) for ind in py_indicators)
-        if not has_py_file:
-            # Check if any .py files exist in the repo
-            for root, dirs, files in os.walk(self._repo_path):
-                if any(f.endswith(".py") for f in files):
-                    has_py_file = True
-                    break
-
-        if has_py_file:
-            self.language = "python"
-            self.detected_framework = "fastapi"  # default fallback
-            # Try to read requirements.txt to detect framework
-            req_path = os.path.join(self._repo_path, "requirements.txt")
-            if os.path.exists(req_path):
-                try:
-                    with open(req_path, "r", encoding="utf-8") as f:
-                        content = f.read().lower()
-                        if "fastapi" in content:
-                            self.detected_framework = "fastapi"
-                        elif "flask" in content:
-                            self.detected_framework = "flask"
-                        elif "django" in content:
-                            self.detected_framework = "django"
-                except Exception as e:
-                    logger.error(f"[Fix] Error reading requirements.txt: {e}")
-            return
-
-        # 3. Check for Go
+        for ind in ("requirements.txt", "pyproject.toml", "Pipfile", "setup.py"):
+            if os.path.exists(os.path.join(self._repo_path, ind)):
+                self.language = "python"
+                self.detected_framework = "fastapi"
+                return
         if os.path.exists(os.path.join(self._repo_path, "go.mod")):
             self.language = "go"
             self.detected_framework = "standard"
             return
-
-        # 4. Check for Ruby
         if os.path.exists(os.path.join(self._repo_path, "Gemfile")):
             self.language = "ruby"
             self.detected_framework = "rails"
             return
+        # Last resort: walk for .py files
+        for root, _, files in os.walk(self._repo_path):
+            if any(f.endswith(".py") for f in files):
+                self.language = "python"
+                self.detected_framework = "fastapi"
+                return
 
     def _get_lang_rules(self) -> str:
+        # Adapter-specific rules take priority — they are precise and framework-aware.
+        if self._adapter and self._adapter.generation_rules:
+            rules = "\n".join(f"- {r}" for r in self._adapter.generation_rules)
+            return rules
+
+        # Generic language fallbacks when no adapter is loaded
         if self.language == "python":
-            return """- CRITICAL: If you use `logger`, you MUST include BOTH `import logging` AND `logger = logging.getLogger(__name__)` in imports_needed. The import alone is NOT enough.
-- Use `if value is not None:` instead of `if value:` when the value could legitimately be 0."""
-        elif self.language in ("javascript", "typescript"):
-            return """- CRITICAL: If you use a logger (like `console` or a logging library), make sure any required imports or setups are in imports_needed.
-- Use strict equality checks `value !== null && value !== undefined` instead of `if (value)` when the value could legitimately be 0 or an empty string."""
-        elif self.language == "go":
-            return """- CRITICAL: Make sure all packages needed (e.g. "log", "fmt") are included in imports_needed.
-- Handle zero values correctly according to Go idiom (e.g. checking for nil vs empty structs)."""
-        else:
-            return "- CRITICAL: Ensure all required external libraries/modules/packages are included in imports_needed."
+            return (
+                "- CRITICAL: If you use `logger`, you MUST include BOTH `import logging` AND "
+                "`logger = logging.getLogger(__name__)` in imports_needed.\n"
+                "- Use `if value is not None:` instead of `if value:` when the value could legitimately be 0."
+            )
+        if self.language in ("javascript", "typescript"):
+            return (
+                "- CRITICAL: If you use a logger, include any required imports or setups in imports_needed.\n"
+                "- Use strict equality `value !== null && value !== undefined` instead of `if (value)` "
+                "when the value could legitimately be 0 or empty string."
+            )
+        if self.language == "go":
+            return (
+                "- CRITICAL: Include all needed packages (e.g. 'log', 'fmt') in imports_needed.\n"
+                "- Handle zero values correctly (nil vs empty struct)."
+            )
+        return "- CRITICAL: Ensure all required external libraries/modules are included in imports_needed."
 
     def _locate_endpoint_programmatically(self, endpoint_path: str, method: str) -> dict:
         """
-        Attempts to programmatically find the file, start_line, end_line, and original_code
-        of the given endpoint using file scanning and simple AST/regex heuristics.
-        Returns a dict with keys: file_path, start_line, end_line, original_code
-        or None if not found.
+        Locate a route handler in the cloned repo using framework-aware patterns.
+
+        Uses the adapter's route_patterns and all_path_variants() for precise
+        matching, falling back to generic heuristics when no adapter is loaded.
+        Returns a dict with file_path, start_line, end_line, original_code or None.
         """
         if not self._repo_path or not os.path.exists(self._repo_path):
             return None
 
-        # Format endpoint path for lookup (standardizing trailing slashes)
-        path = endpoint_path.strip()
-        path_variants = [path]
-        if path.endswith("/"):
-            path_variants.append(path[:-1])
-        else:
-            path_variants.append(path + "/")
+        import re as _re
+        from backend.core.adapters import all_path_variants as _avariants
 
-        # For Node/Express, path might have :param instead of {param}
-        # e.g., /users/{user_id} -> /users/:user_id
-        import re
-        express_path = re.sub(r'\{([^}]+)\}', r':\1', path)
-        if express_path not in path_variants:
-            path_variants.append(express_path)
+        path_variants = _avariants(endpoint_path, self._adapter)
+
+        # Compile adapter route patterns (if any) for fast matching
+        compiled_route_pats = []
+        if self._adapter and self._adapter.route_patterns:
+            for pat in self._adapter.route_patterns:
+                try:
+                    compiled_route_pats.append(_re.compile(pat, _re.IGNORECASE))
+                except Exception:
+                    pass
 
         repo_path = Path(self._repo_path)
-        
-        # Scan source files
-        extensions = (".py", ".js", ".ts", ".tsx", ".go", ".java", ".rb")
+        _SKIP = {".git", "node_modules", "__pycache__", "venv", "backend",
+                 "frontend", ".gemini", "artifacts", "scratch", "brain"}
+        extensions = (".py", ".js", ".ts", ".tsx", ".go", ".java", ".rb", ".mjs")
+
         for ext in extensions:
             for f in repo_path.rglob(f"*{ext}"):
-                if any(p in str(f) for p in [".git", "node_modules", "__pycache__", "venv", "backend", "frontend", ".gemini", "artifacts", "scratch", "brain"]):
+                if any(p in f.parts for p in _SKIP):
                     continue
                 try:
                     content = f.read_text(encoding="utf-8")
-                    # Check if any path variant is in the file content
                     if not any(variant in content for variant in path_variants):
                         continue
 
-                    import re
                     lines = content.splitlines()
                     for idx, line in enumerate(lines):
-                        # Extract quoted strings in the line to match the path precisely
-                        quoted_strings = re.findall(r'["\']([^"\']+)["\']', line)
+                        # Check if this line contains the path
+                        quoted = _re.findall(r'["\']([^"\']+)["\']', line)
                         path_matched = False
-                        if quoted_strings:
-                            for q in quoted_strings:
-                                q_clean = q.strip().rstrip('/')
+                        if quoted:
+                            for q in quoted:
+                                q_clean = q.strip().rstrip("/")
                                 for variant in path_variants:
-                                    v_clean = variant.rstrip('/')
-                                    if q_clean == v_clean:
+                                    if q_clean == variant.rstrip("/"):
                                         path_matched = True
                                         break
                                 if path_matched:
                                     break
                         else:
-                            if any(variant in line for variant in path_variants):
-                                path_matched = True
+                            path_matched = any(v in line for v in path_variants)
 
-                        if path_matched:
-                            # Let's verify if the method matches (case-insensitive check)
-                            # e.g. app.get, @router.post, r.GET, GetMapping
-                            lower_line = line.lower()
-                            method_call = f".{method.lower()}("
-                            method_call_upper = f".{method.upper()}("
+                        if not path_matched:
+                            continue
+
+                        # Determine if line is a route definition
+                        is_route = False
+                        lower = line.lower()
+
+                        # Try adapter-specific patterns first
+                        if compiled_route_pats:
+                            is_route = any(p.search(line) for p in compiled_route_pats)
+
+                        # Generic fallback
+                        if not is_route:
+                            method_l = method.lower()
                             is_route = (
-                                "@" in line or
-                                "app." in lower_line or
-                                "router." in lower_line or
-                                "route" in lower_line or
-                                method_call in line or
-                                method_call_upper in line
+                                "@" in line
+                                or f".{method_l}(" in lower
+                                or f'.{method_l}(' in lower
+                                or "route" in lower
+                                or "export" in lower  # Next.js named exports
                             )
-                            if is_route and (method.lower() in lower_line or any(m in lower_line for m in [".route", "request"])):
-                                # We found the decorator/definition line!
-                                start_idx = idx
-                                # Now backtrack to find any leading decorators/annotations
-                                while start_idx > 0:
-                                    prev_line = lines[start_idx - 1].strip()
-                                    if prev_line.startswith("@") or prev_line.startswith("["):
-                                        start_idx -= 1
-                                    else:
-                                        break
-                                
-                                # Now find the end of the function/block
-                                end_idx = idx
-                                if ext == ".py":
-                                    # For python, read until the indentation level goes back to <= start line indentation
-                                    # Find the def line first to get base indentation (matching def or async def)
-                                    def_line_idx = idx
-                                    while def_line_idx < len(lines) and not lines[def_line_idx].strip().startswith(("def ", "async def ")):
-                                        def_line_idx += 1
-                                    if def_line_idx >= len(lines):
-                                        def_line_idx = idx # fallback
-                                    
-                                    # Get base indentation
-                                    def_line = lines[def_line_idx]
-                                    base_indent = len(def_line) - len(def_line.lstrip())
-                                    
-                                    end_idx = def_line_idx + 1
-                                    while end_idx < len(lines):
-                                        curr_line = lines[end_idx]
-                                        if not curr_line.strip():
-                                            end_idx += 1
-                                            continue
-                                        curr_indent = len(curr_line) - len(curr_line.lstrip())
-                                        # If indentation is less than or equal to def base indentation, we hit the end
-                                        if curr_indent <= base_indent and not curr_line.strip().startswith((")", "]", "}")):
-                                            break
-                                        end_idx += 1
-                                else:
-                                    # For JS/Go/Java, match braces { and }
-                                    brace_count = 0
-                                    found_braces = False
-                                    for scan_idx in range(idx, len(lines)):
-                                        scan_line = lines[scan_idx]
-                                        brace_count += scan_line.count("{") - scan_line.count("}")
-                                        if "{" in scan_line:
-                                            found_braces = True
-                                        if found_braces and brace_count <= 0:
-                                            end_idx = scan_idx + 1
-                                            break
-                                    if end_idx == idx:
-                                        # Fallback: scan 30 lines
-                                        end_idx = min(len(lines), idx + 30)
 
-                                original_lines = lines[start_idx:end_idx]
-                                return {
-                                    "file_path": str(f.relative_to(repo_path)).replace("\\", "/"),
-                                    "target_function": "",
-                                    "start_line": start_idx + 1,
-                                    "end_line": end_idx,
-                                    "original_code": "\n".join(original_lines),
-                                    "reasoning": f"Programmatically matched path '{endpoint_path}' and method '{method}' in {f.name}"
-                                }
+                        if not is_route:
+                            continue
+
+                        # Walk back to include leading decorators/annotations
+                        start_idx = idx
+                        while start_idx > 0:
+                            prev = lines[start_idx - 1].strip()
+                            if prev.startswith("@") or prev.startswith("["):
+                                start_idx -= 1
+                            else:
+                                break
+
+                        # Walk forward to find the end of the function/block
+                        end_idx = idx
+                        if ext == ".py":
+                            def_line_idx = idx
+                            while def_line_idx < len(lines) and not lines[def_line_idx].strip().startswith(("def ", "async def ")):
+                                def_line_idx += 1
+                            if def_line_idx >= len(lines):
+                                def_line_idx = idx
+                            def_line = lines[def_line_idx]
+                            base_indent = len(def_line) - len(def_line.lstrip())
+                            end_idx = def_line_idx + 1
+                            while end_idx < len(lines):
+                                curr = lines[end_idx]
+                                if not curr.strip():
+                                    end_idx += 1
+                                    continue
+                                curr_indent = len(curr) - len(curr.lstrip())
+                                if curr_indent <= base_indent and not curr.strip().startswith((")", "]", "}")):
+                                    break
+                                end_idx += 1
+                        else:
+                            brace_count = 0
+                            found_braces = False
+                            for scan_idx in range(idx, len(lines)):
+                                scan_line = lines[scan_idx]
+                                brace_count += scan_line.count("{") - scan_line.count("}")
+                                if "{" in scan_line:
+                                    found_braces = True
+                                if found_braces and brace_count <= 0:
+                                    end_idx = scan_idx + 1
+                                    break
+                            if end_idx == idx:
+                                end_idx = min(len(lines), idx + 30)
+
+                        return {
+                            "file_path": str(f.relative_to(repo_path)).replace("\\", "/"),
+                            "target_function": "",
+                            "start_line": start_idx + 1,
+                            "end_line": end_idx,
+                            "original_code": "\n".join(lines[start_idx:end_idx]),
+                            "reasoning": (
+                                f"Matched path '{endpoint_path}' via "
+                                f"{'adapter patterns' if compiled_route_pats else 'generic heuristic'} "
+                                f"in {f.name}"
+                            ),
+                        }
                 except Exception as e:
-                    logger.warning(f"[Fix] Error scanning file {f} for programmatic search: {e}")
+                    logger.warning(f"[Fix] Error scanning {f}: {e}")
                     continue
         return None
 

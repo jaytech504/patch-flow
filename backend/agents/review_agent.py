@@ -9,6 +9,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.agents.base import BaseAgent, Tool
+from backend.core.adapters import detect_framework, FrameworkAdapter
 from backend.core.config import get_settings
 from backend.core.models import FixStatus, ReviewVerdict
 
@@ -90,6 +91,7 @@ Return JSON:
         self._github_token = github_token or settings.github_token
         self._temp_dir = None
         self._repo_path = None
+        self._adapter: FrameworkAdapter | None = None
 
     async def handle(self, fix_result: dict) -> dict:
         """
@@ -113,6 +115,13 @@ Return JSON:
             try:
                 self._clone_repo()
                 cloned = True
+                # Detect framework from the cloned repo so precheck_fn
+                # can apply framework-specific rules during review.
+                self._adapter = detect_framework(self._repo_path)
+                if self._adapter:
+                    logger.info(f"[Review] Detected framework: {self._adapter.display_name}")
+                else:
+                    logger.info("[Review] No specific framework detected — using generic pre-checks.")
             except Exception as e:
                 logger.error(f"[Review] Failed to clone repo: {e}")
 
@@ -184,6 +193,10 @@ Return JSON:
             )
 
             # Ask the LLM to review the fix in context of the full file
+            framework_hint = (
+                f"- **Framework:** {self._adapter.display_name}\n"
+                if self._adapter else ""
+            )
             review_result = await self.run(
                 task=f"""Review this proposed code fix. You are looking at the COMPLETE file where the fix will be applied.
 
@@ -193,7 +206,7 @@ Return JSON:
 - **Endpoint(s):** {endpoint_label}
 - **File:** {file_path}
 - **Lines:** {fix.get('start_line', '?')}-{fix.get('end_line', '?')}
-
+{framework_hint}
 ## Proposed imports to add
 {imports_needed if imports_needed else "(none)"}
 
@@ -206,7 +219,6 @@ Return JSON:
 ```
 {code_after}
 ```
-
 ## FULL FILE CONTENT (for context)
 ```
 {llm_file_context}
@@ -410,6 +422,25 @@ Return your verdict as JSON:
         else:
             issues.extend(self._generic_exception_structure_checks(proposed_content))
             issues.extend(self._generic_unreachable_checks(proposed_content))
+
+        # ── Framework-specific pre-checks ─────────────────────────────────────
+        # Run the adapter's precheck_fn against the proposed code_after and the
+        # imports list.  These are fast, deterministic checks that don't require
+        # the LLM and catch common framework-specific mistakes before sending to
+        # the model review (saves tokens and catches issues the LLM often misses).
+        # Use getattr so test harnesses that bypass __init__ still work.
+        adapter = getattr(self, "_adapter", None)
+        if adapter and adapter.precheck_fn:
+            try:
+                adapter_issues = adapter.precheck_fn(code_after, imports_needed)
+                if adapter_issues:
+                    logger.info(
+                        f"[Review] {adapter.display_name} pre-checks found "
+                        f"{len(adapter_issues)} issue(s): {adapter_issues}"
+                    )
+                issues.extend(adapter_issues)
+            except Exception as exc:
+                logger.warning(f"[Review] Adapter precheck_fn raised: {exc}")
 
         return issues
 
