@@ -505,13 +505,19 @@ Return your verdict as JSON:
             if ext in {".js", ".mjs", ".cjs"}:
                 return self._run_syntax_command(["node", "--check", temp_path], "Node.js")
             if ext in {".ts", ".tsx"}:
-                ok, msg = self._run_syntax_command(["npx", "--yes", "tsc", "--noEmit", temp_path], "TypeScript")
+                ok, msg = self._run_syntax_command([
+                    "npx", "--yes", "tsc", "--noEmit",
+                    "--skipLibCheck",
+                    "--noResolve",
+                    "--jsx", "react-jsx",
+                    "--target", "esnext",
+                    "--allowJs",
+                    "--allowSyntheticDefaultImports",
+                    temp_path
+                ], "TypeScript")
                 if ok:
                     return True, ""
-                fallback_ok, fallback_msg = self._run_syntax_command(["node", "--check", temp_path], "Node.js")
-                if fallback_ok:
-                    return True, ""
-                return False, msg or fallback_msg
+                return False, msg
             if ext == ".go":
                 return self._run_syntax_command(["gofmt", "-e", temp_path], "gofmt")
             if ext == ".rb":

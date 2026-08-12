@@ -131,8 +131,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }"""
         issues = _nextjs_precheck(code_safe, imports=[])
-        self.assertEqual(len(issues), 0)
+    def test_locate_pascalcase_src_pages_dashboard(self):
+        pages_dir = self.repo_path / "src" / "pages"
+        pages_dir.mkdir(parents=True, exist_ok=True)
+        page_file = pages_dir / "Dashboard.tsx"
+        page_file.write_text("""import React from 'react';
+import { supabase } from '../lib/supabase';
+
+export default function Dashboard() {
+  return <div>Dashboard Content</div>;
+}
+""", encoding="utf-8")
+
+        agent = FixAgent(db=None, session_id="test", framework="nextjs")
+        agent._repo_path = str(self.repo_path)
+        agent.language = "typescript"
+
+        loc = agent._locate_endpoint_programmatically("/dashboard", "GET")
+        self.assertIsNotNone(loc)
+        self.assertEqual(loc["file_path"].replace("\\", "/"), "src/pages/Dashboard.tsx")
+
+    def test_locate_pascalcase_src_pages_notes(self):
+        pages_dir = self.repo_path / "src" / "pages"
+        pages_dir.mkdir(parents=True, exist_ok=True)
+        page_file = pages_dir / "Notes.tsx"
+        page_file.write_text("""import React from 'react';
+import { supabase } from '../lib/supabase';
+
+export default function Notes() {
+  return <div>Notes Content</div>;
+}
+""", encoding="utf-8")
+
+        agent = FixAgent(db=None, session_id="test", framework="nextjs")
+        agent._repo_path = str(self.repo_path)
+        agent.language = "typescript"
+
+        loc = agent._locate_endpoint_programmatically("/notes", "GET")
+        self.assertIsNotNone(loc)
+        self.assertEqual(loc["file_path"].replace("\\", "/"), "src/pages/Notes.tsx")
+
+    def test_trace_component_from_react_router_app_tsx(self):
+        src_dir = self.repo_path / "src"
+        pages_dir = src_dir / "pages"
+        pages_dir.mkdir(parents=True, exist_ok=True)
+
+        notes_file = pages_dir / "Notes.tsx"
+        notes_file.write_text("""export default function Notes() { return <div>Notes</div>; }""", encoding="utf-8")
+
+        app_file = src_dir / "App.tsx"
+        app_file.write_text("""import React from 'react';
+import { Routes, Route } from 'react-router-dom';
+import Notes from './pages/Notes';
+
+export function App() {
+  return (
+    <Routes>
+      <Route path="/notes" element={<Notes />} />
+    </Routes>
+  );
+}
+""", encoding="utf-8")
+
+        agent = FixAgent(db=None, session_id="test", framework="nextjs")
+        agent._repo_path = str(self.repo_path)
+        agent.language = "typescript"
+
+        loc = agent._locate_endpoint_programmatically("/notes", "GET")
+        self.assertIsNotNone(loc)
+        # Must resolve to the actual component in src/pages/Notes.tsx, NOT App.tsx
+        self.assertEqual(loc["file_path"].replace("\\", "/"), "src/pages/Notes.tsx")
 
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -584,14 +584,19 @@ Return JSON:
             return self._run_syntax_command(["node", "--check", str(full_path)], "Node.js")
 
         if ext in {".ts", ".tsx"}:
-            ok, msg = self._run_syntax_command(["npx", "--yes", "tsc", "--noEmit", str(full_path)], "TypeScript")
+            ok, msg = self._run_syntax_command([
+                "npx", "--yes", "tsc", "--noEmit",
+                "--skipLibCheck",
+                "--noResolve",
+                "--jsx", "react-jsx",
+                "--target", "esnext",
+                "--allowJs",
+                "--allowSyntheticDefaultImports",
+                str(full_path)
+            ], "TypeScript")
             if ok:
                 return True, ""
-            # Fallback to Node check when TS toolchain is unavailable.
-            fallback_ok, fallback_msg = self._run_syntax_command(["node", "--check", str(full_path)], "Node.js")
-            if fallback_ok:
-                return True, ""
-            return False, msg or fallback_msg
+            return False, msg
 
         if ext == ".go":
             return self._run_syntax_command(["gofmt", "-e", str(full_path)], "gofmt")
@@ -1041,12 +1046,12 @@ Return JSON:
                  ".gemini", "artifacts", "scratch", "brain"}
         extensions = (".py", ".js", ".ts", ".tsx", ".go", ".java", ".rb", ".mjs")
 
-        # ── Next.js: locate by filesystem path (App Router + Pages Router) ────
+        # ── Next.js / React: locate by filesystem path (App Router + Pages Router + React pages) ────
         # Handles:
-        #   /api/notes      → app/api/notes/route.ts, pages/api/notes.ts, etc.
-        #   /dashboard      → pages/dashboard.tsx, app/dashboard/page.tsx, etc.
+        #   /api/notes      → app/api/notes/route.ts, pages/api/notes.ts, pages/Notes.tsx, etc.
+        #   /dashboard      → pages/dashboard.tsx, pages/Dashboard.tsx, app/dashboard/page.tsx, etc.
         #   /api/users/{id} → app/api/users/[id]/route.ts, pages/api/users/[id].ts
-        if self._adapter and self._adapter.name == "nextjs":
+        if self.language in ("javascript", "typescript") or (self._adapter and self._adapter.name == "nextjs"):
             import re as _re2
             raw_seg = endpoint_path.strip("/")
             sub_seg = raw_seg[4:] if raw_seg.startswith("api/") else raw_seg
@@ -1055,6 +1060,27 @@ Return JSON:
             sub_fs = _re2.sub(r"\{([^}]+)\}", r"[\1]", sub_seg)
 
             candidate_paths = []
+
+            # 1. Direct case-insensitive directory check across standard Next.js and React page folders
+            search_dirs = [
+                repo_path / "src" / "pages",
+                repo_path / "pages",
+                repo_path / "src" / "pages" / "api",
+                repo_path / "pages" / "api",
+                repo_path / "src" / "app",
+                repo_path / "app",
+                repo_path / "src" / "app" / "api",
+                repo_path / "app" / "api",
+            ]
+            for sdir in search_dirs:
+                if sdir.exists() and sdir.is_dir():
+                    for child in sdir.iterdir():
+                        if child.is_file() and child.suffix.lower() in {".ts", ".tsx", ".js", ".jsx"}:
+                            stem_lower = child.stem.lower()
+                            if stem_lower in {raw_fs.lower(), sub_fs.lower()}:
+                                if child not in candidate_paths:
+                                    candidate_paths.append(child)
+
             for ext in ("ts", "tsx", "js", "jsx"):
                 candidate_paths.extend([
                     # App router API route
@@ -1068,7 +1094,7 @@ Return JSON:
                     repo_path / "pages" / "api" / sub_fs / f"index.{ext}",
                     repo_path / "src" / "pages" / "api" / f"{sub_fs}.{ext}",
                     repo_path / "src" / "pages" / "api" / sub_fs / f"index.{ext}",
-                    # Pages router page (e.g. pages/dashboard.tsx)
+                    # Pages router page (e.g. pages/dashboard.tsx, pages/Dashboard.tsx)
                     repo_path / "pages" / f"{raw_fs}.{ext}",
                     repo_path / "pages" / raw_fs / f"index.{ext}",
                     repo_path / "src" / "pages" / f"{raw_fs}.{ext}",
@@ -1082,7 +1108,12 @@ Return JSON:
                     repo_path / "src" / "app" / sub_fs / f"page.{ext}",
                 ])
 
+            seen_paths = set()
             for candidate in candidate_paths:
+                if str(candidate) in seen_paths:
+                    continue
+                seen_paths.add(str(candidate))
+
                 if candidate.exists() and candidate.is_file():
                     try:
                         content = candidate.read_text(encoding="utf-8")
@@ -1155,7 +1186,7 @@ Return JSON:
                                     "reasoning":     f"Next.js Pages Router: found data fetching in {rel}",
                                 }
 
-                        # 4. Fallback for page file: return entire file content
+                        # 4. Fallback for page component file: return entire file content
                         rel = str(candidate.relative_to(repo_path)).replace("\\", "/")
                         return {
                             "file_path":     rel,
@@ -1163,16 +1194,48 @@ Return JSON:
                             "start_line":    1,
                             "end_line":      len(lines),
                             "original_code": content,
-                            "reasoning":     f"Next.js route/page file found: {rel}",
+                            "reasoning":     f"Route/page file found: {rel}",
                         }
                     except Exception as e:
-                        logger.warning(f"[Fix] Error reading Next.js route file {candidate}: {e}")
-
+                        logger.warning(f"[Fix] Error reading route/page file {candidate}: {e}")
 
         for ext in extensions:
             for f in repo_path.rglob(f"*{ext}"):
                 if any(p in f.parts for p in _SKIP):
                     continue
+
+                # If this is App.tsx / routes.tsx / main.tsx with React Router, check if it references a page component
+                if f.name in {"App.tsx", "App.jsx", "App.js", "App.ts", "routes.tsx", "routes.ts", "main.tsx"}:
+                    try:
+                        router_content = f.read_text(encoding="utf-8")
+                        # If route element={<ComponentName />} is used, trace the component import
+                        pattern = rf'<Route[^>]*path=["\'](?:/)?(?:api/)?{_re.escape(endpoint_path.strip("/"))}["\'][^>]*element=\{{<([a-zA-Z0-9_]+)'
+                        m_comp = _re.search(pattern, router_content, _re.IGNORECASE)
+                        if m_comp:
+                            comp_name = m_comp.group(1)
+                            # Look for import of comp_name
+                            m_imp = _re.search(rf'import\s+(?:\{{\s*{comp_name}\s*\}}|{comp_name})\s+from\s+["\']([^"\']+)["\']', router_content)
+                            if m_imp:
+                                imp_path = m_imp.group(1).lstrip("./")
+                                for p_ext in (".tsx", ".ts", ".jsx", ".js"):
+                                    possible_file = repo_path / "src" / f"{imp_path}{p_ext}"
+                                    if not possible_file.exists():
+                                        possible_file = repo_path / f"{imp_path}{p_ext}"
+                                    if possible_file.exists():
+                                        comp_content = possible_file.read_text(encoding="utf-8")
+                                        comp_lines = comp_content.splitlines()
+                                        rel = str(possible_file.relative_to(repo_path)).replace("\\", "/")
+                                        return {
+                                            "file_path": rel,
+                                            "target_function": comp_name,
+                                            "start_line": 1,
+                                            "end_line": len(comp_lines),
+                                            "original_code": comp_content,
+                                            "reasoning": f"Traced route component <{comp_name} /> in {rel}",
+                                        }
+                    except Exception as trace_err:
+                        logger.warning(f"[Fix] Error tracing component in {f}: {trace_err}")
+
                 try:
                     content = f.read_text(encoding="utf-8")
                     if not any(variant in content for variant in path_variants):
@@ -1213,7 +1276,7 @@ Return JSON:
                                 "@" in line
                                 or f".{method_l}(" in lower
                                 or f'.{method_l}(' in lower
-                                or "route" in lower
+                                or ("route" in lower and "<route" not in lower)
                                 or "export" in lower  # Next.js named exports
                             )
 
