@@ -1026,9 +1026,67 @@ Return JSON:
                     pass
 
         repo_path = Path(self._repo_path)
-        _SKIP = {".git", "node_modules", "__pycache__", "venv", "backend",
-                 "frontend", ".gemini", "artifacts", "scratch", "brain"}
+        _SKIP = {".git", "node_modules", "__pycache__", "venv",
+                 ".gemini", "artifacts", "scratch", "brain"}
         extensions = (".py", ".js", ".ts", ".tsx", ".go", ".java", ".rb", ".mjs")
+
+        # ── Next.js App Router: locate by filesystem path ─────────────────────
+        # App Router routes live at  app/api/<segments>/route.ts  or
+        # src/app/api/<segments>/route.ts.  We can find the file directly
+        # from the endpoint path rather than scanning for string content.
+        if self._adapter and self._adapter.name == "nextjs":
+            import re as _re2
+            # Convert /users/{id}/orders → users/[id]/orders
+            fs_seg = _re2.sub(r"\{([^}]+)\}", r"[\1]", endpoint_path.lstrip("/"))
+            candidates = [
+                repo_path / "app"     / "api" / fs_seg / "route.ts",
+                repo_path / "app"     / "api" / fs_seg / "route.tsx",
+                repo_path / "src" / "app" / "api" / fs_seg / "route.ts",
+                repo_path / "src" / "app" / "api" / fs_seg / "route.tsx",
+            ]
+            for candidate in candidates:
+                if candidate.exists():
+                    try:
+                        content = candidate.read_text(encoding="utf-8")
+                        lines   = content.splitlines()
+                        # Find the named export that matches the HTTP method
+                        method_upper = method.upper()
+                        for idx, line in enumerate(lines):
+                            if _re2.search(
+                                rf"export\s+(async\s+)?function\s+{method_upper}\b", line
+                            ):
+                                start_idx = idx
+                                # Expand to full brace-matched block
+                                brace_count, found_braces, end_idx = 0, False, idx
+                                for scan_idx in range(idx, len(lines)):
+                                    brace_count += lines[scan_idx].count("{") - lines[scan_idx].count("}")
+                                    if "{" in lines[scan_idx]:
+                                        found_braces = True
+                                    if found_braces and brace_count <= 0:
+                                        end_idx = scan_idx + 1
+                                        break
+                                rel = str(candidate.relative_to(repo_path)).replace("\\", "/")
+                                return {
+                                    "file_path":     rel,
+                                    "target_function": f"{method_upper}",
+                                    "start_line":    start_idx + 1,
+                                    "end_line":      end_idx,
+                                    "original_code": "\n".join(lines[start_idx:end_idx]),
+                                    "reasoning":     f"Next.js App Router: found {method_upper} export in {rel}",
+                                }
+                        # File found but no matching export — return whole file as context
+                        rel = str(candidate.relative_to(repo_path)).replace("\\", "/")
+                        return {
+                            "file_path":     rel,
+                            "target_function": "",
+                            "start_line":    1,
+                            "end_line":      len(lines),
+                            "original_code": content,
+                            "reasoning":     f"Next.js App Router route file found: {rel}",
+                        }
+                    except Exception as e:
+                        logger.warning(f"[Fix] Error reading Next.js route file {candidate}: {e}")
+
 
         for ext in extensions:
             for f in repo_path.rglob(f"*{ext}"):
@@ -1271,10 +1329,10 @@ Return JSON:
         try:
             results = []
             repo_path = Path(self._repo_path)
-            # Scan common source file extensions
-            for ext in ("*.py", "*.js", "*.ts", "*.tsx", "*.go", "*.rb", "*.java", "*.kt", "*.cs"):
+            # Scan all common source file extensions — not just .py
+            for ext in ("*.py", "*.ts", "*.tsx", "*.js", "*.mjs", "*.go", "*.rb", "*.java", "*.kt", "*.cs"):
                 for f in repo_path.rglob(ext):
-                    if ".git" in str(f) or "__pycache__" in str(f) or "node_modules" in str(f):
+                    if any(skip in str(f) for skip in [".git", "__pycache__", "node_modules", "dist", "build", ".next"]):
                         continue
                     try:
                         content = f.read_text(encoding="utf-8")
@@ -1284,7 +1342,7 @@ Return JSON:
                                 {"line": i + 1, "content": line.strip()}
                                 for i, line in enumerate(lines)
                                 if search_term in line
-                             ]
+                            ]
                             results.append({
                                 "file": str(f.relative_to(repo_path)),
                                 "matches": matches,

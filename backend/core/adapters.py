@@ -114,15 +114,23 @@ def _nextjs_precheck(code_after: str, imports: list[str]) -> list[str]:
                 "NextResponse used but not imported — add \"import { NextResponse } from 'next/server'\"."
             )
 
-    # App Router handlers must be named exports (GET, POST, etc.)
-    has_named_export = bool(
-        re.search(r"export\s+(async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b", code_after)
+    # Named export check — only run when code_after looks like a complete file
+    # (contains import statements or multiple top-level declarations).
+    # Handler snippets produced during fix generation won't have top-level
+    # imports and should not be flagged for missing exports.
+    looks_like_full_file = (
+        re.search(r"^import\s", code_after, re.MULTILINE) is not None
+        or code_after.count("export") > 1
     )
-    if not has_named_export:
-        issues.append(
-            "Next.js App Router handlers must be named exports — "
-            "e.g. 'export async function GET(request: NextRequest) { ... }'."
+    if looks_like_full_file:
+        has_named_export = bool(
+            re.search(r"export\s+(async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b", code_after)
         )
+        if not has_named_export:
+            issues.append(
+                "Next.js App Router handlers must be named exports — "
+                "e.g. 'export async function GET(request: NextRequest) { ... }'."
+            )
 
     # catch block that logs but never returns a response
     if re.search(r"catch\s*\(\w+\)\s*\{[^}]*console\.(error|log|warn)", code_after, re.DOTALL):
@@ -134,7 +142,6 @@ def _nextjs_precheck(code_after: str, imports: list[str]) -> list[str]:
     # Unguarded process.env access
     env_accesses = re.findall(r"process\.env\.(\w+)", code_after)
     for var in env_accesses:
-        # Check whether there's a guard like: if (!process.env.VAR) or const x = process.env.VAR; if (!x)
         if not re.search(
             rf"if\s*\(\s*[!]?\s*(?:process\.env\.{var}|[a-zA-Z_]\w*)\s*\)", code_after
         ):

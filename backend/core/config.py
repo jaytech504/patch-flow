@@ -6,8 +6,6 @@ class Settings(BaseSettings):
     gemma_api_key: str = ""
     gemma_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     gemma_model: str = "gemma-4-26b-a4b-it"
-    # PatchFlow needs machine-readable agent responses, not exposed reasoning.
-    # Gemma 4 accepts "minimal" to disable its thinking mode.
     gemma_thinking_level: str = "minimal"
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/chaos_agent"
     app_env: str = "development"
@@ -16,8 +14,6 @@ class Settings(BaseSettings):
     # GitHub OAuth
     github_client_id: str = ""
     github_client_secret: str = ""
-
-    # GitHub — optional fallback (for demo/dev use without OAuth)
     github_token: str = ""
 
     # JWT
@@ -25,9 +21,23 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 24
 
+    # Sentry integration (Phase 4)
+    sentry_webhook_secret: str = ""        # HMAC secret from Sentry internal integration
+    sentry_auth_token: str = ""            # Sentry auth token for API calls
+    sentry_org: str = ""                   # Sentry org slug, e.g. "acme-corp"
+
+    # Incident pipeline thresholds
+    incident_min_events: int = 3           # minimum error event count before patching
+    incident_min_users: int = 1            # minimum affected users before patching
+    incident_environments: str = "production"  # comma-separated envs to process
+
     class Config:
         env_file = ".env"
         extra = "ignore"
+
+    @property
+    def incident_env_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.incident_environments.split(",") if e.strip()]
 
 
 @lru_cache()

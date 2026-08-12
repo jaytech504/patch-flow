@@ -22,6 +22,7 @@ class User(Base):
     last_login_at = Column(DateTime, default=datetime.utcnow)
 
     sessions = relationship("ChaosSession", back_populates="user")
+    monitored_sites = relationship("MonitoredSite", back_populates="user")
 
 
 class SessionStatus(str, PyEnum):
@@ -41,6 +42,14 @@ class FailureStatus(str, PyEnum):
     DEGRADED = "degraded"
 
 
+class IncidentStatus(str, PyEnum):
+    RECEIVED   = "received"      # webhook received, not yet processed
+    PROCESSING = "processing"    # pipeline running
+    PR_OPENED  = "pr_opened"     # draft PR created
+    SKIPPED    = "skipped"       # blocked by threshold / blocklist / dedup
+    FAILED     = "failed"        # pipeline error
+
+
 class ChaosSession(Base):
     __tablename__ = "chaos_sessions"
 
@@ -48,15 +57,15 @@ class ChaosSession(Base):
     target_url = Column(String(500), nullable=False)
     target_name = Column(String(100), nullable=True)
     source_path = Column(String(500), nullable=True)
-    github_repo = Column(String(300), nullable=True)    # owner/repo
+    github_repo = Column(String(300), nullable=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=True)
     status = Column(Enum(SessionStatus), default=SessionStatus.PENDING)
     endpoints_found = Column(Integer, default=0)
     failures_injected = Column(Integer, default=0)
     unhandled_count = Column(Integer, default=0)
     fixes_generated = Column(Integer, default=0)
-    prs_opened = Column(Integer, default=0)             # NEW
-    risk_score = Column(Integer, default=0)             # NEW
+    prs_opened = Column(Integer, default=0)
+    risk_score = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
@@ -132,7 +141,7 @@ class Report(Base):
     critical_findings = Column(JSON, default=list)
     all_findings = Column(JSON, default=list)
     fixes = Column(JSON, default=list)
-    skipped_fixes = Column(JSON, default=list)   # fixes blocked by validation gate
+    skipped_fixes = Column(JSON, default=list)
     risk_score = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -156,3 +165,74 @@ class PullRequest(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     session = relationship("ChaosSession", back_populates="pull_requests")
+
+
+# ── Phase 4: Monitored Sites ──────────────────────────────────────────────────
+
+class MonitoredSite(Base):
+    """
+    A site/project the user wants PatchFlow to watch via Sentry.
+    Links a Sentry project to a GitHub repo so incidents can be auto-patched.
+    """
+    __tablename__ = "monitored_sites"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    name = Column(String(200), nullable=False)           # display name
+    url = Column(String(500), nullable=True)             # production URL
+    github_repo = Column(String(300), nullable=True)     # owner/repo
+    sentry_project_slug = Column(String(200), nullable=True)
+    sentry_org = Column(String(200), nullable=True)
+    framework = Column(String(50), nullable=True)        # detected or set by user
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="monitored_sites")
+    incidents = relationship("SentryIncident", back_populates="site", cascade="all, delete-orphan")
+
+
+# ── Phase 4: Sentry Incidents ─────────────────────────────────────────────────
+
+class SentryIncident(Base):
+    """
+    One incident run: one Sentry issue + one release = one potential draft PR.
+    The dedup_key (sentry_issue_id + release) prevents duplicate runs.
+    """
+    __tablename__ = "sentry_incidents"
+
+    id = Column(String, primary_key=True)
+    site_id = Column(String, ForeignKey("monitored_sites.id"), nullable=True)
+
+    # Sentry identifiers
+    sentry_issue_id = Column(String(200), nullable=False)
+    sentry_issue_url = Column(String(500), nullable=True)
+    sentry_project = Column(String(200), nullable=True)
+    sentry_release = Column(String(200), nullable=True)
+    dedup_key = Column(String(400), nullable=False, unique=True)  # issue_id + release
+
+    # Error context (redacted before storage)
+    error_title = Column(String(500), nullable=True)
+    error_type = Column(String(200), nullable=True)
+    culprit = Column(String(500), nullable=True)        # Sentry's culprit field
+    stack_file = Column(String(500), nullable=True)     # file from top stack frame
+    stack_lineno = Column(Integer, nullable=True)
+    stack_function = Column(String(300), nullable=True)
+    environment = Column(String(100), nullable=True)
+    event_count = Column(Integer, default=0)
+    user_count = Column(Integer, default=0)
+
+    # Pipeline outcome
+    status = Column(Enum(IncidentStatus), default=IncidentStatus.RECEIVED)
+    skip_reason = Column(Text, nullable=True)           # why it was skipped
+    pr_url = Column(String(500), nullable=True)
+    pr_number = Column(Integer, nullable=True)
+    github_repo = Column(String(300), nullable=True)
+    fix_summary = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    processed_at = Column(DateTime, nullable=True)
+
+    site = relationship("MonitoredSite", back_populates="incidents")
+
+
