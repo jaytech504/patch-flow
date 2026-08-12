@@ -106,7 +106,7 @@ def _flask_precheck(code_after: str, imports: list[str]) -> list[str]:
 def _nextjs_precheck(code_after: str, imports: list[str]) -> list[str]:
     issues: list[str] = []
 
-    # Check NextResponse is imported when used
+    # Check NextResponse is imported when used in App Router
     if "NextResponse" in code_after:
         all_code = "\n".join(imports) + "\n" + code_after
         if "from 'next/server'" not in all_code and 'from "next/server"' not in all_code:
@@ -114,29 +114,28 @@ def _nextjs_precheck(code_after: str, imports: list[str]) -> list[str]:
                 "NextResponse used but not imported — add \"import { NextResponse } from 'next/server'\"."
             )
 
-    # Named export check — only run when code_after looks like a complete file
-    # (contains import statements or multiple top-level declarations).
-    # Handler snippets produced during fix generation won't have top-level
-    # imports and should not be flagged for missing exports.
-    looks_like_full_file = (
-        re.search(r"^import\s", code_after, re.MULTILINE) is not None
-        or code_after.count("export") > 1
-    )
-    if looks_like_full_file:
-        has_named_export = bool(
-            re.search(r"export\s+(async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b", code_after)
-        )
-        if not has_named_export:
+    # Supabase checks
+    if "supabase" in code_after.lower():
+        # Check if raw error object is sent to client
+        if re.search(r"(?:res\.status\(\d+\)\.json|NextResponse\.json)\(\s*error\s*\)", code_after):
             issues.append(
-                "Next.js App Router handlers must be named exports — "
-                "e.g. 'export async function GET(request: NextRequest) { ... }'."
+                "Raw Supabase error object returned in response — this leaks database schema details. "
+                "Return a sanitized error message instead: { error: 'Failed to process request' }."
             )
 
-    # catch block that logs but never returns a response
+    # Check catch block returns or sends response
     if re.search(r"catch\s*\(\w+\)\s*\{[^}]*console\.(error|log|warn)", code_after, re.DOTALL):
-        if "NextResponse.json" not in code_after and "new Response" not in code_after:
+        has_response = (
+            "NextResponse.json" in code_after
+            or "new Response" in code_after
+            or "res.status(" in code_after
+            or "res.json(" in code_after
+            or "res.end(" in code_after
+            or "return {" in code_after  # getServerSideProps returns props
+        )
+        if not has_response:
             issues.append(
-                "catch block logs the error but doesn't return a NextResponse — the client will hang."
+                "catch block logs the error but doesn't return or send a response — the client will hang."
             )
 
     # Unguarded process.env access
@@ -219,19 +218,40 @@ def _hono_precheck(code_after: str, imports: list[str]) -> list[str]:
 
 def _nextjs_path_variants(path: str) -> list[str]:
     """
-    Next.js App Router uses filesystem routing.
-    /users/{id} → app/api/users/[id]/route.ts
-    Also generates the folder path so the locator can find route.ts files.
+    Next.js uses filesystem routing for both App Router and Pages Router.
+    Handles:
+      /api/notes      → app/api/notes/route.ts, pages/api/notes.ts, etc.
+      /dashboard      → pages/dashboard.tsx, app/dashboard/page.tsx, etc.
+      /api/users/{id} → app/api/users/[id]/route.ts, pages/api/users/[id].ts
     """
-    # Convert {param} → [param] for filesystem segment
-    fs_path = re.sub(r"\{([^}]+)\}", r"[\1]", path.lstrip("/"))
-    variants = [
-        f"app/api/{fs_path}/route.ts",
-        f"app/api/{fs_path}/route.tsx",
-        f"src/app/api/{fs_path}/route.ts",
-        f"pages/api/{fs_path}.ts",
-        f"pages/api/{fs_path}.js",
-    ]
+    raw_seg = path.strip("/")
+    sub_seg = raw_seg[4:] if raw_seg.startswith("api/") else raw_seg
+
+    raw_fs = re.sub(r"\{([^}]+)\}", r"[\1]", raw_seg)
+    sub_fs = re.sub(r"\{([^}]+)\}", r"[\1]", sub_seg)
+
+    variants = []
+    for ext in ("ts", "tsx", "js", "jsx"):
+        variants.extend([
+            f"app/api/{sub_fs}/route.{ext}",
+            f"src/app/api/{sub_fs}/route.{ext}",
+            f"app/{raw_fs}/route.{ext}",
+            f"src/app/{raw_fs}/route.{ext}",
+            f"app/{raw_fs}/page.{ext}",
+            f"src/app/{raw_fs}/page.{ext}",
+            f"app/{sub_fs}/page.{ext}",
+            f"src/app/{sub_fs}/page.{ext}",
+            f"pages/api/{sub_fs}.{ext}",
+            f"pages/api/{sub_fs}/index.{ext}",
+            f"src/pages/api/{sub_fs}.{ext}",
+            f"src/pages/api/{sub_fs}/index.{ext}",
+            f"pages/{raw_fs}.{ext}",
+            f"pages/{raw_fs}/index.{ext}",
+            f"src/pages/{raw_fs}.{ext}",
+            f"src/pages/{raw_fs}/index.{ext}",
+            f"pages/{sub_fs}.{ext}",
+            f"src/pages/{sub_fs}.{ext}",
+        ])
     return variants
 
 
@@ -319,27 +339,35 @@ _reg(FrameworkAdapter(
 _reg(FrameworkAdapter(
     name="nextjs",
     language="typescript",
-    display_name="Next.js App Router",
+    display_name="Next.js",
     npm_deps=["next"],
     marker_files=["next.config.ts", "next.config.js", "next.config.mjs"],
     source_patterns=[
         r"from ['\"]next/server['\"]",
         r"export async function (GET|POST|PUT|PATCH|DELETE)",
         r"NextRequest|NextResponse",
+        r"NextApiRequest|NextApiResponse",
+        r"getServerSideProps|getStaticProps",
+        r"from ['\"]@supabase/supabase-js['\"]",
+        r"from ['\"]@supabase/ssr['\"]",
+        r"from ['\"]@supabase/auth-helpers-nextjs['\"]",
     ],
     generation_rules=[
-        "Handlers MUST be named exports: export async function GET(request: NextRequest) { ... }",
-        "Always return NextResponse.json({...}, { status: N }) — never throw unhandled errors.",
-        "Wrap the entire handler body in try/catch and return NextResponse.json({error:'...'}, {status:500}) in the catch.",
-        "Guard process.env access: const val = process.env.MY_VAR; if (!val) return NextResponse.json({error:'Misconfigured'},{status:500});",
-        "Use NextRequest for type-safe request access; use request.json() inside try/catch (it throws on malformed JSON).",
-        "Server-only modules (db clients, secrets): import them with 'import ... from \"server-only\"' guard pattern or check typeof window === 'undefined'.",
-        "Do NOT use res.status() / req.query — that is the Pages Router API. App Router uses NextRequest/NextResponse only.",
-        "CRITICAL: import NextResponse from 'next/server', not from 'next'.",
+        "For App Router (app/api/.../route.ts): handlers MUST be named exports: export async function GET(request: NextRequest) { ... } and return NextResponse.json({...}, { status: N }).",
+        "For Pages Router API (pages/api/...): handlers MUST be default export: export default async function handler(req: NextApiRequest, res: NextApiResponse) { ... } and return res.status(N).json({ error: '...' }).",
+        "For Pages Router pages (pages/dashboard.tsx): wrap data fetching in getServerSideProps with try/catch, returning { props: { error: '...' } } or { notFound: true } on failure.",
+        "For Supabase: ALWAYS check 'if (error)' after 'const { data, error } = await supabase...'. Never leak raw Supabase/Postgres error messages or internal schema details to the client.",
+        "For Supabase: Handle 404 when single record is expected but data is null, and handle 400 for constraint errors.",
+        "Always wrap async route bodies in try/catch to prevent unhandled promise rejections.",
+        "Guard process.env access: const val = process.env.NEXT_PUBLIC_... || process.env.SUPABASE_...; if (!val) ...",
+        "CRITICAL for App Router: import { NextResponse } from 'next/server', not from 'next'.",
     ],
     route_patterns=[
         r"export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s*\(",
         r"export\s+function\s+(GET|POST|PUT|PATCH|DELETE)\s*\(",
+        r"export\s+default\s+(?:async\s+)?function\b",
+        r"export\s+(?:async\s+)?function\s+(?:getServerSideProps|getStaticProps)\b",
+        r"export\s+default\s+(?:async\s+)?(?:\([^)]*\)|[a-zA-Z0-9_]+)\s*=>",
     ],
     path_variants_fn=_nextjs_path_variants,
     precheck_fn=_nextjs_precheck,

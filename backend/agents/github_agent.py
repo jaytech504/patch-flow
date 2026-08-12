@@ -177,16 +177,17 @@ Return JSON:
         except Exception as e:
             return {"error": str(e)}
 
-    async def _list_source_files(self, extension: str = ".py") -> dict:
+    async def _list_source_files(self, extension: str = None) -> dict:
         try:
             repo_path = Path(self._repo_path)
-            files = [
-                str(f.relative_to(repo_path))
-                for f in repo_path.rglob(f"*{extension}")
-                if ".git" not in str(f) and "node_modules" not in str(f)
-                and "__pycache__" not in str(f) and "venv" not in str(f)
-            ]
-            return {"files": files[:50]}
+            exts = [extension] if extension else [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rb"]
+            files = []
+            for ext in exts:
+                for f in repo_path.rglob(f"*{ext}"):
+                    if any(skip in str(f) for skip in [".git", "node_modules", "__pycache__", "venv", ".venv", "dist", "build", ".next"]):
+                        continue
+                    files.append(str(f.relative_to(repo_path)))
+            return {"files": files[:60]}
         except Exception as e:
             return {"error": str(e)}
 
@@ -194,24 +195,25 @@ Return JSON:
         try:
             results = []
             repo_path = Path(self._repo_path)
-            for f in repo_path.rglob("*.py"):
-                if ".git" in str(f) or "__pycache__" in str(f):
-                    continue
-                try:
-                    content = f.read_text(encoding="utf-8")
-                    if search_term in content:
-                        lines = content.splitlines()
-                        matches = [
-                            {"line": i + 1, "content": line.strip()}
-                            for i, line in enumerate(lines)
-                            if search_term in line
-                        ]
-                        results.append({
-                            "file": str(f.relative_to(repo_path)),
-                            "matches": matches,
-                        })
-                except Exception:
-                    continue
+            for ext in ("*.ts", "*.tsx", "*.js", "*.jsx", "*.py", "*.mjs", "*.go", "*.rb"):
+                for f in repo_path.rglob(ext):
+                    if any(skip in str(f) for skip in [".git", "node_modules", "__pycache__", "venv", ".venv", "dist", "build", ".next"]):
+                        continue
+                    try:
+                        content = f.read_text(encoding="utf-8")
+                        if search_term in content:
+                            lines = content.splitlines()
+                            matches = [
+                                {"line": i + 1, "content": line.strip()}
+                                for i, line in enumerate(lines)
+                                if search_term in line
+                            ]
+                            results.append({
+                                "file": str(f.relative_to(repo_path)),
+                                "matches": matches,
+                            })
+                    except Exception:
+                        continue
             return {"results": results}
         except Exception as e:
             return {"error": str(e)}

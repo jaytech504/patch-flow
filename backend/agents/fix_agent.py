@@ -194,17 +194,28 @@ Return JSON:
                         else:
                             await self._log("thought", f"Could not programmatically locate {endpoint_path}. Falling back to LLM locator...")
                             # Step 1: Locate the single endpoint's code block
+                            if self.detected_framework == "nextjs" or self.language in ("javascript", "typescript"):
+                                locator_steps = f"""Steps:
+1. Search for Next.js route or page files corresponding to "{endpoint_path}":
+   - App Router: app/api/.../route.ts, app/api/.../route.js, app/.../page.tsx, src/app/...
+   - Pages Router: pages/api/...ts, pages/api/...js, pages/...tsx, pages/...js, src/pages/...
+2. Read the file containing this endpoint
+3. Identify the COMPLETE handler function (e.g. `export async function {method}`, `export default async function handler`, `getServerSideProps`, or default export component)
+4. Return the start and end line numbers"""
+                            else:
+                                locator_steps = f"""Steps:
+1. Search for route decorators matching "{endpoint_path}" (e.g. @app.get("{endpoint_path}") or @router.get("{endpoint_path}"))
+2. Read the file containing this endpoint
+3. Identify the COMPLETE function (decorator + def line + full body until the next decorator or top-level definition)
+4. Return the start and end line numbers"""
+
                             location = await self.run(
                                 task=f"""Find the source code for ONE specific endpoint handler.
 
 Endpoint to find: {endpoint_path}
 Framework: {self.detected_framework}
 
-Steps:
-1. Search for route decorators matching "{endpoint_path}" (e.g. @app.get("{endpoint_path}") or @router.get("{endpoint_path}"))
-2. Read the file containing this endpoint
-3. Identify the COMPLETE function (decorator + def line + full body until the next decorator or top-level definition)
-4. Return the start and end line numbers
+{locator_steps}
 
 IMPORTANT: Return ONLY this single endpoint's function. Do NOT include other endpoints.
 
@@ -1030,33 +1041,58 @@ Return JSON:
                  ".gemini", "artifacts", "scratch", "brain"}
         extensions = (".py", ".js", ".ts", ".tsx", ".go", ".java", ".rb", ".mjs")
 
-        # ── Next.js App Router: locate by filesystem path ─────────────────────
-        # App Router routes live at  app/api/<segments>/route.ts  or
-        # src/app/api/<segments>/route.ts.  We can find the file directly
-        # from the endpoint path rather than scanning for string content.
+        # ── Next.js: locate by filesystem path (App Router + Pages Router) ────
+        # Handles:
+        #   /api/notes      → app/api/notes/route.ts, pages/api/notes.ts, etc.
+        #   /dashboard      → pages/dashboard.tsx, app/dashboard/page.tsx, etc.
+        #   /api/users/{id} → app/api/users/[id]/route.ts, pages/api/users/[id].ts
         if self._adapter and self._adapter.name == "nextjs":
             import re as _re2
-            # Convert /users/{id}/orders → users/[id]/orders
-            fs_seg = _re2.sub(r"\{([^}]+)\}", r"[\1]", endpoint_path.lstrip("/"))
-            candidates = [
-                repo_path / "app"     / "api" / fs_seg / "route.ts",
-                repo_path / "app"     / "api" / fs_seg / "route.tsx",
-                repo_path / "src" / "app" / "api" / fs_seg / "route.ts",
-                repo_path / "src" / "app" / "api" / fs_seg / "route.tsx",
-            ]
-            for candidate in candidates:
-                if candidate.exists():
+            raw_seg = endpoint_path.strip("/")
+            sub_seg = raw_seg[4:] if raw_seg.startswith("api/") else raw_seg
+
+            raw_fs = _re2.sub(r"\{([^}]+)\}", r"[\1]", raw_seg)
+            sub_fs = _re2.sub(r"\{([^}]+)\}", r"[\1]", sub_seg)
+
+            candidate_paths = []
+            for ext in ("ts", "tsx", "js", "jsx"):
+                candidate_paths.extend([
+                    # App router API route
+                    repo_path / "app" / "api" / sub_fs / f"route.{ext}",
+                    repo_path / "src" / "app" / "api" / sub_fs / f"route.{ext}",
+                    # App router custom/root route
+                    repo_path / "app" / raw_fs / f"route.{ext}",
+                    repo_path / "src" / raw_fs / f"route.{ext}",
+                    # Pages router API route
+                    repo_path / "pages" / "api" / f"{sub_fs}.{ext}",
+                    repo_path / "pages" / "api" / sub_fs / f"index.{ext}",
+                    repo_path / "src" / "pages" / "api" / f"{sub_fs}.{ext}",
+                    repo_path / "src" / "pages" / "api" / sub_fs / f"index.{ext}",
+                    # Pages router page (e.g. pages/dashboard.tsx)
+                    repo_path / "pages" / f"{raw_fs}.{ext}",
+                    repo_path / "pages" / raw_fs / f"index.{ext}",
+                    repo_path / "src" / "pages" / f"{raw_fs}.{ext}",
+                    repo_path / "src" / "pages" / raw_fs / f"index.{ext}",
+                    repo_path / "pages" / f"{sub_fs}.{ext}",
+                    repo_path / "src" / "pages" / f"{sub_fs}.{ext}",
+                    # App router page (e.g. app/dashboard/page.tsx)
+                    repo_path / "app" / raw_fs / f"page.{ext}",
+                    repo_path / "src" / "app" / raw_fs / f"page.{ext}",
+                    repo_path / "app" / sub_fs / f"page.{ext}",
+                    repo_path / "src" / "app" / sub_fs / f"page.{ext}",
+                ])
+
+            for candidate in candidate_paths:
+                if candidate.exists() and candidate.is_file():
                     try:
                         content = candidate.read_text(encoding="utf-8")
                         lines   = content.splitlines()
-                        # Find the named export that matches the HTTP method
                         method_upper = method.upper()
+
+                        # 1. Search for App Router named export: export async function GET / POST ...
                         for idx, line in enumerate(lines):
-                            if _re2.search(
-                                rf"export\s+(async\s+)?function\s+{method_upper}\b", line
-                            ):
+                            if _re2.search(rf"export\s+(async\s+)?function\s+{method_upper}\b", line):
                                 start_idx = idx
-                                # Expand to full brace-matched block
                                 brace_count, found_braces, end_idx = 0, False, idx
                                 for scan_idx in range(idx, len(lines)):
                                     brace_count += lines[scan_idx].count("{") - lines[scan_idx].count("}")
@@ -1074,7 +1110,52 @@ Return JSON:
                                     "original_code": "\n".join(lines[start_idx:end_idx]),
                                     "reasoning":     f"Next.js App Router: found {method_upper} export in {rel}",
                                 }
-                        # File found but no matching export — return whole file as context
+
+                        # 2. Search for Pages Router API default export: export default async function handler(...)
+                        for idx, line in enumerate(lines):
+                            if _re2.search(r"export\s+default\s+(async\s+)?function\b", line) or _re2.search(r"export\s+default\s+(async\s+)?(?:\([^)]*\)|[a-zA-Z0-9_]+)\s*=>", line):
+                                start_idx = idx
+                                brace_count, found_braces, end_idx = 0, False, idx
+                                for scan_idx in range(idx, len(lines)):
+                                    brace_count += lines[scan_idx].count("{") - lines[scan_idx].count("}")
+                                    if "{" in lines[scan_idx]:
+                                        found_braces = True
+                                    if found_braces and brace_count <= 0:
+                                        end_idx = scan_idx + 1
+                                        break
+                                rel = str(candidate.relative_to(repo_path)).replace("\\", "/")
+                                return {
+                                    "file_path":     rel,
+                                    "target_function": "default_handler",
+                                    "start_line":    start_idx + 1,
+                                    "end_line":      end_idx,
+                                    "original_code": "\n".join(lines[start_idx:end_idx]),
+                                    "reasoning":     f"Next.js Pages Router: found default handler export in {rel}",
+                                }
+
+                        # 3. Search for getServerSideProps / getStaticProps
+                        for idx, line in enumerate(lines):
+                            if _re2.search(r"export\s+(async\s+)?function\s+(getServerSideProps|getStaticProps)\b", line):
+                                start_idx = idx
+                                brace_count, found_braces, end_idx = 0, False, idx
+                                for scan_idx in range(idx, len(lines)):
+                                    brace_count += lines[scan_idx].count("{") - lines[scan_idx].count("}")
+                                    if "{" in lines[scan_idx]:
+                                        found_braces = True
+                                    if found_braces and brace_count <= 0:
+                                        end_idx = scan_idx + 1
+                                        break
+                                rel = str(candidate.relative_to(repo_path)).replace("\\", "/")
+                                return {
+                                    "file_path":     rel,
+                                    "target_function": "getServerSideProps",
+                                    "start_line":    start_idx + 1,
+                                    "end_line":      end_idx,
+                                    "original_code": "\n".join(lines[start_idx:end_idx]),
+                                    "reasoning":     f"Next.js Pages Router: found data fetching in {rel}",
+                                }
+
+                        # 4. Fallback for page file: return entire file content
                         rel = str(candidate.relative_to(repo_path)).replace("\\", "/")
                         return {
                             "file_path":     rel,
@@ -1082,7 +1163,7 @@ Return JSON:
                             "start_line":    1,
                             "end_line":      len(lines),
                             "original_code": content,
-                            "reasoning":     f"Next.js App Router route file found: {rel}",
+                            "reasoning":     f"Next.js route/page file found: {rel}",
                         }
                     except Exception as e:
                         logger.warning(f"[Fix] Error reading Next.js route file {candidate}: {e}")
