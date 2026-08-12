@@ -81,6 +81,20 @@ Unhandled results:
 Leaked errors:
 {self._format_results(leaked[:10])}
 
+All results (for context):
+{self._format_results(failure_results[:20])}
+
+Important rules for your analysis:
+- Even if all failures were "handled gracefully", still produce MEDIUM-severity findings
+  for missing resilience patterns (e.g. no timeout handling, no rate-limit backoff,
+  no malformed-input validation).
+- A 200 response to malformed_json or null_fields means the endpoint accepts bad input
+  silently — this is a MEDIUM finding worth fixing.
+- A 200 response to http_timeout or slow_response means no timeout is configured — MEDIUM.
+- Only use CRITICAL if error details actually leaked (stack trace, DB info, internal paths).
+- Only use HIGH if the endpoint returned 500 or crashed.
+- Always produce at least one finding even if the app appears healthy.
+
 Produce a comprehensive risk analysis with specific findings and patterns.""",
             context={
                 "total": len(failure_results),

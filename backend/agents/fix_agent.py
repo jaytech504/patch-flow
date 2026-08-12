@@ -124,21 +124,21 @@ Return JSON:
         critical_findings = analysis.get("critical_findings", [])
         all_findings = analysis.get("all_findings", [])
 
-        # The LLM sometimes puts HIGH-severity issues only in all_findings,
-        # leaving critical_findings empty.  Merge both lists so we never
-        # skip actionable findings.  Keep CRITICAL and HIGH; cap at 5.
+        # Merge findings by severity. Include CRITICAL, HIGH, and MEDIUM
+        # (MEDIUM findings still represent real gaps worth fixing when we
+        # have access to the source code).  Cap at 5 to keep costs down.
         seen_titles = set()
         actionable_findings = []
         for f in critical_findings + all_findings:
             sev = (f.get("severity") or "").upper()
             title = f.get("title", "")
-            if sev in ("CRITICAL", "HIGH") and title not in seen_titles:
+            if sev in ("CRITICAL", "HIGH", "MEDIUM") and title not in seen_titles:
                 seen_titles.add(title)
                 actionable_findings.append(f)
         actionable_findings = actionable_findings[:5]
 
         if not actionable_findings:
-            logger.warning("[Fix] No CRITICAL or HIGH findings — nothing to fix.")
+            logger.warning("[Fix] No CRITICAL, HIGH, or MEDIUM findings — nothing to fix.")
 
         # Try to clone repo if provided
         cloned_successfully = False

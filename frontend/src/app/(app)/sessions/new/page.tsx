@@ -800,6 +800,29 @@ export default function NewSessionPage() {
                     </div>
                   )}
 
+                  {/* Next.js page-route warning — shown when no /api/ endpoints are present */}
+                  {(() => {
+                    const allEndpoints = groups.flatMap((g: any) => g.endpoints || []);
+                    const hasApiRoutes = allEndpoints.some((ep: any) => (ep.path || "").startsWith("/api/"));
+                    const hasPageRoutes = allEndpoints.some((ep: any) => !(ep.path || "").startsWith("/api/"));
+                    if (!hasApiRoutes && hasPageRoutes) {
+                      return (
+                        <div className="flex items-start gap-3 p-[12px_16px] bg-[#FFFBEB] border border-[#FDE68A] rounded-xl">
+                          <AlertTriangle className="h-4 w-4 text-[#D97706] shrink-0 mt-0.5" />
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[13px] font-semibold text-[#B45309]">No API routes detected</span>
+                            <span className="text-[12px] text-[#92400E] leading-relaxed">
+                              The endpoints listed look like <strong>page routes</strong> (e.g. <code className="bg-amber-100 px-1 rounded text-[11px]">/dashboard</code>, <code className="bg-amber-100 px-1 rounded text-[11px]">/notes</code>).
+                              PatchFlow tests <strong>API handlers</strong> — for Next.js, these are routes under <code className="bg-amber-100 px-1 rounded text-[11px]">app/api/**</code> (e.g. <code className="bg-amber-100 px-1 rounded text-[11px]">/api/users</code>).
+                              Page routes always return 200 to chaos probes and won't produce actionable findings. Add your API endpoints instead.
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   {/* Bulk Actions Bar */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-200 rounded-xl">
                     <div className="flex flex-wrap gap-2">
@@ -935,6 +958,14 @@ export default function NewSessionPage() {
                                       <div className="pl-12 pr-4 pb-2.5 flex items-start gap-1.5 text-xs text-amber-700">
                                         <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
                                         <span>{ep.risk_note}</span>
+                                      </div>
+                                    )}
+
+                                    {/* Warn when a page route (not /api/) is selected */}
+                                    {isChecked && !(ep.path || "").startsWith("/api/") && (
+                                      <div className="pl-12 pr-4 pb-2.5 flex items-start gap-1.5 text-xs text-amber-700">
+                                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                                        <span>This looks like a page route, not an API handler. Chaos probes on page routes return 200 and won't produce findings. Use <span className="font-mono">/api/...</span> routes for best results.</span>
                                       </div>
                                     )}
 
