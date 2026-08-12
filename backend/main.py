@@ -6,7 +6,8 @@ from loguru import logger
 from backend.core.config import get_settings
 from backend.core.websocket_manager import ws_manager
 from backend.db.session import init_db
-from backend.api import sessions, reports, github, auth, discovery, sentry as sentry_api, sites, incidents
+from backend.api import sessions, reports, github, auth, discovery, sites, incidents
+from backend.api import sdk as sdk_api
 
 settings = get_settings()
 
@@ -40,9 +41,9 @@ app.include_router(discovery.router, prefix="/api/discovery", tags=["discovery"]
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(github.router, prefix="/api/github", tags=["github"])
-app.include_router(sentry_api.router, prefix="/api/sentry", tags=["sentry"])
 app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
 app.include_router(incidents.router, prefix="/api/incidents", tags=["incidents"])
+app.include_router(sdk_api.router, prefix="/api/sdk", tags=["sdk"])
 
 
 @app.websocket("/ws/{session_id}")

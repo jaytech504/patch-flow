@@ -1,5 +1,5 @@
 """
-Redactor — strips PII and secrets from Sentry payloads before they touch
+Redactor — strips PII and secrets from SDK error payloads before they touch
 the LLM, the database, or PR descriptions.
 
 Patterns scrubbed:
@@ -10,7 +10,7 @@ Patterns scrubbed:
   - IPv4 addresses
   - Private keys (PEM blocks)
   - AWS / GCP / Azure credential patterns
-  - Sentry DSN URLs (contain project keys)
+  - DSN URLs containing project keys
 """
 
 from __future__ import annotations
@@ -34,10 +34,10 @@ _PATTERNS: list[tuple[str, str]] = [
         r"(?i)(postgres(?:ql)?|mysql|mongodb|redis|amqp)://[^@\s]+@[^\s\"']+",
         r"\1://***REDACTED***",
     ),
-    # Sentry DSN  https://KEY@oNNN.ingest.sentry.io/…
+    # DSN URLs containing project keys (e.g. error tracking DSNs)
     (
         r"https://[a-f0-9]{32}@o\d+\.ingest(?:\.us)?\.sentry\.io/\d+",
-        "https://***REDACTED***@sentry.io/***",
+        "https://***REDACTED***@ingest.example/***",
     ),
     # AWS access/secret keys
     (r"(?<![A-Z0-9])[A-Z0-9]{20}(?![A-Z0-9])", "***AWS_KEY***"),
@@ -84,7 +84,7 @@ def redact_dict(obj: Any, depth: int = 0) -> Any:
 
 def redact_stack_frame(frame: dict) -> dict:
     """
-    Redact a single Sentry stack frame dict.
+    Redact a single stack frame dict.
     Preserves filename, lineno, function — scrubs vars and context lines.
     """
     safe = {

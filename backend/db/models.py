@@ -171,51 +171,72 @@ class PullRequest(Base):
 
 class MonitoredSite(Base):
     """
-    A site/project the user wants PatchFlow to watch via Sentry.
-    Links a Sentry project to a GitHub repo so incidents can be auto-patched.
+    A site the user wants PatchFlow to monitor via the Agent SDK.
+    Links a GitHub repo so real production errors can be auto-patched.
     """
     __tablename__ = "monitored_sites"
 
     id = Column(String, primary_key=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    name = Column(String(200), nullable=False)           # display name
-    url = Column(String(500), nullable=True)             # production URL
-    github_repo = Column(String(300), nullable=True)     # owner/repo
-    sentry_project_slug = Column(String(200), nullable=True)
-    sentry_org = Column(String(200), nullable=True)
-    framework = Column(String(50), nullable=True)        # detected or set by user
+    name = Column(String(200), nullable=False)
+    url = Column(String(500), nullable=True)
+    github_repo = Column(String(300), nullable=True)
+    framework = Column(String(50), nullable=True)
     active = Column(Boolean, default=True)
+    # SDK integration status
+    sdk_status = Column(String(50), default="not_installed")  # not_installed | active | error
+    sdk_last_seen = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="monitored_sites")
-    incidents = relationship("SentryIncident", back_populates="site", cascade="all, delete-orphan")
+    incidents = relationship("Incident", back_populates="site", cascade="all, delete-orphan")
+    api_keys = relationship("SiteApiKey", back_populates="site", cascade="all, delete-orphan")
 
 
-# ── Phase 4: Sentry Incidents ─────────────────────────────────────────────────
-
-class SentryIncident(Base):
+class SiteApiKey(Base):
     """
-    One incident run: one Sentry issue + one release = one potential draft PR.
-    The dedup_key (sentry_issue_id + release) prevents duplicate runs.
+    API key issued to a monitored site's SDK installation.
+    Format: pf_live_<32-char-hex>
+    One site can have multiple keys (rotation support); only active ones are accepted.
     """
-    __tablename__ = "sentry_incidents"
+    __tablename__ = "site_api_keys"
+
+    id = Column(String, primary_key=True)
+    site_id = Column(String, ForeignKey("monitored_sites.id"), nullable=False)
+    key_hash = Column(String(64), nullable=False, unique=True)  # SHA-256 of the raw key
+    key_prefix = Column(String(20), nullable=False)             # first 12 chars for display
+    label = Column(String(100), nullable=True)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+
+    site = relationship("MonitoredSite", back_populates="api_keys")
+
+
+# ── Incidents ─────────────────────────────────────────────────────────────────
+
+class Incident(Base):
+    """
+    One incident run triggered by the PatchFlow Agent SDK.
+    One error fingerprint + site = one potential draft PR.
+    The dedup_key prevents duplicate pipeline runs for the same error.
+    """
+    __tablename__ = "sentry_incidents"   # table name kept for DB compat
 
     id = Column(String, primary_key=True)
     site_id = Column(String, ForeignKey("monitored_sites.id"), nullable=True)
 
-    # Sentry identifiers
+    # Error identity (synthetic ID for SDK errors: "sdk_<sdk_error_id>")
     sentry_issue_id = Column(String(200), nullable=False)
-    sentry_issue_url = Column(String(500), nullable=True)
-    sentry_project = Column(String(200), nullable=True)
-    sentry_release = Column(String(200), nullable=True)
-    dedup_key = Column(String(400), nullable=False, unique=True)  # issue_id + release
+    sentry_project = Column(String(200), nullable=True)   # site name
+    dedup_key = Column(String(400), nullable=False, unique=True)
 
     # Error context (redacted before storage)
     error_title = Column(String(500), nullable=True)
     error_type = Column(String(200), nullable=True)
-    culprit = Column(String(500), nullable=True)        # Sentry's culprit field
-    stack_file = Column(String(500), nullable=True)     # file from top stack frame
+    culprit = Column(String(500), nullable=True)
+    stack_file = Column(String(500), nullable=True)
     stack_lineno = Column(Integer, nullable=True)
     stack_function = Column(String(300), nullable=True)
     environment = Column(String(100), nullable=True)
@@ -224,7 +245,7 @@ class SentryIncident(Base):
 
     # Pipeline outcome
     status = Column(Enum(IncidentStatus), default=IncidentStatus.RECEIVED)
-    skip_reason = Column(Text, nullable=True)           # why it was skipped
+    skip_reason = Column(Text, nullable=True)
     pr_url = Column(String(500), nullable=True)
     pr_number = Column(Integer, nullable=True)
     github_repo = Column(String(300), nullable=True)
@@ -234,5 +255,50 @@ class SentryIncident(Base):
     processed_at = Column(DateTime, nullable=True)
 
     site = relationship("MonitoredSite", back_populates="incidents")
+
+
+# ── SDK error events ──────────────────────────────────────────────────────────
+
+class SdkError(Base):
+    """
+    A raw error event received from the PatchFlow Agent SDK.
+    Stored before dedup/pipeline processing.
+    """
+    __tablename__ = "sdk_errors"
+
+    id = Column(String, primary_key=True)
+    site_id = Column(String, ForeignKey("monitored_sites.id"), nullable=False)
+
+    # Error identity
+    error_type = Column(String(300), nullable=True)      # e.g. "ValueError"
+    error_message = Column(Text, nullable=True)           # redacted message
+    culprit = Column(String(500), nullable=True)          # endpoint or function
+
+    # Stack context
+    stack_file = Column(String(500), nullable=True)
+    stack_lineno = Column(Integer, nullable=True)
+    stack_function = Column(String(300), nullable=True)
+    stack_frames = Column(JSON, default=list)             # redacted frames
+
+    # Request context
+    endpoint = Column(String(500), nullable=True)         # /api/users
+    method = Column(String(10), nullable=True)            # GET/POST etc.
+    status_code = Column(Integer, nullable=True)
+
+    # Metadata
+    framework = Column(String(50), nullable=True)         # fastapi/express/etc.
+    environment = Column(String(100), nullable=True)
+    sdk_version = Column(String(20), nullable=True)
+
+    # Dedup fingerprint — hash of (site_id + error_type + stack_file + stack_lineno)
+    fingerprint = Column(String(64), nullable=False, index=True)
+
+    # Pipeline outcome
+    incident_id = Column(String, ForeignKey("sentry_incidents.id"), nullable=True)
+    processed = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    site = relationship("MonitoredSite")
 
 

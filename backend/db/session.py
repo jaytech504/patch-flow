@@ -54,12 +54,16 @@ async def init_db():
         migrations = [
             # Phase 1 — skipped_fixes column on reports table
             "ALTER TABLE reports ADD COLUMN IF NOT EXISTS skipped_fixes JSONB DEFAULT '[]'::jsonb",
-            # Phase 4 — monitored_sites table (created by create_all, but ensure columns exist)
+            # Phase 4 — monitored_sites columns
             "ALTER TABLE monitored_sites ADD COLUMN IF NOT EXISTS framework VARCHAR(50)",
             "ALTER TABLE monitored_sites ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
-            # Phase 4 — sentry_incidents table columns
+            "ALTER TABLE monitored_sites ADD COLUMN IF NOT EXISTS sdk_status VARCHAR(50) DEFAULT 'not_installed'",
+            "ALTER TABLE monitored_sites ADD COLUMN IF NOT EXISTS sdk_last_seen TIMESTAMP",
+            # Phase 4 — sentry_incidents columns
             "ALTER TABLE sentry_incidents ADD COLUMN IF NOT EXISTS fix_summary TEXT",
             "ALTER TABLE sentry_incidents ADD COLUMN IF NOT EXISTS github_repo VARCHAR(300)",
+            # SDK — new tables (created by create_all, but ensure extra columns exist)
+            "ALTER TABLE sdk_errors ADD COLUMN IF NOT EXISTS incident_id VARCHAR REFERENCES sentry_incidents(id)",
         ]
         for sql in migrations:
             try:

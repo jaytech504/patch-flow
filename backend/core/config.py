@@ -21,15 +21,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 24
 
-    # Sentry integration (Phase 4)
-    sentry_webhook_secret: str = ""        # HMAC secret from Sentry internal integration
-    sentry_auth_token: str = ""            # Sentry auth token for API calls
-    sentry_org: str = ""                   # Sentry org slug, e.g. "acme-corp"
-
-    # Incident pipeline thresholds
-    incident_min_events: int = 3           # minimum error event count before patching
-    incident_min_users: int = 1            # minimum affected users before patching
-    incident_environments: str = "production"  # comma-separated envs to process
+    # Incident pipeline thresholds (used by SDK incident pipeline)
+    incident_min_events: int = 3       # occurrences before fix is triggered
+    incident_min_users: int = 1
+    incident_environments: str = "production"
 
     class Config:
         env_file = ".env"

@@ -2,15 +2,18 @@
 Monitored Sites API — Phase 4.
 
 Endpoints:
-  GET    /api/sites          — list user's monitored sites
-  POST   /api/sites          — connect a new site
-  PATCH  /api/sites/{id}     — update site settings
-  DELETE /api/sites/{id}     — disconnect a site
-  GET    /api/sites/sentry-projects — list Sentry projects for the org
+  GET    /api/sites                    — list user's monitored sites
+  POST   /api/sites                    — connect a new site
+  PATCH  /api/sites/{id}               — update site settings
+  DELETE /api/sites/{id}               — disconnect a site
+  POST   /api/sites/{id}/generate-key  — generate a new SDK API key
+  DELETE /api/sites/{id}/keys/{key_id} — revoke an API key
 """
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 import uuid
 from datetime import datetime
 
@@ -21,11 +24,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import get_current_user
 from backend.core.config import get_settings
-from backend.db.models import MonitoredSite, User
+from backend.db.models import MonitoredSite, SiteApiKey, User
 from backend.db.session import get_db
 
 router = APIRouter()
 settings = get_settings()
+
+_KEY_PREFIX = "pf_live_"
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _generate_raw_key() -> str:
+    """Generate a new raw API key: pf_live_<32-hex-chars>"""
+    return _KEY_PREFIX + secrets.token_hex(32)
+
+
+def _hash_key(raw_key: str) -> str:
+    return hashlib.sha256(raw_key.encode()).hexdigest()
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -34,8 +50,6 @@ class SiteCreate(BaseModel):
     name: str
     url: str | None = None
     github_repo: str | None = None
-    sentry_project_slug: str | None = None
-    sentry_org: str | None = None
     framework: str | None = None
 
 
@@ -43,23 +57,42 @@ class SiteUpdate(BaseModel):
     name: str | None = None
     url: str | None = None
     github_repo: str | None = None
-    sentry_project_slug: str | None = None
     framework: str | None = None
     active: bool | None = None
 
 
-def _site_to_dict(site: MonitoredSite) -> dict:
+def _site_to_dict(site: MonitoredSite, api_keys: list[SiteApiKey] | None = None) -> dict:
     return {
         "id": site.id,
         "name": site.name,
         "url": site.url,
         "github_repo": site.github_repo,
-        "sentry_project_slug": site.sentry_project_slug,
-        "sentry_org": site.sentry_org or settings.sentry_org,
         "framework": site.framework,
         "active": site.active,
+        "sdk_status": site.sdk_status or "not_installed",
+        "sdk_last_seen": site.sdk_last_seen.isoformat() if site.sdk_last_seen else None,
+        "api_keys": [
+            {
+                "id": k.id,
+                "prefix": k.key_prefix,
+                "label": k.label,
+                "active": k.active,
+                "created_at": k.created_at.isoformat() if k.created_at else None,
+                "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+            }
+            for k in (api_keys or [])
+        ],
         "created_at": site.created_at.isoformat() if site.created_at else None,
     }
+
+
+async def _get_site_keys(site_id: str, db: AsyncSession) -> list[SiteApiKey]:
+    result = await db.execute(
+        select(SiteApiKey)
+        .where(SiteApiKey.site_id == site_id)
+        .order_by(SiteApiKey.created_at.desc())
+    )
+    return list(result.scalars().all())
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -75,7 +108,11 @@ async def list_sites(
         .order_by(MonitoredSite.created_at.desc())
     )
     sites = result.scalars().all()
-    return {"sites": [_site_to_dict(s) for s in sites]}
+    out = []
+    for site in sites:
+        keys = await _get_site_keys(site.id, db)
+        out.append(_site_to_dict(site, keys))
+    return {"sites": out}
 
 
 @router.post("")
@@ -90,15 +127,33 @@ async def create_site(
         name=body.name,
         url=body.url,
         github_repo=body.github_repo,
-        sentry_project_slug=body.sentry_project_slug,
-        sentry_org=body.sentry_org or settings.sentry_org,
         framework=body.framework,
         active=True,
+        sdk_status="not_installed",
         created_at=datetime.utcnow(),
     )
     db.add(site)
     await db.flush()
-    return _site_to_dict(site)
+
+    # Auto-generate a first API key on creation
+    raw_key = _generate_raw_key()
+    key_record = SiteApiKey(
+        id=str(uuid.uuid4()),
+        site_id=site.id,
+        key_hash=_hash_key(raw_key),
+        key_prefix=raw_key[:16],   # "pf_live_" + first 8 hex chars
+        label="Default key",
+        active=True,
+        created_at=datetime.utcnow(),
+    )
+    db.add(key_record)
+    await db.flush()
+
+    result = _site_to_dict(site, [key_record])
+    # Return the raw key ONCE — it is never stored in plaintext
+    result["api_key"] = raw_key
+    result["api_key_id"] = key_record.id
+    return result
 
 
 @router.patch("/{site_id}")
@@ -115,7 +170,8 @@ async def update_site(
         setattr(site, field, value)
     site.updated_at = datetime.utcnow()
     await db.flush()
-    return _site_to_dict(site)
+    keys = await _get_site_keys(site_id, db)
+    return _site_to_dict(site, keys)
 
 
 @router.delete("/{site_id}")
@@ -132,14 +188,53 @@ async def delete_site(
     return {"deleted": site_id}
 
 
-@router.get("/sentry-projects")
-async def list_sentry_projects(
+@router.post("/{site_id}/generate-key")
+async def generate_api_key(
+    site_id: str,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List Sentry projects available in the configured org."""
-    from backend.core.sentry_client import SentryClient
-    if not settings.sentry_auth_token or not settings.sentry_org:
-        return {"projects": []}
-    client = SentryClient(settings.sentry_auth_token, settings.sentry_org)
-    projects = await client.list_projects()
-    return {"projects": projects}
+    """Generate a new SDK API key for the site. Returns the raw key once."""
+    site = await db.get(MonitoredSite, site_id)
+    if not site or site.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Site not found.")
+
+    raw_key = _generate_raw_key()
+    key_record = SiteApiKey(
+        id=str(uuid.uuid4()),
+        site_id=site_id,
+        key_hash=_hash_key(raw_key),
+        key_prefix=raw_key[:16],
+        label=f"Key {datetime.utcnow().strftime('%Y-%m-%d')}",
+        active=True,
+        created_at=datetime.utcnow(),
+    )
+    db.add(key_record)
+    await db.flush()
+
+    return {
+        "api_key": raw_key,         # shown ONCE, never stored in plaintext
+        "api_key_id": key_record.id,
+        "prefix": key_record.key_prefix,
+    }
+
+
+@router.delete("/{site_id}/keys/{key_id}")
+async def revoke_api_key(
+    site_id: str,
+    key_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Revoke (deactivate) an SDK API key."""
+    site = await db.get(MonitoredSite, site_id)
+    if not site or site.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Site not found.")
+
+    key_record = await db.get(SiteApiKey, key_id)
+    if not key_record or key_record.site_id != site_id:
+        raise HTTPException(status_code=404, detail="Key not found.")
+
+    key_record.active = False
+    await db.flush()
+    return {"revoked": key_id}

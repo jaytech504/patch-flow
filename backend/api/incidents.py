@@ -1,29 +1,25 @@
 """
-Incidents API — Phase 4.
-Lists Sentry-triggered incidents for the current user's monitored sites.
+Incidents API.
+Lists SDK-triggered incidents for the current user's monitored sites.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import get_current_user
-from backend.db.models import MonitoredSite, SentryIncident, User
+from backend.db.models import Incident, MonitoredSite, User
 from backend.db.session import get_db
 
 router = APIRouter()
 
 
-def _incident_to_dict(inc: SentryIncident) -> dict:
+def _incident_to_dict(inc: Incident) -> dict:
     return {
         "id": inc.id,
         "site_id": inc.site_id,
-        "sentry_issue_id": inc.sentry_issue_id,
-        "sentry_issue_url": inc.sentry_issue_url,
-        "sentry_project": inc.sentry_project,
-        "sentry_release": inc.sentry_release,
         "error_title": inc.error_title,
         "error_type": inc.error_type,
         "culprit": inc.culprit,
@@ -50,7 +46,6 @@ async def list_incidents(
     current_user: User = Depends(get_current_user),
 ):
     """List all incidents across all of the user's monitored sites."""
-    # Get site IDs belonging to this user
     sites_result = await db.execute(
         select(MonitoredSite.id).where(MonitoredSite.user_id == current_user.id)
     )
@@ -60,9 +55,9 @@ async def list_incidents(
         return {"incidents": []}
 
     result = await db.execute(
-        select(SentryIncident)
-        .where(SentryIncident.site_id.in_(site_ids))
-        .order_by(SentryIncident.created_at.desc())
+        select(Incident)
+        .where(Incident.site_id.in_(site_ids))
+        .order_by(Incident.created_at.desc())
         .limit(100)
     )
     incidents = result.scalars().all()
@@ -76,16 +71,13 @@ async def get_incident(
     current_user: User = Depends(get_current_user),
 ):
     """Get a single incident detail."""
-    inc = await db.get(SentryIncident, incident_id)
+    inc = await db.get(Incident, incident_id)
     if not inc:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Incident not found.")
 
-    # Verify ownership via site
     if inc.site_id:
         site = await db.get(MonitoredSite, inc.site_id)
         if not site or site.user_id != current_user.id:
-            from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Incident not found.")
 
     return _incident_to_dict(inc)
