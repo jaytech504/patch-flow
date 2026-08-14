@@ -14,6 +14,7 @@ from backend.core.adapters import FrameworkAdapter, detect_framework, all_path_v
 from backend.core.config import get_settings
 from backend.core.models import FixCandidate, FixStatus, SourceSnapshot
 from backend.core.patch_validation import PatchValidator
+from backend.core.syntax_validator import validate_file_syntax, validate_content_syntax
 from backend.db.models import FailureResult, ChaosSession, SessionStatus, Report
 
 settings = get_settings()
@@ -570,59 +571,7 @@ Return JSON:
         if not full_path.exists():
             return False, f"File not found for syntax check: {file_path}"
 
-        content = full_path.read_text(encoding="utf-8")
-        ext = full_path.suffix.lower()
-
-        if ext == ".py":
-            try:
-                ast.parse(content)
-                return True, ""
-            except SyntaxError as exc:
-                return False, f"{exc.msg} at line {exc.lineno}, col {exc.offset}"
-
-        if ext in {".js", ".mjs", ".cjs"}:
-            return self._run_syntax_command(["node", "--check", str(full_path)], "Node.js")
-
-        if ext in {".ts", ".tsx"}:
-            ok, msg = self._run_syntax_command([
-                "npx", "--yes", "tsc", "--noEmit",
-                "--skipLibCheck",
-                "--noResolve",
-                "--jsx", "react-jsx",
-                "--target", "esnext",
-                "--allowJs",
-                "--allowSyntheticDefaultImports",
-                str(full_path)
-            ], "TypeScript")
-            if ok:
-                return True, ""
-            return False, msg
-
-        if ext == ".go":
-            return self._run_syntax_command(["gofmt", "-e", str(full_path)], "gofmt")
-
-        if ext == ".rb":
-            return self._run_syntax_command(["ruby", "-c", str(full_path)], "ruby")
-
-        # Unknown extension: do not block, rely on review checks.
-        return True, ""
-
-    def _run_syntax_command(self, command: list[str], label: str) -> tuple[bool, str]:
-        try:
-            proc = subprocess.run(command, capture_output=True, text=True, timeout=20)
-        except FileNotFoundError:
-            logger.warning(f"[Fix] {label} syntax tool not available. Skipping strict syntax validation.")
-            return True, ""
-        except Exception as exc:
-            return False, f"{label} syntax tool failed: {exc}"
-
-        if proc.returncode == 0:
-            return True, ""
-
-        stderr = (proc.stderr or "").strip()
-        stdout = (proc.stdout or "").strip()
-        details = stderr or stdout or f"{label} syntax check failed with exit code {proc.returncode}."
-        return False, details
+        return validate_file_syntax(full_path)
 
     async def revise_fixes(self, fixes_needing_revision: list[dict]) -> list[dict]:
         """

@@ -12,6 +12,7 @@ from backend.agents.base import BaseAgent, Tool
 from backend.core.adapters import detect_framework, FrameworkAdapter
 from backend.core.config import get_settings
 from backend.core.models import FixStatus, ReviewVerdict
+from backend.core.syntax_validator import validate_content_syntax
 
 settings = get_settings()
 
@@ -490,59 +491,8 @@ Return your verdict as JSON:
         return compact[:max_chars]
 
     def _validate_content_syntax(self, file_path: str, content: str) -> tuple[bool, str]:
-        ext = Path(file_path).suffix.lower()
-        if ext == ".py":
-            try:
-                ast.parse(content)
-                return True, ""
-            except SyntaxError as exc:
-                return False, f"{exc.msg} at line {exc.lineno}, col {exc.offset}"
-
-        with tempfile.NamedTemporaryFile("w", suffix=ext or ".txt", encoding="utf-8", delete=False) as tmp:
-            tmp.write(content)
-            temp_path = tmp.name
-        try:
-            if ext in {".js", ".mjs", ".cjs"}:
-                return self._run_syntax_command(["node", "--check", temp_path], "Node.js")
-            if ext in {".ts", ".tsx"}:
-                ok, msg = self._run_syntax_command([
-                    "npx", "--yes", "tsc", "--noEmit",
-                    "--skipLibCheck",
-                    "--noResolve",
-                    "--jsx", "react-jsx",
-                    "--target", "esnext",
-                    "--allowJs",
-                    "--allowSyntheticDefaultImports",
-                    temp_path
-                ], "TypeScript")
-                if ok:
-                    return True, ""
-                return False, msg
-            if ext == ".go":
-                return self._run_syntax_command(["gofmt", "-e", temp_path], "gofmt")
-            if ext == ".rb":
-                return self._run_syntax_command(["ruby", "-c", temp_path], "ruby")
-            return True, ""
-        finally:
-            try:
-                os.remove(temp_path)
-            except Exception:
-                pass
-
-    def _run_syntax_command(self, command: list[str], label: str) -> tuple[bool, str]:
-        try:
-            proc = subprocess.run(command, capture_output=True, text=True, timeout=20)
-        except FileNotFoundError:
-            logger.warning(f"[Review] {label} syntax tool not available. Skipping strict syntax validation.")
-            return True, ""
-        except Exception as exc:
-            return False, f"{label} syntax tool failed: {exc}"
-
-        if proc.returncode == 0:
-            return True, ""
-        stderr = (proc.stderr or "").strip()
-        stdout = (proc.stdout or "").strip()
-        return False, stderr or stdout or f"{label} syntax check failed with exit code {proc.returncode}."
+        """Best-effort syntax check for full proposed content before accepting review verdict."""
+        return validate_content_syntax(file_path, content)
 
     def _generic_exception_structure_checks(self, content: str) -> list[str]:
         issues = []
