@@ -28,10 +28,25 @@ patchflow.init({ apiKey: 'pf_live_your_key_here' });
 app.use(patchflow.expressMiddleware());
 ```
 
-### Next.js App Router
+### Next.js (Global Setup — Recommended)
+Add a single `instrumentation.ts` file in your project root (or `src/`):
+```ts
+// instrumentation.ts
+import patchflow from '@/lib/patchflow';
+
+export function register() {
+  patchflow.init({
+    apiKey: process.env.PATCHFLOW_API_KEY || 'pf_live_your_key_here',
+    host: process.env.PATCHFLOW_HOST,
+  });
+}
+```
+*That's it — `register()` runs once when the server boots. Any unhandled error, crash, or promise rejection across your entire Next.js app is captured automatically without modifying individual routes.*
+
+### Next.js (Per-Route Wrapper — Optional)
 ```ts
 // app/api/users/route.ts
-import patchflow from './patchflow';
+import patchflow from '@/lib/patchflow';
 import { NextRequest, NextResponse } from 'next/server';
 
 patchflow.init({ apiKey: 'pf_live_your_key_here' });

@@ -1,0 +1,34 @@
+{
+  "name": "patchflow",
+  "version": "0.1.0",
+  "description": "Autonomous error interception and code patch generation SDK for Node.js, Next.js, Express, and Hono",
+  "main": "patchflow.js",
+  "types": "patchflow.d.ts",
+  "scripts": {
+    "test": "node -e \"const pf = require('./patchflow'); console.log('PatchFlow Node SDK loaded successfully');\""
+  },
+  "keywords": [
+    "patchflow",
+    "error-tracking",
+    "autonomous-fix",
+    "nextjs",
+    "express",
+    "hono",
+    "nestjs",
+    "ai-agent",
+    "reliability"
+  ],
+  "author": "PatchFlow Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./patchflow.d.ts",
+      "import": "./patchflow.js",
+      "require": "./patchflow.js",
+      "default": "./patchflow.js"
+    }
+  }
+}
