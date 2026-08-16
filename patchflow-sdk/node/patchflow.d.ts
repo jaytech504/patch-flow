@@ -5,7 +5,7 @@
 export interface PatchFlowInitOptions {
   /** Your site API key from the PatchFlow dashboard (pf_live_...) */
   apiKey: string;
-  /** PatchFlow API host (defaults to https://api.patchflow.dev or process.env.PATCHFLOW_HOST) */
+  /** PatchFlow API host (defaults to https://patchflow-backend-xax6.onrender.com or process.env.PATCHFLOW_HOST) */
   host?: string;
   /** Environment name, e.g. 'production' | 'staging' | 'development' */
   environment?: string;
