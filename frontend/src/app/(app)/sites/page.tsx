@@ -109,7 +109,6 @@ function RepoDropdown({ value, repos, reposLoading, onChange }: {
 function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; onClose: () => void }) {
   const [copied, setCopied] = useState<string | null>(null);
   const [tab, setTab] = useState<"node" | "python">("node");
-  const [step, setStep] = useState(1);
 
   const copy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -117,137 +116,219 @@ function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; 
     setTimeout(() => setCopied(null), 1500);
   };
 
-  // The host param is only needed when not using the default (production) host.
-  // Since the SDK default is now the live Render URL, we only add host if the
-  // frontend is talking to a different backend (e.g. localhost during dev).
   const liveHost = "https://patchflow-backend-xax6.onrender.com";
   const needsHost = API_BASE_URL !== liveHost;
-  const hostPy = needsHost ? `,\n    host="${API_BASE_URL}"` : "";
-  const hostNode = needsHost ? `,\n    host: '${API_BASE_URL}'` : "";
+  const hostParam = needsHost ? `,\n    host: '${API_BASE_URL}'` : "";
+  const hostPyParam = needsHost ? `,\n    host="${API_BASE_URL}"` : "";
 
-  const pythonCode = `import patchflow
+  const envSnippet = `PATCHFLOW_API_KEY=${apiKey}${needsHost ? `\nPATCHFLOW_HOST=${API_BASE_URL}` : ""}`;
 
-patchflow.init(
-    api_key="${apiKey}"${hostPy}
-)
-# That's it! All FastAPI/Flask/Django routes are now monitored.`;
+  const nextMiddlewareCode = `// middleware.ts — place in project root (or src/)
+import { NextResponse } from 'next/server';
+import patchflow from './patchflow'; // or from '@/lib/patchflow'
 
-  const nextCode = `// instrumentation.ts — place in your project root (or src/)
+patchflow.init({
+  apiKey: process.env.PATCHFLOW_API_KEY!${hostParam}
+});
+
+export function middleware() {
+  return NextResponse.next();
+}`;
+
+  const nextInstrumentationCode = `// instrumentation.ts — place in project root (or src/)
 import patchflow from './patchflow';
 
 export function register() {
   patchflow.init({
-    apiKey: '${apiKey}'${hostNode}
+    apiKey: process.env.PATCHFLOW_API_KEY!${hostParam}
   });
-}
-// That's it! Every route, API handler, and server action is now monitored.`;
+}`;
+
+  const nextConfigCode = `// next.config.js (Only required if using instrumentation.ts in Next.js 14)
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    instrumentationHook: true,
+  },
+};
+
+module.exports = nextConfig;`;
 
   const expressCode = `const patchflow = require('./patchflow');
-patchflow.init({ apiKey: '${apiKey}'${hostNode} });
 
-// ... your routes here ...
+patchflow.init({
+  apiKey: process.env.PATCHFLOW_API_KEY${hostParam}
+});
+
+// ... your routes ...
 
 // Add this AFTER all routes:
-app.use(patchflow.expressMiddleware());
-// That's it! All Express routes are now monitored.`;
+app.use(patchflow.expressMiddleware());`;
+
+  const pythonCode = `import os
+import patchflow
+
+# Add to the top of your main.py:
+patchflow.init(
+    api_key=os.getenv("PATCHFLOW_API_KEY")${hostPyParam}
+)`;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, scale: 0.97, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.2 }}
-        className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl w-full max-w-[580px] max-h-[90vh] overflow-y-auto">
+        className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl w-full max-w-[620px] max-h-[92vh] overflow-y-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-[#E7E5E2]">
           <div>
-            <h2 className="text-[17px] font-[700] text-[#111110]">Connect {site.name}</h2>
-            <p className="text-[13px] text-[#6F6B66] mt-0.5">2 steps — takes under 60 seconds</p>
+            <h2 className="text-[18px] font-[800] text-[#111110] tracking-tight">Connect {site.name}</h2>
+            <p className="text-[13px] text-[#6F6B66] mt-0.5">Quick 3-step setup guide for your application</p>
           </div>
-          <button onClick={onClose} className="text-[#A3A099] hover:text-[#111110]"><X className="h-[18px] w-[18px]" /></button>
+          <button onClick={onClose} className="text-[#A3A099] hover:text-[#111110] p-1.5 rounded-[6px] hover:bg-[#F3F2F0]">
+            <X className="h-[18px] w-[18px]" />
+          </button>
         </div>
 
         <div className="p-6 flex flex-col gap-6">
 
-          {/* ── STEP 1: Copy API Key ─────────────────────────────────────── */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="flex items-center justify-center h-6 w-6 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800] shrink-0">1</div>
-              <span className="text-[14px] font-[700] text-[#111110]">Copy your API Key</span>
+          {/* ── STEP 1: Add Environment Variable ────────────────────────── */}
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">1</span>
+              <span className="text-[14px] font-[700] text-[#111110]">Set your Environment Variable</span>
             </div>
-            <div className="ml-8">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] text-[#DC2626] font-[600]">⚠ Save this now — it's only shown once</span>
-              </div>
-              <div className="flex items-center gap-2 p-[10px_14px] bg-[#111110] border border-[#333] rounded-[8px] font-mono text-[13px]">
-                <Key className="h-[14px] w-[14px] text-[#FF5A1F] shrink-0" />
-                <span className="flex-1 text-[#F8F8F2] break-all select-all">{apiKey}</span>
-                <button onClick={() => copy("key", apiKey)}
-                  className={cn("flex items-center gap-1 text-[12px] font-[600] shrink-0 px-2 py-1 rounded-[5px] transition-colors",
-                    copied === "key" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                  {copied === "key" ? <><Check className="h-[12px] w-[12px]" />Copied</> : <><Copy className="h-[12px] w-[12px]" />Copy</>}
-                </button>
-              </div>
+            <p className="text-[12px] text-[#6F6B66] ml-7">
+              Add this to your <code className="font-mono bg-[#F3F2F0] px-1.5 py-0.5 rounded text-[#111110]">.env.local</code> file and your hosting settings (e.g. Vercel / Render / Fly.io):
+            </p>
+            <div className="ml-7 relative">
+              <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[8px] overflow-x-auto">
+                {envSnippet}
+              </pre>
+              <button onClick={() => copy("env", envSnippet)}
+                className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
+                  copied === "env" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+                {copied === "env" ? <><Check className="h-[11px] w-[11px]" />Copied</> : <><Copy className="h-[11px] w-[11px]" />Copy</>}
+              </button>
             </div>
           </div>
 
-          {/* ── STEP 2: Add SDK ──────────────────────────────────────────── */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="flex items-center justify-center h-6 w-6 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800] shrink-0">2</div>
-              <span className="text-[14px] font-[700] text-[#111110]">Add PatchFlow to your app</span>
+          {/* ── STEP 2: Download SDK ────────────────────────────────────── */}
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">2</span>
+              <span className="text-[14px] font-[700] text-[#111110]">Download the SDK File</span>
             </div>
-
-            <div className="ml-8 flex flex-col gap-3">
-              {/* Framework selector */}
-              <div className="flex gap-1 bg-[#F3F2F0] rounded-[8px] p-1">
+            <div className="ml-7 flex flex-col gap-2">
+              <div className="flex gap-2 bg-[#F3F2F0] rounded-[8px] p-1 w-fit">
                 {(["node", "python"] as const).map(t => (
                   <button key={t} onClick={() => setTab(t)}
-                    className={cn("flex-1 py-1.5 text-[12px] font-[600] rounded-[6px] transition-colors",
-                      tab === t ? "bg-white text-[#111110] shadow-sm" : "text-[#6F6B66] hover:text-[#111110]")}>
-                    {t === "node" ? "Next.js / Express" : "FastAPI / Python"}
+                    className={cn("px-3 py-1 text-[12px] font-[600] rounded-[6px] transition-colors",
+                      tab === t ? "bg-white text-[#111110] shadow-xs" : "text-[#6F6B66] hover:text-[#111110]")}>
+                    {t === "node" ? "Next.js / Node.js" : "FastAPI / Python"}
                   </button>
                 ))}
               </div>
 
-              {tab === "node" && (
-                <div className="flex flex-col gap-4">
-                  {/* Download */}
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[12px] font-[600] text-[#111110]">a) Download the SDK file into your project:</span>
-                    <a href="/sdk/patchflow.js" download="patchflow.js"
-                      className="flex items-center gap-2 text-[13px] font-[600] text-white bg-[#111110] hover:bg-[#333] px-4 py-2.5 rounded-[8px] transition-colors w-fit">
-                      <Terminal className="h-[14px] w-[14px]" /> Download patchflow.js
-                    </a>
-                    <span className="text-[11px] text-[#A3A099]">Place it in your project root or <code className="bg-[#F3F2F0] px-1 rounded">lib/</code> folder</span>
-                  </div>
+              {tab === "node" ? (
+                <div className="flex items-center gap-3">
+                  <a href="/sdk/patchflow.js" download="patchflow.js"
+                    className="flex items-center gap-2 text-[12px] font-[700] text-white bg-[#111110] hover:bg-[#333] px-3.5 py-2 rounded-[8px] transition-colors">
+                    <Terminal className="h-[13px] w-[13px]" /> Download patchflow.js
+                  </a>
+                  <span className="text-[12px] text-[#6F6B66]">Place in your project root or <code className="font-mono bg-[#F3F2F0] px-1 rounded">lib/</code></span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <a href="/sdk/patchflow.py" download="patchflow.py"
+                    className="flex items-center gap-2 text-[12px] font-[700] text-white bg-[#111110] hover:bg-[#333] px-3.5 py-2 rounded-[8px] transition-colors">
+                    <Terminal className="h-[13px] w-[13px]" /> Download patchflow.py
+                  </a>
+                  <span className="text-[12px] text-[#6F6B66]">Place in your project root next to <code className="font-mono bg-[#F3F2F0] px-1 rounded">main.py</code></span>
+                </div>
+              )}
+            </div>
+          </div>
 
-                  {/* Next.js setup */}
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[12px] font-[600] text-[#111110]">b) Create one file — covers ALL routes automatically:</span>
+          {/* ── STEP 3: Setup Code ──────────────────────────────────────── */}
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">3</span>
+              <span className="text-[14px] font-[700] text-[#111110]">Initialize in your Code</span>
+            </div>
+
+            <div className="ml-7 flex flex-col gap-3">
+              {tab === "node" && (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[12px] font-[700] text-[#111110]">
+                        Next.js Option 1: <code className="font-mono bg-[#F3F2F0] px-1 rounded text-[#FF5A1F]">middleware.ts</code> (Recommended — Zero Config)
+                      </span>
+                      <span className="text-[10px] font-[600] bg-[#F0FDF4] text-[#16A34A] px-2 py-0.5 rounded-full">
+                        Works on all Next.js versions (13, 14, 15)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#6F6B66] mb-1.5">
+                      Create <code className="font-mono text-[#111110]">middleware.ts</code> in your project root — runs automatically on every request with 0 config:
+                    </p>
                     <div className="relative">
-                      <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[14px_16px] rounded-[10px] overflow-x-auto leading-relaxed whitespace-pre-wrap">
-                        {nextCode}
+                      <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[8px] overflow-x-auto leading-relaxed">
+                        {nextMiddlewareCode}
                       </pre>
-                      <button onClick={() => copy("next", nextCode)}
-                        className={cn("absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
-                          copied === "next" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                        {copied === "next" ? <Check className="h-[11px] w-[11px]" /> : <Copy className="h-[11px] w-[11px]" />}
+                      <button onClick={() => copy("middleware", nextMiddlewareCode)}
+                        className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
+                          copied === "middleware" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+                        {copied === "middleware" ? <Check className="h-[11px] w-[11px]" /> : <Copy className="h-[11px] w-[11px]" />}
                       </button>
                     </div>
                   </div>
 
-                  {/* Express alternative */}
-                  <details className="group">
-                    <summary className="text-[12px] font-[600] text-[#6F6B66] cursor-pointer hover:text-[#111110] select-none">
-                      Using Express instead? Click here ▸
+                  <details className="group border border-[#E7E5E2] rounded-[8px] p-3 bg-[#FAFAF9]">
+                    <summary className="text-[12px] font-[700] text-[#374151] cursor-pointer hover:text-[#111110] select-none flex items-center justify-between">
+                      <span>Next.js Option 2: Use <code className="font-mono text-[#FF5A1F]">instrumentation.ts</code> instead</span>
+                      <span className="text-[11px] text-[#A3A099] font-[500]">Server startup hook ▸</span>
+                    </summary>
+                    <div className="mt-3 flex flex-col gap-2.5">
+                      <div className="relative">
+                        <pre className="bg-[#111110] text-[#F8F8F2] text-[11px] font-mono p-[10px_12px] rounded-[6px] overflow-x-auto">
+                          {nextInstrumentationCode}
+                        </pre>
+                        <button onClick={() => copy("next", nextInstrumentationCode)}
+                          className={cn("absolute top-2 right-2 flex items-center gap-1 text-[10px] font-[600] px-2 py-0.5 rounded-[4px] transition-colors",
+                            copied === "next" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+                          {copied === "next" ? <Check className="h-[10px] w-[10px]" /> : <Copy className="h-[10px] w-[10px]" />}
+                        </button>
+                      </div>
+                      <div className="p-2.5 bg-[#FFF8F5] border border-[#FFE2D5] rounded-[6px] text-[11px] text-[#7C2D12]">
+                        <span className="font-[700] block mb-0.5">⚡ Next.js 14 Note:</span>
+                        If using Next.js 14, enable the hook in <code className="font-mono bg-[#FFEDE3] px-1 rounded">next.config.js</code>:
+                        <div className="relative mt-1.5">
+                          <pre className="bg-[#111110] text-[#F8F8F2] text-[10px] font-mono p-[8px_10px] rounded-[4px] overflow-x-auto">
+                            {nextConfigCode}
+                          </pre>
+                          <button onClick={() => copy("config", nextConfigCode)}
+                            className={cn("absolute top-1.5 right-1.5 flex items-center gap-1 text-[9px] font-[600] px-1.5 py-0.5 rounded-[3px] transition-colors",
+                              copied === "config" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+                            {copied === "config" ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+
+                  <details className="group border border-[#E7E5E2] rounded-[8px] p-3 bg-[#FAFAF9]">
+                    <summary className="text-[12px] font-[700] text-[#374151] cursor-pointer hover:text-[#111110] select-none flex items-center justify-between">
+                      <span>Using Express?</span>
+                      <span className="text-[11px] text-[#A3A099] font-[500]">Middleware setup ▸</span>
                     </summary>
                     <div className="mt-2 relative">
-                      <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[14px_16px] rounded-[10px] overflow-x-auto leading-relaxed whitespace-pre-wrap">
+                      <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[6px] overflow-x-auto">
                         {expressCode}
                       </pre>
                       <button onClick={() => copy("express", expressCode)}
-                        className={cn("absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
+                        className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
                           copied === "express" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
                         {copied === "express" ? <Check className="h-[11px] w-[11px]" /> : <Copy className="h-[11px] w-[11px]" />}
                       </button>
@@ -257,50 +338,36 @@ app.use(patchflow.expressMiddleware());
               )}
 
               {tab === "python" && (
-                <div className="flex flex-col gap-4">
-                  {/* Download */}
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[12px] font-[600] text-[#111110]">a) Download the SDK file into your project:</span>
-                    <a href="/sdk/patchflow.py" download="patchflow.py"
-                      className="flex items-center gap-2 text-[13px] font-[600] text-white bg-[#111110] hover:bg-[#333] px-4 py-2.5 rounded-[8px] transition-colors w-fit">
-                      <Terminal className="h-[14px] w-[14px]" /> Download patchflow.py
-                    </a>
-                    <span className="text-[11px] text-[#A3A099]">Place it in your project root next to <code className="bg-[#F3F2F0] px-1 rounded">main.py</code></span>
-                  </div>
-
-                  {/* Python setup */}
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[12px] font-[600] text-[#111110]">b) Add to the top of your main.py — covers ALL routes:</span>
-                    <div className="relative">
-                      <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[14px_16px] rounded-[10px] overflow-x-auto leading-relaxed whitespace-pre-wrap">
-                        {pythonCode}
-                      </pre>
-                      <button onClick={() => copy("python", pythonCode)}
-                        className={cn("absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
-                          copied === "python" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                        {copied === "python" ? <Check className="h-[11px] w-[11px]" /> : <Copy className="h-[11px] w-[11px]" />}
-                      </button>
-                    </div>
+                <div>
+                  <span className="text-[12px] font-[600] text-[#111110] block mb-1">Add to the top of <code className="font-mono bg-[#F3F2F0] px-1 rounded">main.py</code>:</span>
+                  <div className="relative">
+                    <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[8px] overflow-x-auto leading-relaxed">
+                      {pythonCode}
+                    </pre>
+                    <button onClick={() => copy("python", pythonCode)}
+                      className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
+                        copied === "python" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+                      {copied === "python" ? <Check className="h-[11px] w-[11px]" /> : <Copy className="h-[11px] w-[11px]" />}
+                    </button>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* What happens next */}
-          <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-[10px] p-[14px_16px] flex flex-col gap-2">
-            <span className="text-[12px] font-[700] text-[#16A34A]">✓ What happens after you deploy</span>
-            <ol className="text-[12px] text-[#374151] space-y-1.5 list-decimal list-inside">
-              <li>Your app runs normally — PatchFlow sits silently in the background</li>
-              <li>When a real bug crashes a route, PatchFlow captures the full stack trace</li>
-              <li>After 3 occurrences, PatchFlow <span className="font-[600]">automatically writes a fix and opens a draft PR</span> on your GitHub repo</li>
-              <li>You review and merge — done!</li>
-            </ol>
+          {/* ── Status Banner ───────────────────────────────────────────── */}
+          <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-[10px] p-[14px_16px] flex flex-col gap-1.5">
+            <span className="text-[12px] font-[700] text-[#16A34A] flex items-center gap-1.5">
+              <Check className="h-4 w-4" /> Automatic Verification
+            </span>
+            <p className="text-[12px] text-[#374151]">
+              The moment your app starts up with PatchFlow initialized, it automatically sends a background ping. Your site status on this dashboard will turn <span className="font-[700] text-[#16A34A]">SDK Active</span> immediately!
+            </p>
           </div>
 
           <button onClick={onClose}
-            className="w-full py-2.5 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] transition-colors">
-            Done — I&apos;ve Added the SDK
+            className="w-full py-2.5 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] transition-colors cursor-pointer">
+            Done — Close Guide
           </button>
         </div>
       </motion.div>
