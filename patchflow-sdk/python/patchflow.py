@@ -110,6 +110,9 @@ def init(
     # ── Fallback: install sys.excepthook for non-web scripts ─────────────────
     _install_excepthook(_instance)
 
+    # ── Automatic startup heartbeat ping to mark SDK active in dashboard ──────
+    _instance.ping()
+
     if debug:
         print(f"[PatchFlow] Initialised. host={_instance.host} env={_instance.environment}")
 
@@ -125,6 +128,37 @@ class PatchFlow:
         self.environment = environment
         self.debug = debug
         self._framework = _detect_framework()
+
+    def ping(self) -> None:
+        """
+        Send a heartbeat ping to confirm connection and mark the SDK as active.
+        Runs in a background thread so it never blocks startup.
+        """
+        if not self.api_key:
+            return
+
+        def _do_ping():
+            url = f"{self.host}/api/sdk/ping"
+            headers = {
+                "X-PatchFlow-Key": self.api_key,
+                "User-Agent": f"patchflow-python/{__version__}",
+            }
+            try:
+                if _HTTP == "httpx":
+                    with _httpx.Client(timeout=5.0) as client:
+                        r = client.post(url, headers=headers)
+                        if self.debug:
+                            print(f"[PatchFlow] Heartbeat ping response: {r.status_code}")
+                else:
+                    req = _urllib.Request(url, data=b"", headers=headers, method="POST")
+                    with _urllib.urlopen(req, timeout=5.0) as r:
+                        if self.debug:
+                            print(f"[PatchFlow] Heartbeat ping response: {r.status}")
+            except Exception as e:
+                if self.debug:
+                    print(f"[PatchFlow] Heartbeat ping failed: {e}")
+
+        threading.Thread(target=_do_ping, daemon=True).start()
 
     def capture_exception(
         self,

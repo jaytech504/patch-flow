@@ -58,6 +58,9 @@ function init({ apiKey, host, environment, debug = false } = {}) {
   // Install global uncaughtException handler as fallback
   _installProcessHandlers(_instance);
 
+  // Automatically send non-blocking startup heartbeat to mark SDK as active in dashboard
+  _instance.ping();
+
   if (debug) {
     console.log(`[PatchFlow] Initialised. host=${_instance.host} env=${_instance.environment}`);
   }
@@ -96,6 +99,47 @@ class PatchFlow {
       this._send(payload);
     } catch (e) {
       if (this.debug) console.error('[PatchFlow] Failed to capture exception:', e);
+    }
+  }
+
+  /**
+   * Send a heartbeat ping to confirm connection and mark the SDK as active.
+   * Non-blocking — fire-and-forget in the background.
+   */
+  ping() {
+    if (!this.apiKey) return;
+    try {
+      const url = new URL(`${this.host}/api/sdk/ping`);
+      const isHttps = url.protocol === 'https:';
+      const lib = isHttps ? https : http;
+
+      const options = {
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'X-PatchFlow-Key': this.apiKey,
+          'User-Agent': `patchflow-node/${SDK_VERSION}`,
+          'Content-Length': 0,
+        },
+        timeout: 5000,
+      };
+
+      const req = lib.request(options, (res) => {
+        if (this.debug) {
+          console.log(`[PatchFlow] Heartbeat ping response: ${res.statusCode}`);
+        }
+        res.resume();
+      });
+
+      req.on('error', (e) => {
+        if (this.debug) console.warn('[PatchFlow] Heartbeat ping error:', e.message);
+      });
+
+      req.end();
+    } catch (e) {
+      if (this.debug) console.warn('[PatchFlow] Failed to send heartbeat ping:', e);
     }
   }
 
