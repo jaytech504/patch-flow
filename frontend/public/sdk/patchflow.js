@@ -1,34 +1,26 @@
 /**
- * PatchFlow Agent SDK — Node.js
- * ==============================
+ * PatchFlow Agent SDK — Node.js & Edge Runtime
+ * ============================================
  *
- * One-line setup for Express, Next.js App Router, Hono, NestJS, or any Node app.
+ * Universal one-line error monitoring for Next.js (App Router, Pages Router,
+ * Middleware, Edge Runtime), Express, Hono, NestJS, or any JavaScript / Node app.
  *
  * Usage
  * -----
+ * Next.js (middleware.ts):
+ *   import patchflow from './patchflow';
+ *   patchflow.init({ apiKey: process.env.PATCHFLOW_API_KEY });
+ *
  * Express:
  *   const patchflow = require('./patchflow');
- *   patchflow.init({ apiKey: 'pf_live_...' });
- *   app.use(patchflow.expressMiddleware());          // add after routes
- *
- * Next.js App Router (route.ts):
- *   import patchflow from './patchflow';
- *   patchflow.init({ apiKey: 'pf_live_...' });
- *   export const GET = patchflow.wrapNextHandler(async (request) => { ... });
- *
- * Hono:
- *   import patchflow from './patchflow';
- *   patchflow.init({ apiKey: 'pf_live_...' });
- *   app.use('*', patchflow.honoMiddleware());
+ *   patchflow.init({ apiKey: process.env.PATCHFLOW_API_KEY });
+ *   app.use(patchflow.expressMiddleware());
  *
  * Manual:
  *   try { riskyCode() } catch (e) { patchflow.captureException(e) }
  */
 
 'use strict';
-
-const https = require('https');
-const http = require('http');
 
 const SDK_VERSION = '0.1.0';
 const DEFAULT_HOST = 'https://patchflow-backend-xax6.onrender.com';
@@ -41,21 +33,26 @@ let _instance = null;
  * Initialise the PatchFlow SDK.
  *
  * @param {object} options
- * @param {string}  options.apiKey      - Your site API key (pf_live_...)
- * @param {string}  [options.host]      - PatchFlow API host
+ * @param {string}  options.apiKey        - Your site API key (pf_live_...)
+ * @param {string}  [options.host]        - PatchFlow API host
  * @param {string}  [options.environment] - Environment name (default: 'production')
- * @param {boolean} [options.debug]     - Print debug logs
+ * @param {boolean} [options.debug]       - Print debug logs
  * @returns {PatchFlow}
  */
 function init({ apiKey, host, environment, debug = false } = {}) {
+  const envHost = typeof process !== 'undefined' && process.env ? process.env.PATCHFLOW_HOST : undefined;
+  const envName = typeof process !== 'undefined' && process.env
+    ? (process.env.PATCHFLOW_ENV || process.env.NODE_ENV)
+    : undefined;
+
   _instance = new PatchFlow({
     apiKey,
-    host: host || process.env.PATCHFLOW_HOST || DEFAULT_HOST,
-    environment: environment || process.env.PATCHFLOW_ENV || process.env.NODE_ENV || 'production',
+    host: host || envHost || DEFAULT_HOST,
+    environment: environment || envName || 'production',
     debug,
   });
 
-  // Install global uncaughtException handler as fallback
+  // Install process-level handlers only if running in Node.js environment
   _installProcessHandlers(_instance);
 
   // Automatically send non-blocking startup heartbeat to mark SDK as active in dashboard
@@ -68,26 +65,103 @@ function init({ apiKey, host, environment, debug = false } = {}) {
   return _instance;
 }
 
+// ── Universal HTTP Dispatcher ────────────────────────────────────────────────
+
+function _dispatchHttp(urlStr, headers, bodyStr, timeoutMs = 10000) {
+  // 1. Prefer native global fetch (Works in Edge Runtime, Next.js Middleware, Node 18+, Browsers)
+  if (typeof fetch === 'function') {
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+      fetch(urlStr, {
+        method: 'POST',
+        headers: headers || {},
+        body: bodyStr || undefined,
+        signal: controller ? controller.signal : undefined,
+      })
+        .then(() => {
+          if (timer) clearTimeout(timer);
+        })
+        .catch(() => {
+          if (timer) clearTimeout(timer);
+        });
+    } catch (_) {}
+    return;
+  }
+
+  // 2. Fallback to Node.js https/http module (Only evaluated if fetch is absent)
+  try {
+    const url = new URL(urlStr);
+    const isHttps = url.protocol === 'https:';
+    const lib = isHttps ? require('https') : require('http');
+    const bodyBuf = bodyStr ? Buffer.from(bodyStr) : null;
+
+    const req = lib.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname + (url.search || ''),
+        method: 'POST',
+        headers: {
+          ...(headers || {}),
+          ...(bodyBuf ? { 'Content-Length': bodyBuf.length } : {}),
+        },
+        timeout: timeoutMs,
+      },
+      (res) => res.resume()
+    );
+
+    req.on('error', () => {});
+    if (bodyBuf) req.write(bodyBuf);
+    req.end();
+  } catch (_) {}
+}
+
 // ── Core class ────────────────────────────────────────────────────────────────
 
 class PatchFlow {
   constructor({ apiKey, host, environment, debug }) {
-    this.apiKey = apiKey;
-    this.host = host.replace(/\/$/, '');
-    this.environment = environment;
-    this.debug = debug;
+    this.apiKey = apiKey || '';
+    this.host = (host || DEFAULT_HOST).replace(/\/$/, '');
+    this.environment = environment || 'production';
+    this.debug = Boolean(debug);
+  }
+
+  /**
+   * Send a heartbeat ping to confirm connection and mark the SDK as active.
+   * Non-blocking — fire-and-forget in the background.
+   */
+  ping() {
+    if (!this.apiKey) return;
+    try {
+      _dispatchHttp(
+        `${this.host}/api/sdk/ping`,
+        {
+          'X-PatchFlow-Key': this.apiKey,
+          'User-Agent': `patchflow-node/${SDK_VERSION}`,
+        },
+        null,
+        5000
+      );
+      if (this.debug) {
+        console.log('[PatchFlow] Heartbeat ping dispatched.');
+      }
+    } catch (e) {
+      if (this.debug) console.warn('[PatchFlow] Failed to send heartbeat ping:', e);
+    }
   }
 
   /**
    * Capture and send an exception to PatchFlow.
    * Non-blocking — uses fire-and-forget HTTP in the background.
    *
-   * @param {Error}   error
-   * @param {object}  [context]
-   * @param {string}  [context.endpoint]   - Route path e.g. '/api/users'
-   * @param {string}  [context.method]     - HTTP method
-   * @param {number}  [context.statusCode] - HTTP status code
-   * @param {string}  [context.framework]  - Framework name
+   * @param {Error|any} error
+   * @param {object}    [context]
+   * @param {string}    [context.endpoint]   - Route path e.g. '/api/users'
+   * @param {string}    [context.method]     - HTTP method
+   * @param {number}    [context.statusCode] - HTTP status code
+   * @param {string}    [context.framework]  - Framework name
    */
   captureException(error, context = {}) {
     if (!error) return;
@@ -102,94 +176,40 @@ class PatchFlow {
     }
   }
 
-  /**
-   * Send a heartbeat ping to confirm connection and mark the SDK as active.
-   * Non-blocking — fire-and-forget in the background.
-   */
-  ping() {
+  _send(payload) {
     if (!this.apiKey) return;
     try {
-      const url = new URL(`${this.host}/api/sdk/ping`);
-      const isHttps = url.protocol === 'https:';
-      const lib = isHttps ? https : http;
-
-      const options = {
-        hostname: url.hostname,
-        port: url.port || (isHttps ? 443 : 80),
-        path: url.pathname,
-        method: 'POST',
-        headers: {
+      const body = JSON.stringify(payload);
+      _dispatchHttp(
+        `${this.host}/api/sdk/errors`,
+        {
+          'Content-Type': 'application/json',
           'X-PatchFlow-Key': this.apiKey,
           'User-Agent': `patchflow-node/${SDK_VERSION}`,
-          'Content-Length': 0,
         },
-        timeout: 5000,
-      };
-
-      const req = lib.request(options, (res) => {
-        if (this.debug) {
-          console.log(`[PatchFlow] Heartbeat ping response: ${res.statusCode}`);
-        }
-        res.resume();
-      });
-
-      req.on('error', (e) => {
-        if (this.debug) console.warn('[PatchFlow] Heartbeat ping error:', e.message);
-      });
-
-      req.end();
-    } catch (e) {
-      if (this.debug) console.warn('[PatchFlow] Failed to send heartbeat ping:', e);
-    }
-  }
-
-  _send(payload) {
-    const body = JSON.stringify(payload);
-    const url = new URL(`${this.host}/api/sdk/errors`);
-    const isHttps = url.protocol === 'https:';
-    const lib = isHttps ? https : http;
-
-    const options = {
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-        'X-PatchFlow-Key': this.apiKey,
-        'User-Agent': `patchflow-node/${SDK_VERSION}`,
-      },
-      timeout: 10000,
-    };
-
-    const req = lib.request(options, (res) => {
+        body,
+        10000
+      );
       if (this.debug) {
-        console.log(`[PatchFlow] Sent error — status=${res.statusCode}`);
+        console.log('[PatchFlow] Error payload dispatched.');
       }
-      // Drain response body
-      res.resume();
-    });
-
-    req.on('error', (e) => {
-      if (this.debug) console.error('[PatchFlow] Send failed:', e.message);
-    });
-
-    req.write(body);
-    req.end();
+    } catch (e) {
+      if (this.debug) console.error('[PatchFlow] Send failed:', e);
+    }
   }
 }
 
 // ── Payload builder ───────────────────────────────────────────────────────────
 
 function buildPayload(error, context = {}) {
-  const frames = parseStack(error.stack || '');
+  const errObj = error instanceof Error ? error : new Error(String(error));
+  const frames = parseStack(errObj.stack || '');
   const top = frames[frames.length - 1] || {};
-  const culprit = context.endpoint || `${top.filename || ''}:${top.lineno || ''}`;
+  const culprit = context.endpoint || `${top.filename || 'unknown'}:${top.lineno || 0}`;
 
   return {
-    error_type: error.name || error.constructor?.name || 'Error',
-    error_message: (error.message || String(error)).slice(0, 1000),
+    error_type: errObj.name || errObj.constructor?.name || 'Error',
+    error_message: (errObj.message || String(errObj)).slice(0, 1000),
     culprit,
     endpoint: context.endpoint || '',
     method: (context.method || '').toUpperCase(),
@@ -202,7 +222,8 @@ function buildPayload(error, context = {}) {
 }
 
 function parseStack(stack) {
-  const lines = stack.split('\n').slice(1); // skip first line (error message)
+  if (!stack) return [];
+  const lines = stack.split('\n').slice(1);
   const frames = [];
   const atRegex = /^\s*at\s+(?:(.+?)\s+\()?(.+?):(\d+):(\d+)\)?/;
 
@@ -210,11 +231,10 @@ function parseStack(stack) {
     const m = atRegex.exec(line);
     if (m) {
       const [, fn, file, lineno] = m;
-      // Skip node internals and patchflow itself
       if (file && !file.startsWith('node:') && !file.includes('patchflow.js')) {
         frames.push({
           filename: file,
-          lineno: parseInt(lineno, 10),
+          lineno: parseInt(lineno, 10) || 0,
           function: fn || '<anonymous>',
           context_line: '',
           pre_context: [],
@@ -228,22 +248,10 @@ function parseStack(stack) {
 }
 
 function detectFramework() {
-  try {
-    require.resolve('next');
-    return 'nextjs';
-  } catch {}
-  try {
-    require.resolve('express');
-    return 'express';
-  } catch {}
-  try {
-    require.resolve('hono');
-    return 'hono';
-  } catch {}
-  try {
-    require.resolve('@nestjs/core');
-    return 'nestjs';
-  } catch {}
+  if (typeof process !== 'undefined' && process.env) {
+    if (process.env.NEXT_RUNTIME || process.env.__NEXT_PROCESSED_ENV) return 'nextjs';
+  }
+  if (typeof globalThis !== 'undefined' && globalThis.EdgeRuntime) return 'nextjs-edge';
   return 'node';
 }
 
@@ -251,21 +259,21 @@ function detectFramework() {
 
 /**
  * Express error-handling middleware.
- * Add AFTER all routes: app.use(patchflow.expressMiddleware())
+ * Must be registered AFTER all routes: `app.use(patchflow.expressMiddleware())`
  *
  * @returns {Function} Express error middleware (err, req, res, next)
  */
 function expressMiddleware() {
   const pf = _requireInstance('expressMiddleware');
-  // Must have 4 params for Express to treat it as error middleware
-  // eslint-disable-next-line no-unused-vars
-  return function patchflowErrorHandler(err, req, res, next) {
-    pf.captureException(err, {
-      endpoint: req.path || req.url,
-      method: req.method,
-      statusCode: res.statusCode || 500,
-      framework: 'express',
-    });
+  return function patchflowExpressMiddleware(err, req, res, next) {
+    try {
+      pf.captureException(err, {
+        endpoint: req.originalUrl || req.url,
+        method: req.method,
+        statusCode: res.statusCode >= 400 ? res.statusCode : 500,
+        framework: 'express',
+      });
+    } catch (_) {}
     next(err);
   };
 }
@@ -280,7 +288,7 @@ function expressMiddleware() {
  *     return NextResponse.json({ ok: true });
  *   });
  *
- * @param {Function} handler - async (request: NextRequest) => NextResponse
+ * @param {Function} handler
  * @returns {Function}
  */
 function wrapNextHandler(handler) {
@@ -289,12 +297,16 @@ function wrapNextHandler(handler) {
     try {
       return await handler(request, context);
     } catch (err) {
-      pf.captureException(err, {
-        endpoint: new URL(request.url).pathname,
-        method: request.method,
-        statusCode: 500,
-        framework: 'nextjs',
-      });
+      try {
+        const urlStr = request && request.url ? request.url : '';
+        const endpoint = urlStr ? new URL(urlStr).pathname : '';
+        pf.captureException(err, {
+          endpoint,
+          method: request?.method || 'GET',
+          statusCode: 500,
+          framework: 'nextjs',
+        });
+      } catch (_) {}
       throw err;
     }
   };
@@ -314,30 +326,35 @@ function honoMiddleware() {
     try {
       await next();
     } catch (err) {
-      pf.captureException(err, {
-        endpoint: new URL(c.req.url).pathname,
-        method: c.req.method,
-        statusCode: 500,
-        framework: 'hono',
-      });
+      try {
+        pf.captureException(err, {
+          endpoint: new URL(c.req.url).pathname,
+          method: c.req.method,
+          statusCode: 500,
+          framework: 'hono',
+        });
+      } catch (_) {}
       throw err;
     }
   };
 }
 
-// ── process-level fallback ────────────────────────────────────────────────────
+// ── Process-level fallback (Node.js only) ──────────────────────────────────────
 
 function _installProcessHandlers(pf) {
-  process.on('uncaughtException', (err) => {
-    pf.captureException(err);
-    // Give the HTTP call a moment to fire before process potentially exits
-    // The default behaviour (crash) is preserved — we don't swallow it.
-  });
+  if (typeof process === 'undefined' || typeof process.on !== 'function') {
+    return; // Skip on Edge Runtime, Web Workers, or browsers
+  }
+  try {
+    process.on('uncaughtException', (err) => {
+      pf.captureException(err);
+    });
 
-  process.on('unhandledRejection', (reason) => {
-    const err = reason instanceof Error ? reason : new Error(String(reason));
-    pf.captureException(err);
-  });
+    process.on('unhandledRejection', (reason) => {
+      const err = reason instanceof Error ? reason : new Error(String(reason));
+      pf.captureException(err);
+    });
+  } catch (_) {}
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -353,7 +370,7 @@ function _requireInstance(fnName) {
 
 /**
  * Capture an exception using the globally initialised SDK instance.
- * @param {Error} error
+ * @param {Error|any} error
  * @param {object} [context]
  */
 function captureException(error, context = {}) {

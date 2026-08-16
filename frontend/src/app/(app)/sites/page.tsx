@@ -123,13 +123,16 @@ function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; 
 
   const envSnippet = `PATCHFLOW_API_KEY=${apiKey}${needsHost ? `\nPATCHFLOW_HOST=${API_BASE_URL}` : ""}`;
 
-  const nextMiddlewareCode = `// middleware.ts — place in project root (or src/)
-import { NextResponse } from 'next/server';
+  const nextMiddlewareCode = `// middleware.ts (in your project root or src/)
+// ── 1. If you ALREADY have middleware.ts: Just add these 2 lines at the top ──
 import patchflow from './patchflow'; // or from '@/lib/patchflow'
 
 patchflow.init({
   apiKey: process.env.PATCHFLOW_API_KEY!${hostParam}
 });
+
+// ── 2. If creating a NEW middleware.ts: Keep the function below ───────────────
+import { NextResponse } from 'next/server';
 
 export function middleware() {
   return NextResponse.next();
@@ -270,8 +273,9 @@ patchflow.init(
                         Works on all Next.js versions (13, 14, 15)
                       </span>
                     </div>
-                    <p className="text-[11px] text-[#6F6B66] mb-1.5">
-                      Create <code className="font-mono text-[#111110]">middleware.ts</code> in your project root — runs automatically on every request with 0 config:
+                    <p className="text-[11px] text-[#6F6B66] mb-2 leading-relaxed">
+                      <strong className="text-[#111110]">Have an existing <code className="font-mono text-[#FF5A1F]">middleware.ts</code>?</strong> Just paste the top 2 lines into it.<br />
+                      <strong className="text-[#111110]">Don&apos;t have one?</strong> Create <code className="font-mono text-[#111110]">middleware.ts</code> in your project root with the full snippet below:
                     </p>
                     <div className="relative">
                       <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[8px] overflow-x-auto leading-relaxed">
