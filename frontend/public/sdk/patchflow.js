@@ -68,60 +68,24 @@ function init({ apiKey, host, environment, debug = false } = {}) {
   return _instance;
 }
 
-// ── Universal HTTP Dispatcher ────────────────────────────────────────────────
+// ── Universal HTTP Dispatcher (Fetch-based, 100% Webpack & Edge Safe) ─────────
 
 async function _dispatchHttp(urlStr, headers, bodyStr, timeoutMs = 10000) {
-  // 1. Prefer native global fetch (Works in Edge Runtime, Next.js, Node 18+, Browsers)
-  if (typeof fetch === 'function') {
-    try {
-      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
-      const res = await fetch(urlStr, {
-        method: 'POST',
-        headers: headers || {},
-        body: bodyStr || undefined,
-        signal: controller ? controller.signal : undefined,
-      });
-      if (timer) clearTimeout(timer);
-      return res;
-    } catch (_) {}
+    const res = await fetch(urlStr, {
+      method: 'POST',
+      headers: headers || {},
+      body: bodyStr || undefined,
+      signal: controller ? controller.signal : undefined,
+    });
+    if (timer) clearTimeout(timer);
+    return res;
+  } catch (_) {
     return null;
   }
-
-  // 2. Fallback to Node.js https/http module (Only evaluated if fetch is absent)
-  return new Promise((resolve) => {
-    try {
-      const url = new URL(urlStr);
-      const isHttps = url.protocol === 'https:';
-      const lib = isHttps ? require('https') : require('http');
-      const bodyBuf = bodyStr ? Buffer.from(bodyStr) : null;
-
-      const req = lib.request(
-        {
-          hostname: url.hostname,
-          port: url.port || (isHttps ? 443 : 80),
-          path: url.pathname + (url.search || ''),
-          method: 'POST',
-          headers: {
-            ...(headers || {}),
-            ...(bodyBuf ? { 'Content-Length': bodyBuf.length } : {}),
-          },
-          timeout: timeoutMs,
-        },
-        (res) => {
-          res.resume();
-          resolve(res);
-        }
-      );
-
-      req.on('error', () => resolve(null));
-      if (bodyBuf) req.write(bodyBuf);
-      req.end();
-    } catch (_) {
-      resolve(null);
-    }
-  });
 }
 
 // ── Core class ────────────────────────────────────────────────────────────────
@@ -267,7 +231,7 @@ function detectFramework() {
  * Express error-handling middleware.
  * Must be registered AFTER all routes: `app.use(patchflow.expressMiddleware())`
  *
- * @returns {Function} Express error middleware (err, req, res, next)
+ * @returns {(err: any, req: any, res: any, next: any) => void}
  */
 function expressMiddleware() {
   const pf = _requireInstance('expressMiddleware');
@@ -294,19 +258,20 @@ function expressMiddleware() {
  *     return NextResponse.json({ ok: true });
  *   });
  *
- * @param {Function} handler
- * @returns {Function}
+ * @template {(...args: any[]) => any} T
+ * @param {T} handler
+ * @returns {T}
  */
 function wrapNextHandler(handler) {
   const pf = _requireInstance('wrapNextHandler');
-  return async function wrappedNextHandler(request, context) {
+  /** @type {any} */
+  const wrapped = async function (request, context) {
     try {
       return await handler(request, context);
     } catch (err) {
       try {
         const urlStr = request && request.url ? request.url : '';
         const endpoint = urlStr ? new URL(urlStr).pathname : '/crash';
-        // Await on serverless to guarantee HTTP delivery before function terminates
         await pf.captureException(err, {
           endpoint,
           method: request?.method || 'GET',
@@ -317,6 +282,7 @@ function wrapNextHandler(handler) {
       throw err;
     }
   };
+  return /** @type {T} */ (wrapped);
 }
 
 // ── Hono middleware ───────────────────────────────────────────────────────────
@@ -325,7 +291,7 @@ function wrapNextHandler(handler) {
  * Hono middleware factory.
  * Usage: app.use('*', patchflow.honoMiddleware())
  *
- * @returns {Function} Hono middleware
+ * @returns {(c: any, next: () => Promise<void>) => Promise<void>}
  */
 function honoMiddleware() {
   const pf = _requireInstance('honoMiddleware');
