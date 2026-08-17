@@ -94,7 +94,7 @@ class SdkIncidentPipeline:
             target_name=site.name,
             github_repo=site.github_repo,
             user_id=site.user_id,
-            status=SessionStatus.RUNNING,
+            status=SessionStatus.FIXING,
             created_at=datetime.utcnow(),
         )
         self.db.add(session)
