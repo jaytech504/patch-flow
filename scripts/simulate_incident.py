@@ -6,9 +6,8 @@ Simulates real production errors captured by the PatchFlow Agent SDK
 to trigger and test the autonomous fix & draft PR pipeline.
 
 Usage:
-  python scripts/simulate_incident.py --api-key pf_live_...
-  python scripts/simulate_incident.py --api-key pf_live_... --framework nextjs --count 3
-  python scripts/simulate_incident.py --api-key pf_live_... --host http://localhost:8000
+  python scripts/simulate_incident.py --api-key pf_live_... --framework fastapi
+  python scripts/simulate_incident.py --api-key pf_live_... --endpoint /crash --file app.py --line 20
 """
 
 from __future__ import annotations
@@ -23,75 +22,57 @@ import urllib.request
 # ── Preset Error Scenarios ───────────────────────────────────────────────────
 
 SCENARIOS = {
+    "fastapi": {
+        "error_type": "TypeError",
+        "error_message": "'NoneType' object is not subscriptable",
+        "endpoint": "/crash",
+        "method": "GET",
+        "status_code": 500,
+        "framework": "fastapi",
+        "stack_frames": [
+            {
+                "filename": "app.py",
+                "lineno": 25,
+                "function": "crash",
+                "context_line": "title = data['title']",
+            },
+        ],
+    },
     "nextjs": {
         "error_type": "TypeError",
         "error_message": "Cannot read properties of undefined (reading 'title')",
-        "endpoint": "/api/notes",
+        "endpoint": "/crash",
         "method": "GET",
         "status_code": 500,
         "framework": "nextjs",
         "stack_frames": [
             {
-                "filename": "node_modules/next/dist/server/base-server.js",
-                "lineno": 1120,
-                "function": "renderToHTML",
-                "context_line": "await renderReq(req, res);",
-            },
-            {
-                "filename": "src/pages/Notes.tsx",
-                "lineno": 139,
-                "function": "NotesPage",
-                "context_line": "const title = note.title;",
-            },
-        ],
-    },
-    "fastapi": {
-        "error_type": "httpx.TimeoutException",
-        "error_message": "Timed out after 5.0 seconds waiting for downstream payment gateway",
-        "endpoint": "/api/payments/charge",
-        "method": "POST",
-        "status_code": 500,
-        "framework": "fastapi",
-        "stack_frames": [
-            {
-                "filename": "starlette/middleware/errors.py",
-                "lineno": 162,
-                "function": "__call__",
-                "context_line": "await self.app(scope, receive, _send)",
-            },
-            {
-                "filename": "app/services/payment.py",
-                "lineno": 74,
-                "function": "charge_customer",
-                "context_line": "resp = await client.post('/charges', json=payload)",
+                "filename": "app/crash/route.ts",
+                "lineno": 8,
+                "function": "GET",
+                "context_line": "const title = data.notes.title;",
             },
         ],
     },
     "express": {
-        "error_type": "UnhandledPromiseRejection",
-        "error_message": "Unhandled rejection in async handler: User not found in database",
-        "endpoint": "/api/users/profile",
+        "error_type": "TypeError",
+        "error_message": "Cannot read property 'title' of undefined",
+        "endpoint": "/api/notes",
         "method": "GET",
         "status_code": 500,
         "framework": "express",
         "stack_frames": [
             {
-                "filename": "node_modules/express/lib/router/layer.js",
-                "lineno": 95,
-                "function": "handle_request",
-                "context_line": "fn(req, res, next);",
-            },
-            {
-                "filename": "src/routes/users.js",
-                "lineno": 48,
-                "function": "getUserProfile",
-                "context_line": "const profile = await db.findUser(req.params.id);",
+                "filename": "src/routes/notes.js",
+                "lineno": 24,
+                "function": "getNote",
+                "context_line": "const title = note.title;",
             },
         ],
     },
     "hono": {
         "error_type": "Error",
-        "error_message": "Database pool exhausted: connection failed after 3000ms",
+        "error_message": "Item not found in cache",
         "endpoint": "/api/items",
         "method": "GET",
         "status_code": 500,
@@ -101,7 +82,7 @@ SCENARIOS = {
                 "filename": "src/index.ts",
                 "lineno": 33,
                 "function": "getItems",
-                "context_line": "const items = await pool.query('SELECT * FROM items');",
+                "context_line": "const items = cache.get('items');",
             },
         ],
     },
@@ -134,16 +115,19 @@ def make_request(url: str, method: str = "GET", headers: dict = None, data: dict
 def main():
     parser = argparse.ArgumentParser(description="PatchFlow Production Incident Simulator")
     parser.add_argument("--api-key", required=True, help="Site API key (pf_live_...)")
-    parser.add_argument("--host", default="http://localhost:8000", help="PatchFlow API host (default: http://localhost:8000)")
+    parser.add_argument("--host", default="https://patchflow-backend-xax6.onrender.com", help="PatchFlow API host")
     parser.add_argument(
         "--framework",
-        choices=["nextjs", "fastapi", "express", "hono"],
-        default="nextjs",
-        help="Framework template to simulate (default: nextjs)",
+        choices=["fastapi", "nextjs", "express", "hono"],
+        default="fastapi",
+        help="Framework template to simulate (default: fastapi)",
     )
     parser.add_argument("--count", type=int, default=3, help="Number of error occurrences to send (default: 3 to trigger pipeline)")
+    parser.add_argument("--endpoint", default="/crash", help="Endpoint path to test (default: /crash)")
+    parser.add_argument("--file", help="Source filename override (e.g. app.py)")
+    parser.add_argument("--line", type=int, help="Source line number override")
+    parser.add_argument("--error-type", help="Error type override (e.g. TypeError, KeyError)")
     parser.add_argument("--message", help="Custom error message override")
-    parser.add_argument("--endpoint", help="Custom endpoint path override")
 
     args = parser.parse_args()
     host = args.host.rstrip("/")
@@ -153,6 +137,7 @@ def main():
     print("  🚀 PatchFlow Incident Simulator")
     print(f"  Target Host: {host}")
     print(f"  Framework:   {args.framework}")
+    print(f"  Endpoint:    {args.endpoint}")
     print(f"  Key Prefix:  {api_key[:14]}...")
     print(f"  Occurrences: {args.count}")
     print("=" * 60 + "\n")
@@ -175,15 +160,27 @@ def main():
 
     # Step 2: Build Payload
     scenario = SCENARIOS[args.framework].copy()
+    scenario["endpoint"] = args.endpoint
     if args.message:
         scenario["error_message"] = args.message
-    if args.endpoint:
-        scenario["endpoint"] = args.endpoint
+    if args.error_type:
+        scenario["error_type"] = args.error_type
+    if args.file:
+        scenario["stack_frames"] = [
+            {
+                "filename": args.file,
+                "lineno": args.line or 1,
+                "function": "handler",
+                "context_line": "",
+            }
+        ]
 
+    top_frame = scenario["stack_frames"][-1]
     print(f" [2/3] Dispatching {args.count} Simulated Error Events:")
     print(f"       Type:     {scenario['error_type']}")
     print(f"       Message:  {scenario['error_message']}")
-    print(f"       Endpoint: {scenario['method']} {scenario['endpoint']}\n")
+    print(f"       Endpoint: {scenario['method']} {scenario['endpoint']}")
+    print(f"       Culprit:  {top_frame['filename']}:{top_frame['lineno']}\n")
 
     for i in range(1, args.count + 1):
         err_status, err_res = make_request(

@@ -20,7 +20,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db.models import IncidentStatus, MonitoredSite, SdkError, Incident, User
+from backend.db.models import IncidentStatus, MonitoredSite, SdkError, Incident, User, ChaosSession, SessionStatus
 
 # ── Hard blocklist ─────────────────────────────────────────────────────────────
 # Files/modules matching these patterns are never auto-patched.
@@ -85,9 +85,22 @@ class SdkIncidentPipeline:
             logger.info(f"[SdkPipeline] Duplicate — already processing fingerprint {sdk_error.fingerprint[:16]}…")
             return None
 
-        # ── Create incident record ────────────────────────────────────────────
+        # ── Create chaos session & incident records ───────────────────────────
+        incident_id = str(uuid.uuid4())
+
+        session = ChaosSession(
+            id=incident_id,
+            target_url=site.name or "production",
+            target_name=site.name,
+            github_repo=site.github_repo,
+            user_id=site.user_id,
+            status=SessionStatus.RUNNING,
+            created_at=datetime.utcnow(),
+        )
+        self.db.add(session)
+
         incident = Incident(
-            id=str(uuid.uuid4()),
+            id=incident_id,
             site_id=site.id,
             sentry_issue_id=f"sdk_{sdk_error_id}",
             sentry_project=site.name,
@@ -108,16 +121,20 @@ class SdkIncidentPipeline:
         self.db.add(incident)
         # Link the sdk_error to this incident
         sdk_error.incident_id = incident.id
-        await self.db.flush()
+        await self.db.commit()
 
         try:
             await self._execute(incident, sdk_error, site)
+            await self.db.commit()
         except Exception as e:
             logger.error(f"[SdkPipeline] Pipeline failed: {e}")
-            incident.status = IncidentStatus.FAILED
-            incident.skip_reason = f"Pipeline error: {str(e)[:300]}"
-            incident.processed_at = datetime.utcnow()
-            await self.db.flush()
+            await self.db.rollback()
+            inc = await self.db.get(Incident, incident_id)
+            if inc:
+                inc.status = IncidentStatus.FAILED
+                inc.skip_reason = f"Pipeline error: {str(e)[:300]}"
+                inc.processed_at = datetime.utcnow()
+                await self.db.commit()
 
         return incident
 
