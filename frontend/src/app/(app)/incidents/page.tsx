@@ -272,22 +272,26 @@ export default function IncidentsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white border border-[#E7E5E2] rounded-[16px] p-12 text-center">
-          <AlertTriangle className="h-8 w-8 text-[#D4D1CC] mx-auto mb-3" />
-          <p className="text-[15px] font-[700] text-[#111110]">
-            {searchQuery || statusFilter !== "all" ? "No matching incidents" : "No incidents captured yet"}
+          <div className="h-10 w-10 rounded-full bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center mx-auto mb-3">
+            <CheckCircle2 className="h-5 w-5 text-[#16A34A]" />
+          </div>
+          <p className="text-[16px] font-[700] text-[#111110]">
+            {searchQuery || statusFilter !== "all" ? "No matching incidents found" : "All Systems Operational"}
           </p>
-          <p className="text-[13px] text-[#6F6B66] mt-1 max-w-md mx-auto">
+          <p className="text-[13px] text-[#6F6B66] mt-1.5 max-w-md mx-auto leading-relaxed">
             {searchQuery || statusFilter !== "all"
               ? "Try adjusting your search query or status filter."
-              : "Connect your site and deploy the PatchFlow SDK to start capturing live runtime errors."}
+              : "PatchFlow is actively listening for production errors in real time. When an issue occurs in your app, it will be captured here and an automated fix PR will be created."}
           </p>
           {!searchQuery && statusFilter === "all" && (
-            <Link
-              href="/sites"
-              className="inline-flex items-center gap-1.5 mt-4 text-[13px] font-[600] bg-[#FF5A1F] hover:bg-[#E04E16] text-white px-4 py-2 rounded-[8px] transition-colors"
-            >
-              Connect a Site →
-            </Link>
+            <div className="flex items-center justify-center gap-3 mt-5">
+              <Link
+                href="/sites"
+                className="inline-flex items-center gap-1.5 text-[12px] font-[600] text-[#6F6B66] hover:text-[#111110] bg-[#F3F2F0] hover:bg-[#E7E5E2] px-3.5 py-2 rounded-[8px] transition-colors"
+              >
+                View Monitored Sites
+              </Link>
+            </div>
           )}
         </div>
       ) : (
