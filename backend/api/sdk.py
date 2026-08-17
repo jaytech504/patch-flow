@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.redactor import redact_dict, redact_string, redact_stack_frame
-from backend.db.models import MonitoredSite, SiteApiKey, SdkError
+from backend.db.models import MonitoredSite, SiteApiKey, SdkError, Incident, IncidentStatus
 from backend.db.session import AsyncSessionLocal, get_db
 
 router = APIRouter()
@@ -189,11 +189,20 @@ async def ingest_error(
 
     # ── Trigger pipeline once threshold is reached ────────────────────────────
     if occurrence_count >= _MIN_OCCURRENCES:
-        # Check if there's already an active/recent incident for this fingerprint
-        already_processing = any(
-            e.processed for e in existing_errors
+        # Check if there is an active incident currently in-flight for this fingerprint
+        dedup_key = f"sdk:{fingerprint}"
+        active_inc_res = await db.execute(
+            select(Incident).where(
+                Incident.dedup_key == dedup_key,
+                Incident.status.in_([
+                    IncidentStatus.PROCESSING,
+                    IncidentStatus.PR_OPENED,
+                ])
+            )
         )
-        if not already_processing:
+        has_active_incident = active_inc_res.scalar_one_or_none() is not None
+
+        if not has_active_incident:
             logger.info(
                 f"[SDK] Threshold reached ({occurrence_count} occurrences) "
                 f"— triggering incident pipeline for {error_type}"
