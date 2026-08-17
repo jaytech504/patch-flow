@@ -123,31 +123,25 @@ function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; 
 
   const envSnippet = `PATCHFLOW_API_KEY=${apiKey}${needsHost ? `\nPATCHFLOW_HOST=${API_BASE_URL}` : ""}`;
 
-  const nextMiddlewareCode = `// middleware.ts (in your project root or src/)
-// ── 1. If you ALREADY have middleware.ts: Just add these 2 lines at the top ──
-import patchflow from './patchflow'; // or from '@/lib/patchflow'
-
-patchflow.init({
-  apiKey: process.env.PATCHFLOW_API_KEY!${hostParam}
-});
-
-// ── 2. If creating a NEW middleware.ts: Keep the function below ───────────────
-import { NextResponse } from 'next/server';
-
-export function middleware() {
-  return NextResponse.next();
-}`;
-
   const nextInstrumentationCode = `// instrumentation.ts — place in project root (or src/)
-import patchflow from './patchflow';
+import patchflow from './patchflow'; // or from '@/lib/patchflow'
 
 export function register() {
   patchflow.init({
     apiKey: process.env.PATCHFLOW_API_KEY!${hostParam}
   });
+}
+
+// ⚡ Automatically intercepts all unhandled errors across all API routes & pages:
+export async function onRequestError(err: any, request: any) {
+  patchflow.captureException(err, {
+    endpoint: request?.path || '',
+    method: request?.method || 'GET',
+    framework: 'nextjs',
+  });
 }`;
 
-  const nextConfigCode = `// next.config.js (Only required if using instrumentation.ts in Next.js 14)
+  const nextConfigCode = `// next.config.js (Required for Next.js 14)
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -267,60 +261,44 @@ patchflow.init(
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[12px] font-[700] text-[#111110]">
-                        Next.js Option 1: <code className="font-mono bg-[#F3F2F0] px-1 rounded text-[#FF5A1F]">middleware.ts</code> (Recommended — Zero Config)
+                        Next.js: Create <code className="font-mono bg-[#F3F2F0] px-1 rounded text-[#FF5A1F]">instrumentation.ts</code>
                       </span>
                       <span className="text-[10px] font-[600] bg-[#F0FDF4] text-[#16A34A] px-2 py-0.5 rounded-full">
-                        Works on all Next.js versions (13, 14, 15)
+                        Global — covers all routes automatically
                       </span>
                     </div>
-                    <p className="text-[11px] text-[#6F6B66] mb-2 leading-relaxed">
-                      <strong className="text-[#111110]">Have an existing <code className="font-mono text-[#FF5A1F]">middleware.ts</code>?</strong> Just paste the top 2 lines into it.<br />
-                      <strong className="text-[#111110]">Don&apos;t have one?</strong> Create <code className="font-mono text-[#111110]">middleware.ts</code> in your project root with the full snippet below:
+                    <p className="text-[11px] text-[#6F6B66] mb-1.5 leading-relaxed">
+                      Place this in your project root (or <code className="font-mono text-[#111110]">src/</code>) — catches all server & API crashes across your entire app:
                     </p>
                     <div className="relative">
                       <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[8px] overflow-x-auto leading-relaxed">
-                        {nextMiddlewareCode}
+                        {nextInstrumentationCode}
                       </pre>
-                      <button onClick={() => copy("middleware", nextMiddlewareCode)}
+                      <button onClick={() => copy("next", nextInstrumentationCode)}
                         className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
-                          copied === "middleware" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                        {copied === "middleware" ? <Check className="h-[11px] w-[11px]" /> : <Copy className="h-[11px] w-[11px]" />}
+                          copied === "next" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+                        {copied === "next" ? <Check className="h-[11px] w-[11px]" /> : <Copy className="h-[11px] w-[11px]" />}
                       </button>
                     </div>
                   </div>
 
-                  <details className="group border border-[#E7E5E2] rounded-[8px] p-3 bg-[#FAFAF9]">
-                    <summary className="text-[12px] font-[700] text-[#374151] cursor-pointer hover:text-[#111110] select-none flex items-center justify-between">
-                      <span>Next.js Option 2: Use <code className="font-mono text-[#FF5A1F]">instrumentation.ts</code> instead</span>
-                      <span className="text-[11px] text-[#A3A099] font-[500]">Server startup hook ▸</span>
-                    </summary>
-                    <div className="mt-3 flex flex-col gap-2.5">
-                      <div className="relative">
-                        <pre className="bg-[#111110] text-[#F8F8F2] text-[11px] font-mono p-[10px_12px] rounded-[6px] overflow-x-auto">
-                          {nextInstrumentationCode}
-                        </pre>
-                        <button onClick={() => copy("next", nextInstrumentationCode)}
-                          className={cn("absolute top-2 right-2 flex items-center gap-1 text-[10px] font-[600] px-2 py-0.5 rounded-[4px] transition-colors",
-                            copied === "next" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                          {copied === "next" ? <Check className="h-[10px] w-[10px]" /> : <Copy className="h-[10px] w-[10px]" />}
-                        </button>
-                      </div>
-                      <div className="p-2.5 bg-[#FFF8F5] border border-[#FFE2D5] rounded-[6px] text-[11px] text-[#7C2D12]">
-                        <span className="font-[700] block mb-0.5">⚡ Next.js 14 Note:</span>
-                        If using Next.js 14, enable the hook in <code className="font-mono bg-[#FFEDE3] px-1 rounded">next.config.js</code>:
-                        <div className="relative mt-1.5">
-                          <pre className="bg-[#111110] text-[#F8F8F2] text-[10px] font-mono p-[8px_10px] rounded-[4px] overflow-x-auto">
-                            {nextConfigCode}
-                          </pre>
-                          <button onClick={() => copy("config", nextConfigCode)}
-                            className={cn("absolute top-1.5 right-1.5 flex items-center gap-1 text-[9px] font-[600] px-1.5 py-0.5 rounded-[3px] transition-colors",
-                              copied === "config" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                            {copied === "config" ? "Copied" : "Copy"}
-                          </button>
-                        </div>
-                      </div>
+                  {/* Next.js 14 Alert */}
+                  <div className="p-3 bg-[#FFF8F5] border border-[#FFE2D5] rounded-[8px] flex flex-col gap-1.5">
+                    <span className="text-[12px] font-[700] text-[#C2410C]">⚡ Using Next.js 14?</span>
+                    <p className="text-[11px] text-[#7C2D12] leading-relaxed">
+                      Next.js 14 requires enabling the instrumentation hook in <code className="font-mono font-[600] bg-[#FFEDE3] px-1 rounded">next.config.js</code> so it runs automatically on startup:
+                    </p>
+                    <div className="relative">
+                      <pre className="bg-[#111110] text-[#F8F8F2] text-[11px] font-mono p-[10px_12px] rounded-[6px] overflow-x-auto">
+                        {nextConfigCode}
+                      </pre>
+                      <button onClick={() => copy("config", nextConfigCode)}
+                        className={cn("absolute top-2 right-2 flex items-center gap-1 text-[10px] font-[600] px-2 py-0.5 rounded-[4px] transition-colors",
+                          copied === "config" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+                        {copied === "config" ? <Check className="h-[10px] w-[10px]" /> : <Copy className="h-[10px] w-[10px]" />}
+                      </button>
                     </div>
-                  </details>
+                  </div>
 
                   <details className="group border border-[#E7E5E2] rounded-[8px] p-3 bg-[#FAFAF9]">
                     <summary className="text-[12px] font-[700] text-[#374151] cursor-pointer hover:text-[#111110] select-none flex items-center justify-between">
