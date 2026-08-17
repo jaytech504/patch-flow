@@ -7,9 +7,12 @@
  *
  * Usage
  * -----
- * Next.js (middleware.ts):
+ * Next.js (instrumentation.ts):
  *   import patchflow from './patchflow';
  *   patchflow.init({ apiKey: process.env.PATCHFLOW_API_KEY });
+ *
+ * Next.js Route Handler (route.ts):
+ *   export const GET = patchflow.wrapNextHandler(async () => { ... });
  *
  * Express:
  *   const patchflow = require('./patchflow');
@@ -17,7 +20,7 @@
  *   app.use(patchflow.expressMiddleware());
  *
  * Manual:
- *   try { riskyCode() } catch (e) { patchflow.captureException(e) }
+ *   try { riskyCode() } catch (e) { await patchflow.captureException(e) }
  */
 
 'use strict';
@@ -67,55 +70,58 @@ function init({ apiKey, host, environment, debug = false } = {}) {
 
 // ── Universal HTTP Dispatcher ────────────────────────────────────────────────
 
-function _dispatchHttp(urlStr, headers, bodyStr, timeoutMs = 10000) {
-  // 1. Prefer native global fetch (Works in Edge Runtime, Next.js Middleware, Node 18+, Browsers)
+async function _dispatchHttp(urlStr, headers, bodyStr, timeoutMs = 10000) {
+  // 1. Prefer native global fetch (Works in Edge Runtime, Next.js, Node 18+, Browsers)
   if (typeof fetch === 'function') {
     try {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
 
-      fetch(urlStr, {
+      const res = await fetch(urlStr, {
         method: 'POST',
         headers: headers || {},
         body: bodyStr || undefined,
         signal: controller ? controller.signal : undefined,
-      })
-        .then(() => {
-          if (timer) clearTimeout(timer);
-        })
-        .catch(() => {
-          if (timer) clearTimeout(timer);
-        });
+      });
+      if (timer) clearTimeout(timer);
+      return res;
     } catch (_) {}
-    return;
+    return null;
   }
 
   // 2. Fallback to Node.js https/http module (Only evaluated if fetch is absent)
-  try {
-    const url = new URL(urlStr);
-    const isHttps = url.protocol === 'https:';
-    const lib = isHttps ? require('https') : require('http');
-    const bodyBuf = bodyStr ? Buffer.from(bodyStr) : null;
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(urlStr);
+      const isHttps = url.protocol === 'https:';
+      const lib = isHttps ? require('https') : require('http');
+      const bodyBuf = bodyStr ? Buffer.from(bodyStr) : null;
 
-    const req = lib.request(
-      {
-        hostname: url.hostname,
-        port: url.port || (isHttps ? 443 : 80),
-        path: url.pathname + (url.search || ''),
-        method: 'POST',
-        headers: {
-          ...(headers || {}),
-          ...(bodyBuf ? { 'Content-Length': bodyBuf.length } : {}),
+      const req = lib.request(
+        {
+          hostname: url.hostname,
+          port: url.port || (isHttps ? 443 : 80),
+          path: url.pathname + (url.search || ''),
+          method: 'POST',
+          headers: {
+            ...(headers || {}),
+            ...(bodyBuf ? { 'Content-Length': bodyBuf.length } : {}),
+          },
+          timeout: timeoutMs,
         },
-        timeout: timeoutMs,
-      },
-      (res) => res.resume()
-    );
+        (res) => {
+          res.resume();
+          resolve(res);
+        }
+      );
 
-    req.on('error', () => {});
-    if (bodyBuf) req.write(bodyBuf);
-    req.end();
-  } catch (_) {}
+      req.on('error', () => resolve(null));
+      if (bodyBuf) req.write(bodyBuf);
+      req.end();
+    } catch (_) {
+      resolve(null);
+    }
+  });
 }
 
 // ── Core class ────────────────────────────────────────────────────────────────
@@ -130,12 +136,11 @@ class PatchFlow {
 
   /**
    * Send a heartbeat ping to confirm connection and mark the SDK as active.
-   * Non-blocking — fire-and-forget in the background.
    */
-  ping() {
+  async ping() {
     if (!this.apiKey) return;
     try {
-      _dispatchHttp(
+      const res = await _dispatchHttp(
         `${this.host}/api/sdk/ping`,
         {
           'X-PatchFlow-Key': this.apiKey,
@@ -145,8 +150,9 @@ class PatchFlow {
         5000
       );
       if (this.debug) {
-        console.log('[PatchFlow] Heartbeat ping dispatched.');
+        console.log('[PatchFlow] Heartbeat ping dispatched:', res?.status || 'ok');
       }
+      return res;
     } catch (e) {
       if (this.debug) console.warn('[PatchFlow] Failed to send heartbeat ping:', e);
     }
@@ -154,7 +160,6 @@ class PatchFlow {
 
   /**
    * Capture and send an exception to PatchFlow.
-   * Non-blocking — uses fire-and-forget HTTP in the background.
    *
    * @param {Error|any} error
    * @param {object}    [context]
@@ -163,24 +168,24 @@ class PatchFlow {
    * @param {number}    [context.statusCode] - HTTP status code
    * @param {string}    [context.framework]  - Framework name
    */
-  captureException(error, context = {}) {
+  async captureException(error, context = {}) {
     if (!error) return;
     try {
       const payload = buildPayload(error, {
         ...context,
         environment: this.environment,
       });
-      this._send(payload);
+      return await this._send(payload);
     } catch (e) {
       if (this.debug) console.error('[PatchFlow] Failed to capture exception:', e);
     }
   }
 
-  _send(payload) {
+  async _send(payload) {
     if (!this.apiKey) return;
     try {
       const body = JSON.stringify(payload);
-      _dispatchHttp(
+      const res = await _dispatchHttp(
         `${this.host}/api/sdk/errors`,
         {
           'Content-Type': 'application/json',
@@ -191,8 +196,9 @@ class PatchFlow {
         10000
       );
       if (this.debug) {
-        console.log('[PatchFlow] Error payload dispatched.');
+        console.log('[PatchFlow] Error payload dispatched:', res?.status || 'ok');
       }
+      return res;
     } catch (e) {
       if (this.debug) console.error('[PatchFlow] Send failed:', e);
     }
@@ -281,7 +287,7 @@ function expressMiddleware() {
 // ── Next.js App Router wrapper ────────────────────────────────────────────────
 
 /**
- * Wrap a Next.js App Router handler to capture unhandled errors.
+ * Wrap a Next.js App Router handler to capture unhandled errors on Serverless.
  *
  * Usage:
  *   export const GET = patchflow.wrapNextHandler(async (request) => {
@@ -299,8 +305,9 @@ function wrapNextHandler(handler) {
     } catch (err) {
       try {
         const urlStr = request && request.url ? request.url : '';
-        const endpoint = urlStr ? new URL(urlStr).pathname : '';
-        pf.captureException(err, {
+        const endpoint = urlStr ? new URL(urlStr).pathname : '/crash';
+        // Await on serverless to guarantee HTTP delivery before function terminates
+        await pf.captureException(err, {
           endpoint,
           method: request?.method || 'GET',
           statusCode: 500,
@@ -327,7 +334,7 @@ function honoMiddleware() {
       await next();
     } catch (err) {
       try {
-        pf.captureException(err, {
+        await pf.captureException(err, {
           endpoint: new URL(c.req.url).pathname,
           method: c.req.method,
           statusCode: 500,
@@ -373,8 +380,8 @@ function _requireInstance(fnName) {
  * @param {Error|any} error
  * @param {object} [context]
  */
-function captureException(error, context = {}) {
-  if (_instance) _instance.captureException(error, context);
+async function captureException(error, context = {}) {
+  if (_instance) return await _instance.captureException(error, context);
 }
 
 // ── Exports ───────────────────────────────────────────────────────────────────
