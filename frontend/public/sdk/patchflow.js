@@ -43,13 +43,14 @@ let _instance = null;
  * @returns {PatchFlow}
  */
 function init({ apiKey, host, environment, debug = false } = {}) {
+  const envKey = typeof process !== 'undefined' && process.env ? process.env.PATCHFLOW_API_KEY : undefined;
   const envHost = typeof process !== 'undefined' && process.env ? process.env.PATCHFLOW_HOST : undefined;
   const envName = typeof process !== 'undefined' && process.env
     ? (process.env.PATCHFLOW_ENV || process.env.NODE_ENV)
     : undefined;
 
   _instance = new PatchFlow({
-    apiKey,
+    apiKey: apiKey || envKey || '',
     host: host || envHost || DEFAULT_HOST,
     environment: environment || envName || 'production',
     debug,
@@ -234,10 +235,9 @@ function detectFramework() {
  * @returns {(err: any, req: any, res: any, next: any) => void}
  */
 function expressMiddleware() {
-  const pf = _requireInstance('expressMiddleware');
   return function patchflowExpressMiddleware(err, req, res, next) {
     try {
-      pf.captureException(err, {
+      captureException(err, {
         endpoint: req.originalUrl || req.url,
         method: req.method,
         statusCode: res.statusCode >= 400 ? res.statusCode : 500,
@@ -263,7 +263,6 @@ function expressMiddleware() {
  * @returns {T}
  */
 function wrapNextHandler(handler) {
-  const pf = _requireInstance('wrapNextHandler');
   /** @type {any} */
   const wrapped = async function (request, context) {
     try {
@@ -272,7 +271,7 @@ function wrapNextHandler(handler) {
       try {
         const urlStr = request && request.url ? request.url : '';
         const endpoint = urlStr ? new URL(urlStr).pathname : '/crash';
-        await pf.captureException(err, {
+        await captureException(err, {
           endpoint,
           method: request?.method || 'GET',
           statusCode: 500,
@@ -294,13 +293,12 @@ function wrapNextHandler(handler) {
  * @returns {(c: any, next: () => Promise<void>) => Promise<void>}
  */
 function honoMiddleware() {
-  const pf = _requireInstance('honoMiddleware');
   return async function patchflowHonoMiddleware(c, next) {
     try {
       await next();
     } catch (err) {
       try {
-        await pf.captureException(err, {
+        await captureException(err, {
           endpoint: new URL(c.req.url).pathname,
           method: c.req.method,
           statusCode: 500,
@@ -332,22 +330,23 @@ function _installProcessHandlers(pf) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function _requireInstance(fnName) {
-  if (!_instance) {
-    throw new Error(
-      `[PatchFlow] Call patchflow.init({ apiKey: '...' }) before using ${fnName}()`
-    );
-  }
-  return _instance;
-}
-
 /**
  * Capture an exception using the globally initialised SDK instance.
+ * Automatically initializes from process.env.PATCHFLOW_API_KEY if not yet initialized.
+ *
  * @param {Error|any} error
  * @param {object} [context]
  */
 async function captureException(error, context = {}) {
-  if (_instance) return await _instance.captureException(error, context);
+  if (!_instance) {
+    const key = typeof process !== 'undefined' && process.env ? process.env.PATCHFLOW_API_KEY : '';
+    if (key) {
+      init({ apiKey: key });
+    }
+  }
+  if (_instance) {
+    return await _instance.captureException(error, context);
+  }
 }
 
 // ── Exports ───────────────────────────────────────────────────────────────────
