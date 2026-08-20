@@ -360,16 +360,17 @@ patchflow.init(
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SitesPage() {
-  const [sites,        setSites]        = useState<Site[]>([]);
-  const [repos,        setRepos]        = useState<Repo[]>([]);
-  const [reposLoading, setReposLoading] = useState(false);
-  const [loading,      setLoading]      = useState(true);
-  const [showForm,     setShowForm]     = useState(false);
-  const [editSite,     setEditSite]     = useState<Site | null>(null);
-  const [sdkSite,      setSdkSite]      = useState<{ site: Site; apiKey: string } | null>(null);
-  const [saving,       setSaving]       = useState(false);
-  const [deletingId,   setDeletingId]   = useState<string | null>(null);
-  const [error,        setError]        = useState<string | null>(null);
+  const [sites,             setSites]             = useState<Site[]>([]);
+  const [repos,             setRepos]             = useState<Repo[]>([]);
+  const [reposLoading,      setReposLoading]      = useState(false);
+  const [loading,           setLoading]           = useState(true);
+  const [showForm,          setShowForm]          = useState(false);
+  const [editSite,          setEditSite]          = useState<Site | null>(null);
+  const [sdkSite,           setSdkSite]           = useState<{ site: Site; apiKey: string } | null>(null);
+  const [confirmDeleteSite, setConfirmDeleteSite] = useState<Site | null>(null);
+  const [saving,            setSaving]            = useState(false);
+  const [deletingId,        setDeletingId]        = useState<string | null>(null);
+  const [error,             setError]             = useState<string | null>(null);
 
   const [form, setForm] = useState({ name: "", url: "", github_repo: "", framework: "" });
 
@@ -441,8 +442,13 @@ export default function SitesPage() {
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await fetch(`${API_BASE_URL}/api/sites/${id}`, { method: "DELETE", headers: authHeaders() });
-      setSites(p => p.filter(s => s.id !== id));
+      const res = await fetch(`${API_BASE_URL}/api/sites/${id}`, { method: "DELETE", headers: authHeaders() });
+      if (res.ok) {
+        setSites(p => p.filter(s => s.id !== id));
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d.detail || "Failed to delete site.");
+      }
     } catch (e) { console.error(e); }
     finally { setDeletingId(null); }
   };
@@ -545,6 +551,54 @@ export default function SitesPage() {
             </motion.div>
           </>
         )}
+
+        {/* Delete Confirmation Modal */}
+        {confirmDeleteSite && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDeleteSite(null)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }} transition={{ duration: 0.18 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl w-full max-w-[420px] p-6 flex flex-col gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-[#FEF2F2] border border-[#FECACA] flex items-center justify-center shrink-0">
+                    <Trash2 className="h-5 w-5 text-[#DC2626]" />
+                  </div>
+                  <div>
+                    <h2 className="text-[16px] font-[700] text-[#111110]">Delete Site</h2>
+                    <p className="text-[12px] text-[#6F6B66]">This action cannot be undone.</p>
+                  </div>
+                </div>
+
+                <p className="text-[13px] text-[#374151] leading-relaxed">
+                  Are you sure you want to delete <strong className="text-[#111110] font-[700]">{confirmDeleteSite.name}</strong>? All associated API keys, incident logs, and SDK metrics will be permanently removed.
+                </p>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setConfirmDeleteSite(null)}
+                    className="flex-1 py-2.5 text-[13px] font-[600] text-[#6F6B66] border border-[#E7E5E2] rounded-[8px] hover:bg-[#F3F2F0] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const id = confirmDeleteSite.id;
+                      setConfirmDeleteSite(null);
+                      await handleDelete(id);
+                    }}
+                    disabled={deletingId === confirmDeleteSite.id}
+                    className="flex-1 py-2.5 text-[13px] font-[600] text-white bg-[#DC2626] hover:bg-[#B91C1C] rounded-[8px] flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+                  >
+                    {deletingId === confirmDeleteSite.id ? <Loader2 className="h-[14px] w-[14px] animate-spin" /> : <Trash2 className="h-[14px] w-[14px]" />}
+                    Delete Site
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
       </AnimatePresence>
 
       {/* Sites list */}
@@ -618,7 +672,7 @@ export default function SitesPage() {
                     <button onClick={() => openEdit(site)} className="p-1.5 text-[#A3A099] hover:text-[#111110] hover:bg-[#F3F2F0] rounded-[6px]">
                       <Pencil className="h-[14px] w-[14px]" />
                     </button>
-                    <button onClick={() => handleDelete(site.id)} disabled={deletingId === site.id}
+                    <button onClick={() => setConfirmDeleteSite(site)} disabled={deletingId === site.id}
                       className="p-1.5 text-[#A3A099] hover:text-[#DC2626] hover:bg-[#FEF2F2] rounded-[6px] disabled:opacity-50">
                       {deletingId === site.id ? <Loader2 className="h-[14px] w-[14px] animate-spin" /> : <Trash2 className="h-[14px] w-[14px]" />}
                     </button>

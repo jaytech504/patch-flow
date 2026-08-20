@@ -141,8 +141,14 @@ async def ingest_error(
         redact_stack_frame(f.model_dump()) for f in payload.stack_frames
     ]
 
-    # Top frame = last in list (most specific)
-    top_frame = safe_frames[-1] if safe_frames else {}
+    # Prefer the most specific user frame (filtering out internal node_modules / site-packages)
+    user_frame = None
+    for f in reversed(safe_frames):
+        fn = f.get("filename", "") or f.get("abs_path", "")
+        if fn and "node_modules" not in fn and "site-packages" not in fn and "dist/compiled" not in fn:
+            user_frame = f
+            break
+    top_frame = user_frame or (safe_frames[-1] if safe_frames else {})
     stack_file     = top_frame.get("filename", "") or top_frame.get("abs_path", "")
     stack_lineno   = top_frame.get("lineno")
     stack_function = top_frame.get("function", "")

@@ -19,12 +19,12 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import get_current_user
 from backend.core.config import get_settings
-from backend.db.models import MonitoredSite, SiteApiKey, User
+from backend.db.models import MonitoredSite, SiteApiKey, SdkError, Incident, User
 from backend.db.session import get_db
 
 router = APIRouter()
@@ -183,8 +183,13 @@ async def delete_site(
     site = await db.get(MonitoredSite, site_id)
     if not site or site.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Site not found.")
+
+    # Explicitly clean up all child records (SDK errors, incidents, API keys)
+    await db.execute(delete(SdkError).where(SdkError.site_id == site_id))
+    await db.execute(delete(Incident).where(Incident.site_id == site_id))
+    await db.execute(delete(SiteApiKey).where(SiteApiKey.site_id == site_id))
     await db.delete(site)
-    await db.flush()
+    await db.commit()
     return {"deleted": site_id}
 
 
