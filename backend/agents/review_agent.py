@@ -353,6 +353,11 @@ Return your verdict as JSON:
         - duplicate exception/catch handler pattern checks
         - unreachable statements after return/raise/throw (heuristic for non-Python)
         """
+        # Auto-ensure Next.js NextResponse import if used in fix
+        if "NextResponse" in code_after and not any("next/server" in imp for imp in imports_needed):
+            if "next/server" not in file_content:
+                imports_needed = list(imports_needed) + ["import { NextResponse } from 'next/server';"]
+
         proposed_content, apply_error = self._build_proposed_file_content(
             file_content=file_content,
             code_before=code_before,

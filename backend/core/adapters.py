@@ -109,10 +109,17 @@ def _nextjs_precheck(code_after: str, imports: list[str]) -> list[str]:
     # Check NextResponse is imported when used in App Router
     if "NextResponse" in code_after:
         all_code = "\n".join(imports) + "\n" + code_after
-        if "from 'next/server'" not in all_code and 'from "next/server"' not in all_code:
-            issues.append(
-                "NextResponse used but not imported — add \"import { NextResponse } from 'next/server'\"."
-            )
+        has_import = (
+            "from 'next/server'" in all_code
+            or 'from "next/server"' in all_code
+            or any("next/server" in imp for imp in imports)
+            or any("NextResponse" in imp for imp in imports)
+        )
+        if not has_import:
+            if "export " in code_after and "import " in code_after and "next/server" not in code_after:
+                issues.append(
+                    "NextResponse used but not imported — add \"import { NextResponse } from 'next/server'\"."
+                )
 
     # Supabase checks
     if "supabase" in code_after.lower():

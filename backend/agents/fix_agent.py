@@ -377,12 +377,20 @@ Return JSON:
                                     f"{warn_codes}"
                                 )
 
+                            # Auto-ensure framework critical imports if used in fix code
+                            imports_needed = list(candidate.get("imports_needed", []))
+                            fixed_code = candidate.get("code_after", "")
+                            if "NextResponse" in fixed_code and not any("next/server" in imp for imp in imports_needed):
+                                if "next/server" not in raw_file_state:
+                                    imports_needed.append("import { NextResponse } from 'next/server';")
+                                    candidate["imports_needed"] = imports_needed
+
                             # Apply candidate to current file state sequentially
                             applied, error_msg = self._apply_fix_to_repo_file(
                                 file_path=file_path,
                                 original_code=candidate.get("code_before", ""),
-                                fixed_code=candidate.get("code_after", ""),
-                                imports_needed=candidate.get("imports_needed", []),
+                                fixed_code=fixed_code,
+                                imports_needed=imports_needed,
                                 start_line=start_line,
                                 end_line=end_line,
                             )
