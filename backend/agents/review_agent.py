@@ -433,7 +433,7 @@ Return your verdict as JSON:
         adapter = getattr(self, "_adapter", None)
         if adapter and adapter.precheck_fn:
             try:
-                adapter_issues = adapter.precheck_fn(code_after, imports_needed)
+                adapter_issues = adapter.precheck_fn(proposed_content, imports_needed)
                 if adapter_issues:
                     logger.info(
                         f"[Review] {adapter.display_name} pre-checks found "
