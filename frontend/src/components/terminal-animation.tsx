@@ -4,15 +4,15 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 const commands = [
-  { text: "npx patchflow scan ./api", delay: 1000 },
-  { text: "Analyzing 18 endpoints...", delay: 2000, type: "system" },
-  { text: "Injecting failure modes...", delay: 3500, type: "system" },
-  { text: "Found 3 critical vulnerabilities", delay: 5000, type: "error" },
-  { text: "patchflow --fix", delay: 6500 },
-  { text: "Generating patches...", delay: 7500, type: "system" },
-  { text: "✓ Created PR #47: Handle Stripe timeout", delay: 9000, type: "success" },
-  { text: "✓ Created PR #48: Fix unhandled DB disconnect", delay: 9500, type: "success" },
-  { text: "All systems secured.", delay: 11000, type: "system" }
+  { text: "[SDK] Monitoring site 'Devhype' (Next.js / TypeScript)...", delay: 800, type: "system" },
+  { text: "🚨 Production crash captured: TypeError @ app/crash/route.ts:8", delay: 2000, type: "error" },
+  { text: "   Message: Cannot read properties of undefined (reading 'title')", delay: 3000, type: "error" },
+  { text: "⚡ Threshold reached (3 events) → Spawning Autonomous Incident Pipeline", delay: 4200, type: "system" },
+  { text: "🤖 FixAgent: Cloned repo & generated patch via Gemma", delay: 5600, type: "system" },
+  { text: "🛡️ ReviewAgent: Senior review passed & AST verified", delay: 6800, type: "system" },
+  { text: "🔨 Compiler: npx tsc --noEmit build check passed ✓", delay: 8000, type: "success" },
+  { text: "🚀 GitHubAgent: Draft PR #104 opened on GitHub!", delay: 9400, type: "success" },
+  { text: "✨ PatchFlow resolved production incident in 12.4s.", delay: 10800, type: "system" }
 ];
 
 export function TerminalAnimation() {
@@ -35,7 +35,7 @@ export function TerminalAnimation() {
       // Restart animation 3 seconds after the last command
       const resetTimeout = setTimeout(() => {
         if (isActive) runAnimation();
-      }, 11000 + 3000);
+      }, 10800 + 3500);
       timeouts.push(resetTimeout);
     };
 
