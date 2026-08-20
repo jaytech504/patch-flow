@@ -73,52 +73,76 @@ class SdkIncidentPipeline:
         # doesn't spawn multiple incidents.
         dedup_key = f"sdk:{sdk_error.fingerprint}"
         existing = await self.db.execute(
-            select(Incident).where(
-                Incident.dedup_key == dedup_key,
-                Incident.status.in_([
-                    IncidentStatus.PROCESSING,
-                    IncidentStatus.PR_OPENED,
-                ])
+            select(Incident).where(Incident.dedup_key == dedup_key)
+        )
+        existing_incident = existing.scalar_one_or_none()
+
+        if existing_incident:
+            if existing_incident.status in (IncidentStatus.PROCESSING, IncidentStatus.PR_OPENED):
+                logger.info(f"[SdkPipeline] Duplicate — already active incident for {sdk_error.fingerprint[:16]}…")
+                return existing_incident
+
+            # Re-use and reset the existing incident for re-processing
+            incident = existing_incident
+            incident.status = IncidentStatus.PROCESSING
+            incident.skip_reason = None
+            incident.event_count = occurrence_count
+            incident.processed_at = None
+            incident.error_title = f"{sdk_error.error_type}: {(sdk_error.error_message or '')[:200]}"
+            incident.culprit = sdk_error.culprit or sdk_error.endpoint or sdk_error.stack_file or ""
+            incident.stack_file = sdk_error.stack_file
+            incident.stack_lineno = sdk_error.stack_lineno
+            incident.stack_function = sdk_error.stack_function
+
+            # Ensure matching ChaosSession exists for FK integrity
+            session = await self.db.get(ChaosSession, incident.id)
+            if not session:
+                session = ChaosSession(
+                    id=incident.id,
+                    target_url=site.name or "production",
+                    target_name=site.name,
+                    github_repo=site.github_repo,
+                    user_id=site.user_id,
+                    status=SessionStatus.FIXING,
+                    created_at=datetime.utcnow(),
+                )
+                self.db.add(session)
+        else:
+            # ── Create chaos session & incident records ───────────────────────────
+            incident_id = str(uuid.uuid4())
+
+            session = ChaosSession(
+                id=incident_id,
+                target_url=site.name or "production",
+                target_name=site.name,
+                github_repo=site.github_repo,
+                user_id=site.user_id,
+                status=SessionStatus.FIXING,
+                created_at=datetime.utcnow(),
             )
-        )
-        if existing.scalar_one_or_none():
-            logger.info(f"[SdkPipeline] Duplicate — already processing fingerprint {sdk_error.fingerprint[:16]}…")
-            return None
+            self.db.add(session)
 
-        # ── Create chaos session & incident records ───────────────────────────
-        incident_id = str(uuid.uuid4())
+            incident = Incident(
+                id=incident_id,
+                site_id=site.id,
+                sentry_issue_id=f"sdk_{sdk_error_id}",
+                sentry_project=site.name,
+                dedup_key=dedup_key,
+                error_title=f"{sdk_error.error_type}: {(sdk_error.error_message or '')[:200]}",
+                error_type=sdk_error.error_type,
+                culprit=sdk_error.culprit or sdk_error.endpoint or sdk_error.stack_file or "",
+                stack_file=sdk_error.stack_file,
+                stack_lineno=sdk_error.stack_lineno,
+                stack_function=sdk_error.stack_function,
+                environment=sdk_error.environment or "production",
+                event_count=occurrence_count,
+                user_count=1,
+                github_repo=site.github_repo,
+                status=IncidentStatus.PROCESSING,
+                created_at=datetime.utcnow(),
+            )
+            self.db.add(incident)
 
-        session = ChaosSession(
-            id=incident_id,
-            target_url=site.name or "production",
-            target_name=site.name,
-            github_repo=site.github_repo,
-            user_id=site.user_id,
-            status=SessionStatus.FIXING,
-            created_at=datetime.utcnow(),
-        )
-        self.db.add(session)
-
-        incident = Incident(
-            id=incident_id,
-            site_id=site.id,
-            sentry_issue_id=f"sdk_{sdk_error_id}",
-            sentry_project=site.name,
-            dedup_key=dedup_key,
-            error_title=f"{sdk_error.error_type}: {(sdk_error.error_message or '')[:200]}",
-            error_type=sdk_error.error_type,
-            culprit=sdk_error.culprit or sdk_error.endpoint or sdk_error.stack_file or "",
-            stack_file=sdk_error.stack_file,
-            stack_lineno=sdk_error.stack_lineno,
-            stack_function=sdk_error.stack_function,
-            environment=sdk_error.environment or "production",
-            event_count=occurrence_count,
-            user_count=1,  # SDK doesn't track users yet — assume at least 1
-            github_repo=site.github_repo,
-            status=IncidentStatus.PROCESSING,
-            created_at=datetime.utcnow(),
-        )
-        self.db.add(incident)
         # Link the sdk_error to this incident
         sdk_error.incident_id = incident.id
         await self.db.commit()
