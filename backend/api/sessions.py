@@ -8,7 +8,7 @@ import json
 from loguru import logger
 
 from backend.db.session import get_db, AsyncSessionLocal
-from backend.db.models import ChaosSession, SessionStatus, FailureResult, Endpoint, PullRequest, User, AgentStep
+from backend.db.models import ChaosSession, SessionStatus, FailureResult, Endpoint, PullRequest, User, AgentStep, Incident
 from backend.agents.orchestrator import ChaosOrchestrator
 from backend.agents.discovery_agent import DiscoveryAgent
 from backend.auth.dependencies import get_current_user, get_optional_user
@@ -171,7 +171,14 @@ async def list_sessions(
     db: AsyncSession = Depends(get_db),
     user: Optional[User] = Depends(get_optional_user),
 ):
-    query = select(ChaosSession).order_by(desc(ChaosSession.created_at)).limit(20)
+    # Only list user-initiated Chaos Testing sessions (exclude SDK incident backend sessions)
+    incident_subquery = select(Incident.id)
+    query = (
+        select(ChaosSession)
+        .where(ChaosSession.id.not_in(incident_subquery))
+        .order_by(desc(ChaosSession.created_at))
+        .limit(20)
+    )
     # If logged in, only show the user's sessions
     if user:
         query = query.where(ChaosSession.user_id == user.id)
