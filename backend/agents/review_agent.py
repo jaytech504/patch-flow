@@ -512,9 +512,20 @@ Return your verdict as JSON:
         lines = content.splitlines()
         for idx, line in enumerate(lines[:-1]):
             stripped = line.strip()
-            if stripped.startswith(("return", "raise", "throw")):
+            if stripped.startswith(("//", "/*", "*", "#")):
+                continue
+            if stripped.startswith(("return ", "raise ", "throw ")) or stripped in ("return;", "return", "throw;"):
+                # Multi-line statement continuation check
+                if stripped.endswith(("(", "{", "[", ",", "+", "-", "*", "/", "?", ":", "=>", "||", "&&")):
+                    continue
                 next_line = lines[idx + 1].strip()
-                if next_line and not next_line.startswith(("}", "except", "catch", "elif", "else", "finally")):
+                if not next_line or next_line.startswith(("//", "/*", "*", "#")):
+                    continue
+                if next_line.startswith(("}", ")", "]", "except", "catch", "elif", "else", "finally", "case ", "default:")):
+                    continue
+                line_indent = len(line) - len(line.lstrip())
+                next_indent = len(lines[idx + 1]) - len(lines[idx + 1].lstrip())
+                if next_indent == line_indent and stripped.endswith(";"):
                     issues.append(f"Potential unreachable statement after terminator near line {idx + 2}.")
         return issues
 

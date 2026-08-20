@@ -138,12 +138,17 @@ def _nextjs_precheck(code_after: str, imports: list[str]) -> list[str]:
                 "catch block logs the error but doesn't return or send a response — the client will hang."
             )
 
-    # Unguarded process.env access
-    env_accesses = re.findall(r"process\.env\.(\w+)", code_after)
+    # Unguarded custom process.env access (exclude standard Node.js built-ins and guarded expressions)
+    env_accesses = [
+        v for v in re.findall(r"process\.env\.(\w+)", code_after)
+        if v not in ("NODE_ENV", "VERCEL_ENV", "NEXT_RUNTIME", "PORT")
+    ]
     for var in env_accesses:
-        if not re.search(
-            rf"if\s*\(\s*[!]?\s*(?:process\.env\.{var}|[a-zA-Z_]\w*)\s*\)", code_after
-        ):
+        has_guard = (
+            re.search(rf"if\s*\(\s*[!]?\s*(?:process\.env\.{var}|[a-zA-Z_]\w*)\s*\)", code_after)
+            or re.search(rf"process\.env\.{var}\s*(?:\?\?|\|\||===|!==|==|!=|\?)", code_after)
+        )
+        if not has_guard:
             issues.append(
                 f"process.env.{var} accessed without a guard — "
                 "check the variable is defined before using it."
