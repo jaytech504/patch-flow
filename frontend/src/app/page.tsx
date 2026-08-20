@@ -38,10 +38,6 @@ export default function Home() {
         <section className="mx-auto max-w-7xl px-6 pt-12 pb-20 md:pt-20 md:pb-32 lg:pt-24 lg:pb-36 animate-fade-in-up">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             <div className="flex flex-col gap-8 max-w-2xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold uppercase tracking-wider rounded-full border border-primary/30 bg-primary/10 text-primary w-fit">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Autonomous Incident Auto-Patching & Chaos Testing</span>
-              </div>
 
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground leading-[1.1]">
                 Your apps crash in production. <br />
