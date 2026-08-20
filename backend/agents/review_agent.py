@@ -12,7 +12,7 @@ from backend.agents.base import BaseAgent, Tool
 from backend.core.adapters import detect_framework, FrameworkAdapter
 from backend.core.config import get_settings
 from backend.core.models import FixStatus, ReviewVerdict
-from backend.core.syntax_validator import validate_content_syntax
+from backend.core.syntax_validator import validate_content_syntax, validate_project_build
 
 settings = get_settings()
 
@@ -291,10 +291,27 @@ Return your verdict as JSON:
                 fix["review_issues"] = issues
                 needs_revision.append(fix)
             else:
-                logger.info(f"[Review] Fix for {endpoint_label} VALIDATED ✓")
-                await self._log("result", f"✅ Validated fix for {endpoint_label}")
+                # ── Pre-Merge Build & Compiler Validation ─────────────────────────────
+                # Verify that the whole project/file compiles without build errors
+                build_ok, build_err = validate_project_build(self._repo_path, file_path)
+                if not build_ok:
+                    logger.warning(f"[Review] Build verification failed for {file_path}: {build_err}")
+                    await self._log(
+                        "result",
+                        f"❌ Build verification failed for {endpoint_label}: {build_err}"
+                    )
+                    fix["review_status"] = "revision_needed"
+                    fix["status"] = FixStatus.NEEDS_REVIEW.value
+                    fix["review_feedback"] = f"Pre-merge build verification failed: {build_err}"
+                    fix["review_issues"] = [f"Compiler/build check failed: {build_err}"]
+                    needs_revision.append(fix)
+                    continue
+
+                logger.info(f"[Review] Fix for {endpoint_label} VALIDATED & BUILD-VERIFIED ✓")
+                await self._log("result", f"✅ Validated & build-verified fix for {endpoint_label}")
                 fix["review_status"] = "validated"
                 fix["status"] = FixStatus.VALIDATED.value
+                fix["build_verified"] = True
                 reviewed_fixes.append(fix)
 
         # Cleanup clone

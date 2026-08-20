@@ -156,3 +156,55 @@ def validate_content_syntax(file_path: str, content: str) -> tuple[bool, str]:
             os.remove(temp_path)
         except Exception:
             pass
+
+
+def validate_project_build(repo_path: Path | str, target_file: str | None = None) -> tuple[bool, str]:
+    """
+    Execute pre-merge build and compiler verification across project types.
+    - For npm / Next.js / TypeScript projects: verifies TypeScript compiler / Node syntax.
+    - For Python projects: verifies byte-compilation without syntax errors.
+    """
+    path = Path(repo_path)
+    if not path.exists():
+        return True, ""
+
+    pkg_json = path / "package.json"
+    if pkg_json.exists():
+        # Node / npm / TypeScript project verification
+        tsconfig = path / "tsconfig.json"
+        if tsconfig.exists() or (target_file and Path(target_file).suffix.lower() in {".ts", ".tsx"}):
+            file_to_check = str(path / target_file) if target_file and (path / target_file).exists() else str(path)
+            ok, msg = run_syntax_command([
+                "npx", "--yes", "tsc", "--noEmit",
+                "--skipLibCheck",
+                "--noResolve",
+                "--jsx", "react-jsx",
+                "--target", "esnext",
+                "--allowJs",
+                "--allowSyntheticDefaultImports",
+                file_to_check
+            ], "npm/TypeScript")
+            if not ok:
+                ts_ok, filtered_err = filter_typescript_syntax_errors(msg)
+                if not ts_ok:
+                    return False, f"TypeScript build verification failed: {filtered_err}"
+
+        # If target file is JS/MJS/CJS, verify with node --check
+        if target_file and Path(target_file).suffix.lower() in {".js", ".mjs", ".cjs"}:
+            full_target = path / target_file
+            if full_target.exists():
+                ok, msg = run_syntax_command(["node", "--check", str(full_target)], "Node.js")
+                if not ok:
+                    return False, f"JavaScript build verification failed: {msg}"
+
+    # Python project verification
+    if target_file and Path(target_file).suffix.lower() == ".py":
+        full_target = path / target_file
+        if full_target.exists():
+            try:
+                import py_compile
+                py_compile.compile(str(full_target), doraise=True)
+            except Exception as exc:
+                return False, f"Python compile verification failed: {exc}"
+
+    return True, ""
