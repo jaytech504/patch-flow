@@ -35,9 +35,9 @@ export default function Home() {
 
       <main className="flex-1">
         {/* 1. Hero Section */}
-        <section className="mx-auto max-w-7xl px-6 pt-12 pb-20 md:pt-20 md:pb-32 lg:pt-24 lg:pb-36 animate-fade-in-up">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <div className="flex flex-col gap-8 max-w-2xl">
+        <section className="mx-auto max-w-7xl px-6 pt-4 pb-14 md:pt-6 md:pb-20 lg:pt-8 lg:pb-24 animate-fade-in-up">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-center">
+            <div className="flex flex-col gap-6 max-w-2xl">
 
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground leading-[1.1]">
                 Stop finding bugs. <br />
