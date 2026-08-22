@@ -40,8 +40,8 @@ export default function Home() {
             <div className="flex flex-col gap-8 max-w-2xl">
 
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground leading-[1.1]">
-                Your apps crash in production. <br />
-                <span className="text-primary">PatchFlow fixes them.</span>
+                Stop finding bugs. <br />
+                <span className="text-primary">Start fixing them.</span>
               </h1>
 
               <p className="text-lg md:text-xl text-text-secondary leading-relaxed font-medium">
