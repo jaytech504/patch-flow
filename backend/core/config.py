@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     incident_min_users: int = 1
     incident_environments: str = "production"
 
+    # Lemon Squeezy Billing
+    lemon_squeezy_api_key: str = ""
+    lemon_squeezy_store_id: str = ""
+    lemon_squeezy_webhook_secret: str = ""
+    lemon_squeezy_pro_monthly_variant_id: str = ""
+    lemon_squeezy_pro_annual_variant_id: str = ""
+    lemon_squeezy_team_monthly_variant_id: str = ""
+    lemon_squeezy_team_annual_variant_id: str = ""
+
+    # Email Service (Resend or SMTP)
+    resend_api_key: str = ""
+    email_from: str = "PatchFlow Alerts <alerts@patchflow.dev>"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

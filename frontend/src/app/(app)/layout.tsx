@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Activity, LogOut, ChevronDown, LayoutDashboard,
-  AlertTriangle, Globe, Play, Menu, X,
+  AlertTriangle, Globe, Play, Menu, X, CreditCard
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ const NAV = [
   { href: "/incidents",  label: "Incidents",  icon: AlertTriangle },
   { href: "/sites",      label: "Sites",      icon: Globe },
   { href: "/sessions/new", label: "New Scan", icon: Play },
+  { href: "/settings/billing", label: "Billing & Plans", icon: CreditCard },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

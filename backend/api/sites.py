@@ -115,12 +115,24 @@ async def list_sites(
     return {"sites": out}
 
 
+from backend.core.billing_guards import can_create_site
+
 @router.post("")
 async def create_site(
     body: SiteCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # ── Enforce tier site quota ───────────────────────────────────────────────
+    count_res = await db.execute(
+        select(MonitoredSite).where(MonitoredSite.user_id == current_user.id)
+    )
+    existing_count = len(count_res.scalars().all())
+
+    allowed, err_msg = can_create_site(current_user, existing_count)
+    if not allowed:
+        raise HTTPException(status_code=403, detail=err_msg)
+
     site = MonitoredSite(
         id=str(uuid.uuid4()),
         user_id=current_user.id,

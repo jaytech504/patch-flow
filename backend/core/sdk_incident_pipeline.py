@@ -183,12 +183,34 @@ class SdkIncidentPipeline:
             await self._skip(incident, "No GitHub repository linked to this site.")
             return
 
-        # ── Get user's GitHub token ───────────────────────────────────────────
+        # ── Get user's GitHub token and check tier auto-patch permission ──────
         github_token = None
+        user = None
         if site.user_id:
             user = await self.db.get(User, site.user_id)
             if user:
                 github_token = user.github_access_token
+
+        # ── Tier Gating: Check if user's plan permits autonomous code fixes ───
+        from backend.core.billing_guards import can_run_auto_fix, increment_fix_usage
+        from backend.core.email_service import send_incident_alert_email
+
+        allowed_fix, fix_reason = can_run_auto_fix(user)
+        if not allowed_fix:
+            # Free tier or quota exceeded: Send email alert and record incident without code fix
+            if user and user.email and user.email_alerts_enabled:
+                await send_incident_alert_email(
+                    to_email=user.email,
+                    site_name=site.name or "Production App",
+                    error_type=sdk_error.error_type or "Unhandled Error",
+                    error_message=sdk_error.error_message or "",
+                    culprit=f"{sdk_error.stack_file}:{sdk_error.stack_lineno}" if sdk_error.stack_file else (sdk_error.culprit or ""),
+                    incident_id=incident.id,
+                    occurrence_count=incident.event_count,
+                    is_pro=False,
+                )
+            await self._skip(incident, fix_reason)
+            return
 
         if not github_token:
             await self._skip(incident, "No GitHub token available for this site's owner.")
@@ -302,6 +324,23 @@ class SdkIncidentPipeline:
                 f"PR: {pr.get('pr_url', '')}"
             )
             logger.info(f"[SdkPipeline] Draft PR opened: {incident.pr_url}")
+
+            # Increment monthly auto-fix usage
+            await increment_fix_usage(self.db, user)
+
+            # Send Pro/Team notification email with direct link to the opened PR
+            if user and user.email and user.email_alerts_enabled:
+                await send_incident_alert_email(
+                    to_email=user.email,
+                    site_name=site.name or "Production App",
+                    error_type=sdk_error.error_type or "Unhandled Error",
+                    error_message=sdk_error.error_message or "",
+                    culprit=f"{sdk_error.stack_file}:{sdk_error.stack_lineno}" if sdk_error.stack_file else (sdk_error.culprit or ""),
+                    incident_id=incident.id,
+                    occurrence_count=incident.event_count,
+                    is_pro=True,
+                    pr_url=pr.get("pr_url"),
+                )
         else:
             await self._skip(
                 incident,

@@ -5,7 +5,8 @@ import Link from "next/link";
 import {
   AlertTriangle, GitPullRequest, Search,
   XCircle, Clock, Loader2, ExternalLink, RefreshCw,
-  Radio, CheckCircle2, ChevronRight, ChevronDown, Filter
+  Radio, CheckCircle2, ChevronRight, ChevronDown, Filter,
+  Zap, ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -384,12 +385,36 @@ export default function IncidentsPage() {
                     )}
 
                     {inc.skip_reason && (
-                      <div className="flex items-start gap-2.5 p-[12px_16px] bg-white border border-[#E7E5E2] rounded-[10px]">
-                        <XCircle className="h-[15px] w-[15px] text-[#6F6B66] shrink-0 mt-[1px]" />
-                        <div>
-                          <p className="text-[12px] font-[600] text-[#111110]">Auto-Patching Skipped</p>
-                          <p className="text-[12px] text-[#6F6B66] mt-0.5">{inc.skip_reason}</p>
+                      <div className={cn(
+                        "flex items-start justify-between gap-3 p-[12px_16px] rounded-[10px] border",
+                        inc.skip_reason.includes("Free tier") || inc.skip_reason.includes("Upgrade")
+                          ? "bg-[#FEF3C7]/60 border-[#FCD34D] text-[#92400E]"
+                          : "bg-white border-[#E7E5E2] text-[#111110]"
+                      )}>
+                        <div className="flex items-start gap-2.5">
+                          {inc.skip_reason.includes("Free tier") || inc.skip_reason.includes("Upgrade") ? (
+                            <Zap className="h-[16px] w-[16px] text-[#D97706] shrink-0 mt-[1px]" />
+                          ) : (
+                            <XCircle className="h-[15px] w-[15px] text-[#6F6B66] shrink-0 mt-[1px]" />
+                          )}
+                          <div>
+                            <p className="text-[12px] font-[700]">
+                              {inc.skip_reason.includes("Free tier") ? "Auto-Patching Locked (Free Plan)" : "Auto-Patching Skipped"}
+                            </p>
+                            <p className="text-[12px] text-[#6F6B66] mt-0.5">{inc.skip_reason}</p>
+                          </div>
                         </div>
+
+                        {(inc.skip_reason.includes("Free tier") || inc.skip_reason.includes("Upgrade")) && (
+                          <Link
+                            href="/settings/billing"
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-[#EA580C] hover:bg-[#C2410C] text-white text-[11px] font-[700] px-3 py-1.5 rounded-[6px] shrink-0 flex items-center gap-1 transition-colors"
+                          >
+                            <span>Upgrade to Pro ($14/mo)</span>
+                            <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        )}
                       </div>
                     )}
 

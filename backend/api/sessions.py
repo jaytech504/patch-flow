@@ -35,6 +35,8 @@ class StartSessionLegacyRequest(BaseModel):
     github_repo: Optional[str] = None
 
 
+from backend.core.billing_guards import can_run_chaos_scan, increment_scan_usage
+
 # ── Legacy/Direct Start Session ────────────────────────────────────────────────
 
 @router.post("")
@@ -47,6 +49,11 @@ async def start_session_legacy(
     """
     Directly start a chaos session by auto-discovering endpoints from {target_url}/openapi.json.
     """
+    # ── Check chaos scan quota ───────────────────────────────────────────────
+    allowed, err_msg = can_run_chaos_scan(user)
+    if not allowed:
+        raise HTTPException(status_code=403, detail=err_msg)
+
     session_id = str(uuid.uuid4())
 
     # 1. Create and persist session first to satisfy foreign key constraints
@@ -129,6 +136,11 @@ async def start_session(
             detail="None of the selected endpoints exist in the draft spec."
         )
 
+    # ── Check chaos scan quota ───────────────────────────────────────────────
+    allowed, err_msg = can_run_chaos_scan(user)
+    if not allowed:
+        raise HTTPException(status_code=403, detail=err_msg)
+
     session_id = str(uuid.uuid4())
     github_token = _resolve_github_token(user, body.github_repo)
 
@@ -142,6 +154,9 @@ async def start_session(
     )
     db.add(session)
     await db.commit()
+
+    # Increment user's monthly chaos scan usage
+    await increment_scan_usage(db, user)
 
     # Persist only the chosen endpoints
     discovery = DiscoveryAgent(db, session_id)

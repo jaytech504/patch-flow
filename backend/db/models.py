@@ -21,6 +21,21 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login_at = Column(DateTime, default=datetime.utcnow)
 
+    # ── Subscription & Billing (Lemon Squeezy) ──────────────────────────────────
+    subscription_tier = Column(String(50), default="free")  # free, pro, team
+    subscription_status = Column(String(50), default="none")  # none, active, past_due, cancelled, paused, unpaid
+    lemon_customer_id = Column(String(100), nullable=True)
+    lemon_subscription_id = Column(String(100), nullable=True, index=True)
+    lemon_variant_id = Column(String(100), nullable=True)
+    subscription_renews_at = Column(DateTime, nullable=True)
+    subscription_ends_at = Column(DateTime, nullable=True)
+    email_alerts_enabled = Column(Boolean, default=True)
+
+    # Usage tracking (resets monthly)
+    monthly_incident_fixes_used = Column(Integer, default=0)
+    monthly_chaos_scans_used = Column(Integer, default=0)
+    usage_reset_at = Column(DateTime, default=datetime.utcnow)
+
     sessions = relationship("ChaosSession", back_populates="user")
     monitored_sites = relationship("MonitoredSite", back_populates="user")
 
