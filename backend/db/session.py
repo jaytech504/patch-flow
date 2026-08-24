@@ -64,6 +64,18 @@ async def init_db():
             "ALTER TABLE sentry_incidents ADD COLUMN IF NOT EXISTS github_repo VARCHAR(300)",
             # SDK — new tables (created by create_all, but ensure extra columns exist)
             "ALTER TABLE sdk_errors ADD COLUMN IF NOT EXISTS incident_id VARCHAR REFERENCES sentry_incidents(id)",
+            # Phase 5 — User subscription and billing columns
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(50) DEFAULT 'free'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'none'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS lemon_customer_id VARCHAR(100)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS lemon_subscription_id VARCHAR(100)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS lemon_variant_id VARCHAR(100)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_renews_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_ends_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_alerts_enabled BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_incident_fixes_used INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_chaos_scans_used INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS usage_reset_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
         ]
         for sql in migrations:
             try:
