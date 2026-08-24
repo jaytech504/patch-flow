@@ -238,13 +238,13 @@ export default function BillingSettingsPage() {
             </div>
           </div>
 
-          {/* 2. Monthly Auto-Patches */}
+          {/* 2. Monthly Live SDK Auto-Patches */}
           <div className="p-4 rounded-xl bg-muted/40 border border-border">
             <div className="flex items-center justify-between text-xs font-semibold text-text-secondary mb-2">
-              <span>Monthly Auto-Patches</span>
+              <span>Live SDK Auto-Patches</span>
               <span>
                 {currentTier === "free"
-                  ? "Locked (0/0)"
+                  ? "Locked on Free"
                   : `${subData?.usage.monthly_incident_fixes_used || 0} / ${
                       subData?.limits.max_monthly_auto_fixes && subData.limits.max_monthly_auto_fixes < 1000
                         ? subData.limits.max_monthly_auto_fixes
@@ -277,7 +277,7 @@ export default function BillingSettingsPage() {
           {/* 3. Monthly Chaos Scans */}
           <div className="p-4 rounded-xl bg-muted/40 border border-border">
             <div className="flex items-center justify-between text-xs font-semibold text-text-secondary mb-2">
-              <span>Chaos Scans (This Month)</span>
+              <span>Chaos Scans (with Auto-PRs)</span>
               <span>
                 {subData?.usage.monthly_chaos_scans_used || 0} /{" "}
                 {subData?.limits.max_monthly_chaos_scans && subData.limits.max_monthly_chaos_scans < 1000

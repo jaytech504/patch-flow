@@ -16,14 +16,15 @@ TIER_LIMITS = {
         "price_monthly": 0,
         "price_annual": 0,
         "max_monitored_sites": 1,
-        "auto_fixes_enabled": False,
+        "sdk_auto_fixes_enabled": False,
+        "chaos_fixes_enabled": True,
         "max_monthly_auto_fixes": 0,
         "max_monthly_chaos_scans": 3,
         "failure_modes_count": 18,
         "compiler_build_check": False,
         "ai_priority": "standard",
         "email_alerts": True,
-        "description": "Real-time error monitoring and email alerts for 1 site with 3 chaos scans/mo.",
+        "description": "Real-time error monitoring and email alerts for 1 site with 3 chaos scans/mo (including PR fixes).",
     },
     "pro": {
         "tier": "pro",
@@ -31,14 +32,15 @@ TIER_LIMITS = {
         "price_monthly": 14,
         "price_annual": 132,  # $11/mo
         "max_monitored_sites": 5,
-        "auto_fixes_enabled": True,
+        "sdk_auto_fixes_enabled": True,
+        "chaos_fixes_enabled": True,
         "max_monthly_auto_fixes": 100,
         "max_monthly_chaos_scans": 30,
         "failure_modes_count": 18,
         "compiler_build_check": True,
         "ai_priority": "priority",
         "email_alerts": True,
-        "description": "Autonomous GitHub PR fixes, pre-merge build verification, and 5 sites.",
+        "description": "Autonomous live site GitHub PR fixes, pre-merge build verification, and 5 monitored sites.",
     },
     "team": {
         "tier": "team",
@@ -46,7 +48,8 @@ TIER_LIMITS = {
         "price_monthly": 42,
         "price_annual": 408,  # $34/mo
         "max_monitored_sites": 999999,  # unlimited
-        "auto_fixes_enabled": True,
+        "sdk_auto_fixes_enabled": True,
+        "chaos_fixes_enabled": True,
         "max_monthly_auto_fixes": 999999,  # unlimited
         "max_monthly_chaos_scans": 999999,  # unlimited
         "failure_modes_count": 18,
@@ -107,19 +110,19 @@ def can_create_site(user: Optional[User], current_site_count: int) -> tuple[bool
 
 def can_run_auto_fix(user: Optional[User]) -> tuple[bool, str]:
     """
-    Check if the user's plan permits generating automated code fixes & opening GitHub PRs.
-    Free tier users receive alerts and logs, but fixes are gated.
+    Check if the user's plan permits generating automated code fixes & opening GitHub PRs for monitored sites.
+    Free tier users receive real-time alerts and logs, while live auto-patching requires Pro.
     """
     if not user:
-        return False, "Auto-patching is locked on the Free tier. Upgrade to Pro ($14/mo) to enable autonomous GitHub Pull Requests."
+        return False, "Monitored site auto-patching is locked on the Free tier. Upgrade to Pro ($14/mo) to enable autonomous GitHub Pull Requests."
 
     ensure_monthly_usage_reset(user)
     tier = (user.subscription_tier or "free").lower()
     limits = get_tier_limits(tier)
 
-    # 1. Free tier gate: alerts only, no fixes
-    if not limits["auto_fixes_enabled"]:
-        return False, "Auto-patching is locked on the Free tier. Upgrade to Pro ($14/mo) to unlock autonomous code fixes and PR generation."
+    # 1. Free tier gate for live SDK monitored sites
+    if not limits.get("sdk_auto_fixes_enabled", False):
+        return False, "Monitored site auto-patching is locked on the Free tier. Upgrade to Pro ($14/mo) to unlock autonomous code fixes and PR generation."
 
     # 2. Monthly quota check
     fixes_used = user.monthly_incident_fixes_used or 0
