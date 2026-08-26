@@ -20,6 +20,7 @@ import {
   Sparkles,
   Server,
   Activity,
+  X,
 } from "lucide-react";
 
 interface SubscriptionData {
@@ -55,7 +56,11 @@ export default function BillingSettingsPage() {
   useEffect(() => {
     fetchSubscription();
     if (searchParams.get("checkout") === "success") {
-      setSuccessMessage("Thank you! Your subscription is being activated.");
+      setSuccessMessage("Thank you! Your subscription is now active.");
+      // Clean query parameter from the URL so page refreshes don't re-trigger banner
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
     }
   }, [searchParams]);
 
@@ -163,9 +168,18 @@ export default function BillingSettingsPage() {
       </div>
 
       {successMessage && (
-        <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-sm font-medium flex items-center gap-2">
-          <Check className="h-5 w-5 text-emerald-500 shrink-0" />
-          <span>{successMessage}</span>
+        <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-sm font-medium flex items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <Check className="h-5 w-5 text-emerald-500 shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="p-1 rounded-md text-emerald-600 hover:bg-emerald-500/20 transition-colors"
+            title="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
