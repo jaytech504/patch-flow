@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { API_BASE_URL } from "@/lib/api-config";
 import {
   CreditCard,
   Zap,
@@ -61,8 +62,8 @@ export default function BillingSettingsPage() {
   const fetchSubscription = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/billing/subscription", {
+      const token = localStorage.getItem("patchflow_token");
+      const res = await fetch(`${API_BASE_URL}/api/billing/subscription`, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
@@ -81,8 +82,8 @@ export default function BillingSettingsPage() {
   const handleUpgrade = async (tier: "pro" | "team") => {
     try {
       setActionLoading(tier);
-      const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/billing/checkout", {
+      const token = localStorage.getItem("patchflow_token");
+      const res = await fetch(`${API_BASE_URL}/api/billing/checkout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -114,8 +115,8 @@ export default function BillingSettingsPage() {
   const handleOpenPortal = async () => {
     try {
       setActionLoading("portal");
-      const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/api/billing/portal", {
+      const token = localStorage.getItem("patchflow_token");
+      const res = await fetch(`${API_BASE_URL}/api/billing/portal`, {
         method: "POST",
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -217,10 +218,10 @@ export default function BillingSettingsPage() {
             <div className="flex items-center justify-between text-xs font-semibold text-text-secondary mb-2">
               <span>Monitored Sites (SDK)</span>
               <span>
-                {subData?.usage.monitored_sites_count || 0} /{" "}
-                {subData?.limits.max_monitored_sites && subData.limits.max_monitored_sites < 1000
+                {subData?.usage?.monitored_sites_count ?? 0} /{" "}
+                {subData?.limits?.max_monitored_sites !== undefined && subData.limits.max_monitored_sites < 1000
                   ? subData.limits.max_monitored_sites
-                  : "∞"}
+                  : (currentTier === "free" ? 1 : currentTier === "pro" ? 5 : "∞")}
               </span>
             </div>
             <div className="w-full bg-border rounded-full h-2 overflow-hidden">
@@ -228,8 +229,8 @@ export default function BillingSettingsPage() {
                 className="bg-primary h-2 rounded-full transition-all"
                 style={{
                   width: `${Math.min(
-                    ((subData?.usage.monitored_sites_count || 0) /
-                      (subData?.limits.max_monitored_sites || 1)) *
+                    ((subData?.usage?.monitored_sites_count ?? 0) /
+                      (subData?.limits?.max_monitored_sites || (currentTier === "free" ? 1 : 5))) *
                       100,
                     100
                   )}%`,
@@ -245,10 +246,10 @@ export default function BillingSettingsPage() {
               <span>
                 {currentTier === "free"
                   ? "Locked on Free"
-                  : `${subData?.usage.monthly_incident_fixes_used || 0} / ${
-                      subData?.limits.max_monthly_auto_fixes && subData.limits.max_monthly_auto_fixes < 1000
+                  : `${subData?.usage?.monthly_incident_fixes_used ?? 0} / ${
+                      subData?.limits?.max_monthly_auto_fixes !== undefined && subData.limits.max_monthly_auto_fixes < 1000
                         ? subData.limits.max_monthly_auto_fixes
-                        : "∞"
+                        : (currentTier === "pro" ? 100 : "∞")
                     }`}
               </span>
             </div>
@@ -263,8 +264,8 @@ export default function BillingSettingsPage() {
                     currentTier === "free"
                       ? 0
                       : Math.min(
-                          ((subData?.usage.monthly_incident_fixes_used || 0) /
-                            (subData?.limits.max_monthly_auto_fixes || 100)) *
+                          ((subData?.usage?.monthly_incident_fixes_used ?? 0) /
+                            (subData?.limits?.max_monthly_auto_fixes || 100)) *
                             100,
                           100
                         )
@@ -279,10 +280,10 @@ export default function BillingSettingsPage() {
             <div className="flex items-center justify-between text-xs font-semibold text-text-secondary mb-2">
               <span>Chaos Scans (with Auto-PRs)</span>
               <span>
-                {subData?.usage.monthly_chaos_scans_used || 0} /{" "}
-                {subData?.limits.max_monthly_chaos_scans && subData.limits.max_monthly_chaos_scans < 1000
+                {subData?.usage?.monthly_chaos_scans_used ?? 0} /{" "}
+                {subData?.limits?.max_monthly_chaos_scans !== undefined && subData.limits.max_monthly_chaos_scans < 1000
                   ? subData.limits.max_monthly_chaos_scans
-                  : "∞"}
+                  : (currentTier === "free" ? 3 : currentTier === "pro" ? 30 : "∞")}
               </span>
             </div>
             <div className="w-full bg-border rounded-full h-2 overflow-hidden">
@@ -290,8 +291,8 @@ export default function BillingSettingsPage() {
                 className="bg-primary h-2 rounded-full transition-all"
                 style={{
                   width: `${Math.min(
-                    ((subData?.usage.monthly_chaos_scans_used || 0) /
-                      (subData?.limits.max_monthly_chaos_scans || 3)) *
+                    ((subData?.usage?.monthly_chaos_scans_used ?? 0) /
+                      (subData?.limits?.max_monthly_chaos_scans || (currentTier === "free" ? 3 : 30))) *
                       100,
                     100
                   )}%`,
