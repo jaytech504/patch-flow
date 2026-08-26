@@ -60,7 +60,7 @@ async def exchange_code_for_token(code: str) -> str:
 
 
 async def fetch_github_user(access_token: str) -> dict:
-    """Fetch the authenticated user's GitHub profile."""
+    """Fetch the authenticated user's GitHub profile and primary email."""
     async with httpx.AsyncClient() as client:
         response = await client.get(
             GITHUB_USER_URL,
@@ -71,7 +71,35 @@ async def fetch_github_user(access_token: str) -> dict:
             timeout=10.0,
         )
         response.raise_for_status()
-        return response.json()
+        user_data = response.json()
+
+        # If email is private/null, fetch from /user/emails
+        if not user_data.get("email"):
+            try:
+                emails_resp = await client.get(
+                    "https://api.github.com/user/emails",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Accept": "application/json",
+                    },
+                    timeout=10.0,
+                )
+                if emails_resp.status_code == 200:
+                    emails = emails_resp.json()
+                    primary = next(
+                        (e["email"] for e in emails if e.get("primary") and e.get("verified")),
+                        None,
+                    )
+                    if not primary:
+                        primary = next((e["email"] for e in emails if e.get("verified")), None)
+                    if not primary and emails:
+                        primary = emails[0].get("email")
+                    if primary:
+                        user_data["email"] = primary
+            except Exception as exc:
+                logger.warning(f"[OAuth] Could not fetch private user emails: {exc}")
+
+        return user_data
 
 
 async def fetch_user_repos(

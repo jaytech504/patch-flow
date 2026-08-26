@@ -135,6 +135,18 @@ async def create_checkout_session(
 
     # If Lemon Squeezy API key and variant_id are configured, create hosted checkout via API
     if settings.lemon_squeezy_api_key and variant_id and settings.lemon_squeezy_store_id:
+        checkout_data: dict = {
+            "custom": {
+                "user_id": user.id,
+                "target_tier": tier,
+                "billing_cycle": cycle,
+            },
+        }
+        if user.email and "@" in user.email:
+            checkout_data["email"] = user.email.strip()
+        if user.github_username:
+            checkout_data["name"] = user.github_username.strip()
+
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 res = await client.post(
@@ -148,15 +160,7 @@ async def create_checkout_session(
                         "data": {
                             "type": "checkouts",
                             "attributes": {
-                                "checkout_data": {
-                                    "email": user.email or "",
-                                    "name": user.github_username or "",
-                                    "custom": {
-                                        "user_id": user.id,
-                                        "target_tier": tier,
-                                        "billing_cycle": cycle,
-                                    },
-                                },
+                                "checkout_data": checkout_data,
                                 "product_options": {
                                     "redirect_url": redirect_url,
                                 },
@@ -183,9 +187,27 @@ async def create_checkout_session(
                     checkout_url = data["data"]["attributes"]["url"]
                     return {"checkout_url": checkout_url}
                 else:
-                    logger.warning(f"[LemonSqueezy] API checkout error ({res.status_code}): {res.text}")
+                    err_msg = res.text
+                    try:
+                        err_json = res.json()
+                        errors = err_json.get("errors", [])
+                        if errors:
+                            err_msg = errors[0].get("detail", err_msg)
+                    except Exception:
+                        pass
+                    logger.warning(f"[LemonSqueezy] API checkout error ({res.status_code}): {err_msg}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Lemon Squeezy Checkout Error: {err_msg}",
+                    )
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.error(f"[LemonSqueezy] Failed to call Lemon Squeezy API: {exc}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not connect to payment processor: {exc}",
+            )
 
     # Fallback simulation URL for local/testing environments without active Lemon Squeezy store keys
     mock_url = f"{settings.frontend_url.rstrip('/')}/settings/billing?simulated_checkout={tier}&cycle={cycle}"
