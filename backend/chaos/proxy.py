@@ -81,12 +81,12 @@ class ChaosProxy:
                                           None, "Client timeout — app didn't handle slow upstream")
 
         if failure_mode == "connection_refused":
-            # Try to connect to a port that should be closed
+            # Simulate connection refusal via non-routable test address
             try:
-                async with httpx.AsyncClient(timeout=3.0) as c:
-                    r = await c.get("http://localhost:19999/unreachable")
+                async with httpx.AsyncClient(timeout=2.0) as c:
+                    r = await c.get("http://192.0.2.1:19999/unreachable")
                     return self._build_result(failure_mode, url, method, r)
-            except httpx.ConnectError:
+            except (httpx.ConnectError, httpx.TimeoutException):
                 return self._build_result(failure_mode, url, method,
                                           None, "Connection refused — checking if app handles dependency outage")
 

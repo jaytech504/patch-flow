@@ -6,6 +6,7 @@ from typing import Optional, List
 from backend.agents.discovery_agent import DiscoveryAgent
 from backend.auth.dependencies import get_current_user
 from backend.db.models import User
+from backend.core.security_guards import validate_target_url, spec_preview_limiter, rate_limit
 
 router = APIRouter()
 
@@ -26,12 +27,13 @@ class PreviewManual(BaseModel):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
-@router.post("/preview/spec-url")
+@router.post("/preview/spec-url", dependencies=[Depends(rate_limit(spec_preview_limiter))])
 async def preview_spec_url(
     body: PreviewSpecUrl,
     user: User = Depends(get_current_user),
 ):
     """Parse and preview endpoints from an OpenAPI spec URL."""
+    body.spec_url = validate_target_url(body.spec_url)
     discovery = DiscoveryAgent()
     try:
         preview_data = await discovery.preview_from_openapi_url(body.spec_url)

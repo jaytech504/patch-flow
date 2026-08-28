@@ -62,6 +62,20 @@ class SiteUpdate(BaseModel):
 
 
 def _site_to_dict(site: MonitoredSite, api_keys: list[SiteApiKey] | None = None) -> dict:
+    # Compute dynamic SDK status (active vs offline vs not_installed)
+    computed_status = "not_installed"
+    seconds_since_seen = None
+
+    if site.sdk_last_seen:
+        diff = (datetime.utcnow() - site.sdk_last_seen).total_seconds()
+        seconds_since_seen = int(diff)
+        if diff <= 900:  # 15 minutes
+            computed_status = "active"
+        else:
+            computed_status = "offline"
+    elif site.sdk_status == "error":
+        computed_status = "error"
+
     return {
         "id": site.id,
         "name": site.name,
@@ -69,8 +83,9 @@ def _site_to_dict(site: MonitoredSite, api_keys: list[SiteApiKey] | None = None)
         "github_repo": site.github_repo,
         "framework": site.framework,
         "active": site.active,
-        "sdk_status": site.sdk_status or "not_installed",
+        "sdk_status": computed_status,
         "sdk_last_seen": site.sdk_last_seen.isoformat() if site.sdk_last_seen else None,
+        "seconds_since_last_seen": seconds_since_seen,
         "api_keys": [
             {
                 "id": k.id,

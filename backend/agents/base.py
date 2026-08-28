@@ -73,7 +73,7 @@ class BaseAgent(ABC):
         self.client = AsyncOpenAI(
             api_key=settings.gemma_api_key,
             base_url=settings.gemma_base_url,
-            timeout=300.0,
+            timeout=60.0,
         )
         self._tools: Dict[str, Tool] = {}
         # Tunable per-agent budgets to control token usage.
@@ -89,31 +89,31 @@ class BaseAgent(ABC):
         max_iterations = self.max_iterations
 
         for i in range(max_iterations):
-            response = await self._call_gemma(messages)
+            try:
+                response = await self._call_gemma(messages)
+            except Exception as exc:
+                logger.error(f"[{self.name}] LLM execution failed after retries: {exc}")
+                return {
+                    "status": "error",
+                    "_parse_error": f"LLM call failed in {self.name}: {exc}",
+                }
+
             message = response.choices[0].message
             raw_content = message.content or ""
             content = self._extract_final_content(raw_content)
 
-            # Do not persist or stream raw model reasoning. Besides exposing
-            # unnecessary chain-of-thought, Gemma thought-channel tokens can
-            # corrupt the structured response expected by downstream agents.
+            # Do not persist or stream raw model reasoning.
             if raw_content:
                 await self._log("model_output", "Structured model response received.")
 
             if message.tool_calls:
                 # Sanitize tool call arguments before adding to history.
-                # The API requires arguments to be valid JSON strings.
-                # If the LLM produces malformed JSON (e.g. embedding raw
-                # invalid payloads), we replace with a cleaned version.
                 sanitized_tool_calls = []
                 for tc in message.tool_calls:
                     try:
-                        # Validate the arguments are parseable JSON
                         parsed = robust_json_loads(tc.function.arguments)
                         clean_args = json.dumps(parsed)
                     except Exception:
-                        # Replace unparseable arguments with an error placeholder
-                        # so the conversation history stays valid
                         logger.warning(
                             f"[{self.name}] Sanitizing malformed tool args for "
                             f"{tc.function.name}: {tc.function.arguments[:120]}"
@@ -146,9 +146,6 @@ class BaseAgent(ABC):
                         result = {"error": f"Failed to parse tool arguments or execute tool: {e}"}
 
                     result_str = json.dumps(result)
-                    # Cap tool results to prevent ballooning conversation
-                    # history.  8000 chars ≈ 2000 tokens — enough context
-                    # for the LLM without blowing through the budget.
                     MAX_TOOL_RESULT_CHARS = 8000
                     if len(result_str) > MAX_TOOL_RESULT_CHARS:
                         result_str = result_str[:MAX_TOOL_RESULT_CHARS] + '..."}'
@@ -197,13 +194,7 @@ class BaseAgent(ABC):
             "model": settings.gemma_model,
             "messages": messages,
             "max_tokens": self.max_tokens_per_call,
-            # Google exposes Gemma thinking controls through the OpenAI
-            # compatibility endpoint under this vendor extension.
             "extra_body": {
-                # The Python OpenAI client merges `extra_body` into the
-                # request. Google expects its extension inside the API's
-                # `extra_body` envelope, rather than a top-level `google`
-                # key.
                 "extra_body": {
                     "google": {
                         "thinking_config": {
@@ -225,7 +216,6 @@ class BaseAgent(ABC):
         for attempt in range(max_retries + 1):
             try:
                 response = await self.client.chat.completions.create(**kwargs)
-                # Log actual token usage returned by the API
                 if hasattr(response, "usage") and response.usage:
                     u = response.usage
                     logger.info(
@@ -236,8 +226,8 @@ class BaseAgent(ABC):
                 return response
             except Exception as e:
                 err_str = str(e)
+                # 1. Handle Rate Limiting (429)
                 if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    # Extract retry delay from error message if available
                     wait = 60
                     delay_match = _re.search(r"retry in (\d+(?:\.\d+)?)s", err_str, _re.IGNORECASE)
                     if delay_match:
@@ -252,6 +242,22 @@ class BaseAgent(ABC):
                         )
                         await _asyncio.sleep(wait)
                         continue
+                    raise
+
+                # 2. Handle transient 5xx server errors, timeouts, and connection errors
+                is_transient = any(
+                    code in err_str
+                    for code in ("500", "502", "503", "504", "timeout", "ConnectionError", "ConnectError")
+                )
+                if is_transient and attempt < max_retries:
+                    backoff = (2 ** attempt) + 1  # 2s, 3s, 5s
+                    logger.warning(
+                        f"[{self.name}] Transient LLM error ({err_str[:100]}). "
+                        f"Retrying in {backoff}s ({attempt + 1}/{max_retries})..."
+                    )
+                    await _asyncio.sleep(backoff)
+                    continue
+
                 raise
 
     def _estimate_message_chars(self, messages: List[dict]) -> int:

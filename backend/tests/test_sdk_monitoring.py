@@ -202,7 +202,11 @@ class SdkEndpointTests(unittest.IsolatedAsyncioTestCase):
         mock_existing_result = MagicMock()
         mock_existing_result.scalars.return_value.all.return_value = [existing_error_1, existing_error_2]
 
-        mock_db.execute.side_effect = [mock_validate_result, mock_existing_result]
+        # Mock active incident dedup query
+        mock_active_inc_result = MagicMock()
+        mock_active_inc_result.scalar_one_or_none.return_value = None
+
+        mock_db.execute.side_effect = [mock_validate_result, mock_existing_result, mock_active_inc_result]
         mock_db.get.return_value = site
 
         payload = SdkErrorPayload(

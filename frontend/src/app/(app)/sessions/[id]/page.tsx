@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL, WS_BASE_URL } from "@/lib/api-config";
+import { authFetch } from "@/lib/auth-fetch";
 
 interface LogMessage {
   time: string;
@@ -52,6 +53,7 @@ export default function LiveSessionPage() {
   const [rerunning, setRerunning] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showLongRunHint, setShowLongRunHint] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
   const prevRunFinished = useRef(false);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -96,54 +98,66 @@ export default function LiveSessionPage() {
     return 0;
   };
 
+  const fetchSessionState = async () => {
+    try {
+      const response = await authFetch(`/api/sessions/${sessionUrlId}`);
+      if (response.ok) {
+        const data = await response.json();
+
+        // Load past steps
+        if (Array.isArray(data.agent_steps)) {
+          setLogs(data.agent_steps.map((step: any) => ({
+            time: step.created_at ? new Date(step.created_at).toLocaleTimeString() : "",
+            agent: step.agent.replace("Agent", ""),
+            type: step.step_type,
+            content: step.content,
+          })));
+        }
+
+        // Load past failures
+        if (Array.isArray(data.failures)) {
+          setPills(data.failures.map((f: any) => ({
+            id: f.id,
+            endpoint: f.endpoint_id,
+            failureMode: f.failure_mode,
+            status: f.result,
+            statusCode: f.status_code,
+            errorLeaked: f.error_leaked,
+          })));
+        }
+
+        // Set active stage status
+        const stageIdx = getStageIndex(data.status);
+        setActiveStage(stageIdx);
+
+        if (data.status.toLowerCase() === "failed") {
+          setRunFailed(true);
+          setRunFinished(true);
+        } else if (["complete", "completed"].includes(data.status.toLowerCase())) {
+          setRunFinished(true);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch session state:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fallback polling every 3 seconds if WebSocket is disconnected during an active run
+  useEffect(() => {
+    if (runFinished) return;
+    const interval = setInterval(() => {
+      if (!wsConnected && !runFinished) {
+        fetchSessionState();
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [wsConnected, runFinished, sessionUrlId]);
+
   useEffect(() => {
     const loadSessionAndConnect = async () => {
-      // 1. Fetch initial state from backend API
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionUrlId}`);
-        if (response.ok) {
-          const data = await response.json();
-          
-          // Load past steps
-          if (Array.isArray(data.agent_steps)) {
-            setLogs(data.agent_steps.map((step: any) => ({
-              time: step.created_at ? new Date(step.created_at).toLocaleTimeString() : "",
-              agent: step.agent.replace("Agent", ""),
-              type: step.step_type,
-              content: step.content,
-            })));
-          }
-
-          // Load past failures
-          if (Array.isArray(data.failures)) {
-            setPills(data.failures.map((f: any) => ({
-              id: f.id,
-              endpoint: f.endpoint_id, // fallback endpoint ID
-              failureMode: f.failure_mode,
-              status: f.result,
-              statusCode: f.status_code,
-              errorLeaked: f.error_leaked,
-            })));
-          }
-
-          // Set active stage status
-          const stageIdx = getStageIndex(data.status);
-          setActiveStage(stageIdx);
-
-          if (data.status.toLowerCase() === "failed") {
-            setRunFailed(true);
-            setRunFinished(true);
-          } else if (["complete", "completed"].includes(data.status.toLowerCase())) {
-            setRunFinished(true);
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to load initial session state, using simulated socket stream.", err);
-        // If API fails (e.g. mock-id), we can trigger dummy timeline simulation to make UI alive
-        simulateMocks();
-      } finally {
-        setLoading(false);
-      }
+      await fetchSessionState();
 
       // 2. Connect to WebSocket stream
       const wsUrl = `${WS_BASE_URL}/ws/${sessionUrlId}`;
@@ -151,7 +165,16 @@ export default function LiveSessionPage() {
       wsRef.current = socket;
 
       socket.onopen = () => {
+        setWsConnected(true);
         console.log(`WS connection opened for session ${sessionUrlId}`);
+      };
+
+      socket.onclose = () => {
+        setWsConnected(false);
+      };
+
+      socket.onerror = () => {
+        setWsConnected(false);
       };
 
       socket.onmessage = (event) => {

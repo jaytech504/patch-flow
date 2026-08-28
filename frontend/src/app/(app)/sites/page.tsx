@@ -451,9 +451,10 @@ export default function SitesPage() {
 
   const sdkStatusMeta = (status: string) => {
     switch (status) {
-      case "active": return { label: "SDK Active", cls: "bg-[#F0FDF4] text-[#16A34A]", icon: Activity };
-      case "error":  return { label: "SDK Error",  cls: "bg-[#FEF2F2] text-[#DC2626]", icon: AlertCircle };
-      default:       return { label: "Not installed", cls: "bg-[#F3F2F0] text-[#6F6B66]", icon: AlertCircle };
+      case "active": return { label: "SDK Active", cls: "bg-[#F0FDF4] text-[#16A34A] border border-emerald-200", icon: Activity };
+      case "offline": return { label: "SDK Offline", cls: "bg-[#FFFBEB] text-[#D97706] border border-amber-200", icon: AlertCircle };
+      case "error":  return { label: "SDK Error",  cls: "bg-[#FEF2F2] text-[#DC2626] border border-red-200", icon: AlertCircle };
+      default:       return { label: "Not installed", cls: "bg-[#F3F2F0] text-[#6F6B66] border border-zinc-200", icon: AlertCircle };
     }
   };
 

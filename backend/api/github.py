@@ -5,8 +5,8 @@ from typing import Optional
 from loguru import logger
 
 from backend.db.session import get_db
-from backend.db.models import PullRequest, User
-from backend.auth.dependencies import get_optional_user
+from backend.db.models import PullRequest, ChaosSession, User
+from backend.auth.dependencies import get_current_user
 from backend.core.websocket_manager import ws_manager
 
 router = APIRouter()
@@ -16,8 +16,15 @@ router = APIRouter()
 async def list_pull_requests(
     session_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    query = select(PullRequest).order_by(PullRequest.created_at.desc())
+    # Only return PRs for sessions belonging to current_user
+    user_sessions_subquery = select(ChaosSession.id).where(ChaosSession.user_id == current_user.id)
+    query = (
+        select(PullRequest)
+        .where(PullRequest.session_id.in_(user_sessions_subquery))
+        .order_by(PullRequest.created_at.desc())
+    )
     if session_id:
         query = query.where(PullRequest.session_id == session_id)
     result = await db.execute(query.limit(50))
@@ -40,9 +47,17 @@ async def list_pull_requests(
 
 
 @router.get("/{pr_id}")
-async def get_pull_request(pr_id: str, db: AsyncSession = Depends(get_db)):
+async def get_pull_request(
+    pr_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     pr = await db.get(PullRequest, pr_id)
     if not pr:
+        raise HTTPException(status_code=404, detail="PR not found")
+
+    session = await db.get(ChaosSession, pr.session_id)
+    if not session or (session.user_id and session.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="PR not found")
     return {
         "id": pr.id,
@@ -114,21 +129,30 @@ async def github_webhook(
 
 
 @router.post("/{pr_id}/sync")
-async def sync_pr_status(pr_id: str, db: AsyncSession = Depends(get_db)):
+async def sync_pr_status(
+    pr_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """Manually sync one PR's status from GitHub API."""
     from backend.core.config import get_settings
     settings = get_settings()
-
-    if not settings.github_token:
-        raise HTTPException(status_code=400, detail="No GitHub token configured")
 
     pr_record = await db.get(PullRequest, pr_id)
     if not pr_record:
         raise HTTPException(status_code=404, detail="PR not found")
 
+    session = await db.get(ChaosSession, pr_record.session_id)
+    if not session or (session.user_id and session.user_id != user.id):
+        raise HTTPException(status_code=404, detail="PR not found")
+
+    token = user.github_access_token or settings.github_token
+    if not token:
+        raise HTTPException(status_code=400, detail="No GitHub token available")
+
     try:
         from github import Github
-        gh = Github(settings.github_token)
+        gh = Github(token)
         repo = gh.get_repo(pr_record.github_repo)
         gh_pr = repo.get_pull(pr_record.pr_number)
 
@@ -149,7 +173,7 @@ async def sync_pr_status(pr_id: str, db: AsyncSession = Depends(get_db)):
 async def merge_pull_request(
     pr_id: str,
     db: AsyncSession = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Merge the specified pull request on GitHub and update its status.
@@ -158,14 +182,14 @@ async def merge_pull_request(
     if not pr_record:
         raise HTTPException(status_code=404, detail="PR not found")
 
+    session = await db.get(ChaosSession, pr_record.session_id)
+    if not session or (session.user_id and session.user_id != user.id):
+        raise HTTPException(status_code=404, detail="PR not found")
+
     # Resolve token: user's OAuth token > global fallback
     from backend.core.config import get_settings
     settings = get_settings()
-    token = None
-    if user and user.github_access_token:
-        token = user.github_access_token
-    else:
-        token = settings.github_token or None
+    token = user.github_access_token or settings.github_token or None
 
     if not token:
         raise HTTPException(status_code=400, detail="No GitHub token available. Please log in with GitHub.")

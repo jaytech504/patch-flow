@@ -11,13 +11,13 @@ from backend.db.session import get_db, AsyncSessionLocal
 from backend.db.models import ChaosSession, SessionStatus, FailureResult, Endpoint, PullRequest, User, AgentStep, Incident
 from backend.agents.orchestrator import ChaosOrchestrator
 from backend.agents.discovery_agent import DiscoveryAgent
-from backend.auth.dependencies import get_current_user, get_optional_user
+from backend.auth.dependencies import get_current_user
 from backend.core.websocket_manager import ws_manager
+from backend.core.security_guards import validate_target_url, scan_start_limiter, rate_limit
+from backend.core.draft_cache import draft_cache
+from backend.core.billing_guards import can_run_chaos_scan, increment_scan_usage
 
 router = APIRouter()
-
-
-from backend.core.draft_cache import draft_cache
 
 # ── Input models ──────────────────────────────────────────────────────────────
 
@@ -35,61 +35,55 @@ class StartSessionLegacyRequest(BaseModel):
     github_repo: Optional[str] = None
 
 
-from backend.core.billing_guards import can_run_chaos_scan, increment_scan_usage
-
 # ── Legacy/Direct Start Session ────────────────────────────────────────────────
 
-@router.post("")
+@router.post("", dependencies=[Depends(rate_limit(scan_start_limiter))])
 async def start_session_legacy(
     body: StartSessionLegacyRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """
-    Directly start a chaos session by auto-discovering endpoints from {target_url}/openapi.json.
+    Start a chaos session directly by discovering and running endpoints from openapi_url.
     """
-    # ── Check chaos scan quota ───────────────────────────────────────────────
+    # SSRF guard on target_url
+    body.target_url = validate_target_url(body.target_url)
+
     allowed, err_msg = can_run_chaos_scan(user)
     if not allowed:
         raise HTTPException(status_code=403, detail=err_msg)
 
     session_id = str(uuid.uuid4())
+    github_token = _resolve_github_token(user, body.github_repo)
 
-    # 1. Create and persist session first to satisfy foreign key constraints
     session = ChaosSession(
         id=session_id,
         target_url=body.target_url,
         target_name=body.target_name,
         github_repo=body.github_repo,
-        user_id=user.id if user else None,
+        user_id=user.id,
         status=SessionStatus.PENDING,
     )
     db.add(session)
     await db.commit()
-    
-    # 2. Run discovery
-    spec_url = f"{body.target_url.rstrip('/')}/openapi.json"
-    logger.info(f"[Sessions] Legacy direct start. Scanning spec URL: {spec_url}")
-    
+
+    await increment_scan_usage(db, user)
+
     discovery = DiscoveryAgent(db, session_id)
     try:
+        spec_url = f"{body.target_url.rstrip('/')}/openapi.json"
         endpoints = await discovery.from_openapi_url(spec_url)
     except Exception as e:
-        logger.error(f"[Sessions] Discovery failed for {spec_url}: {e}")
-        # Clean up session since it failed
-        await db.delete(session)
-        await db.commit()
-        raise HTTPException(status_code=400, detail=f"Failed to discover endpoints from {spec_url}: {e}")
+        logger.warning(f"Could not discover from openapi.json: {e}")
+        endpoints = []
 
     if not endpoints:
-        # Clean up session
-        await db.delete(session)
-        await db.commit()
-        raise HTTPException(status_code=400, detail="No endpoints found in spec.")
+        raise HTTPException(
+            status_code=400,
+            detail="No endpoints found. Make sure your app is running and exposes an OpenAPI spec at /openapi.json",
+        )
 
-    # 3. Trigger background tasks
-    github_token = _resolve_github_token(user, body.github_repo)
     background_tasks.add_task(
         _run_pipeline_with_endpoints,
         session_id, body.target_url, endpoints, body.github_repo, github_token
@@ -104,12 +98,12 @@ async def start_session_legacy(
 
 # ── Start Session from Spec Draft ──────────────────────────────────────────────
 
-@router.post("/start")
+@router.post("/start", dependencies=[Depends(rate_limit(scan_start_limiter))])
 async def start_session(
     body: StartSessionRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Start a chaos session using endpoints selected from a parsed draft.
@@ -118,6 +112,9 @@ async def start_session(
         raise HTTPException(status_code=400, detail="No endpoints selected.")
     if len(body.selected_temp_ids) > 10:
         raise HTTPException(status_code=400, detail="A maximum of 10 endpoints can be selected per chaos session.")
+
+    # SSRF guard on target_url
+    body.target_url = validate_target_url(body.target_url)
 
     # Retrieve from short-lived TTL cache
     draft = draft_cache.get(body.draft_id)
@@ -149,7 +146,7 @@ async def start_session(
         target_url=body.target_url,
         target_name=body.target_name,
         github_repo=body.github_repo,
-        user_id=user.id if user else None,
+        user_id=user.id,
         status=SessionStatus.PENDING,
     )
     db.add(session)
@@ -184,19 +181,17 @@ async def start_session(
 @router.get("")
 async def list_sessions(
     db: AsyncSession = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
-    # Only list user-initiated Chaos Testing sessions (exclude SDK incident backend sessions)
+    # Only list user-initiated Chaos Testing sessions for the authenticated user
     incident_subquery = select(Incident.id)
     query = (
         select(ChaosSession)
+        .where(ChaosSession.user_id == user.id)
         .where(ChaosSession.id.not_in(incident_subquery))
         .order_by(desc(ChaosSession.created_at))
-        .limit(20)
+        .limit(50)
     )
-    # If logged in, only show the user's sessions
-    if user:
-        query = query.where(ChaosSession.user_id == user.id)
     result = await db.execute(query)
     sessions = result.scalars().all()
     return [
@@ -217,9 +212,13 @@ async def list_sessions(
 
 
 @router.get("/{session_id}")
-async def get_session(session_id: str, db: AsyncSession = Depends(get_db)):
+async def get_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     session = await db.get(ChaosSession, session_id)
-    if not session:
+    if not session or (session.user_id and session.user_id != user.id):
         raise HTTPException(status_code=404, detail="Session not found")
 
     endpoints_result = await db.execute(
@@ -245,12 +244,12 @@ async def get_session(session_id: str, db: AsyncSession = Depends(get_db)):
         "target_name": session.target_name,
         "target_url": session.target_url,
         "github_repo": session.github_repo,
-        "status": session.status.value,
+        "status": session.status.value if hasattr(session.status, "value") else (session.status or "pending"),
         "endpoints_found": session.endpoints_found,
         "failures_injected": session.failures_injected,
         "unhandled_count": session.unhandled_count,
         "fixes_generated": session.fixes_generated,
-        "created_at": session.created_at.isoformat(),
+        "created_at": session.created_at.isoformat() if session.created_at else "",
         "completed_at": session.completed_at.isoformat() if session.completed_at else None,
         "endpoints": [
             {
@@ -355,17 +354,14 @@ async def retry_session(
     session_id: str,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Rerun a failed chaos session using its pre-discovered endpoints.
     """
     session = await db.get(ChaosSession, session_id)
-    if not session:
+    if not session or session.user_id != user.id:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    if user and session.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to retry this session")
 
     # Update status to pending
     session.status = SessionStatus.PENDING

@@ -3,7 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from backend.db.session import get_db
-from backend.db.models import Report, FailureResult, Endpoint
+from backend.db.models import Report, FailureResult, Endpoint, ChaosSession, User
+from backend.auth.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -60,9 +61,18 @@ def _serialise_skipped_fix(fix: dict) -> dict:
 
 
 @router.get("/{report_id}")
-async def get_report(report_id: str, db: AsyncSession = Depends(get_db)):
+async def get_report(
+    report_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     report = await db.get(Report, report_id)
     if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Verify session ownership
+    session = await db.get(ChaosSession, report.session_id)
+    if not session or (session.user_id and session.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Report not found")
 
     # Load all endpoints for the session to map endpoint_id → path
@@ -120,12 +130,20 @@ async def get_report(report_id: str, db: AsyncSession = Depends(get_db)):
             }
             for f in fixed_failures
         ],
-        "created_at": report.created_at.isoformat(),
+        "created_at": report.created_at.isoformat() if report.created_at else "",
     }
 
 
 @router.get("/session/{session_id}")
-async def get_report_by_session(session_id: str, db: AsyncSession = Depends(get_db)):
+async def get_report_by_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    session = await db.get(ChaosSession, session_id)
+    if not session or (session.user_id and session.user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Report not found for this session")
+
     result = await db.execute(
         select(Report).where(Report.session_id == session_id)
     )

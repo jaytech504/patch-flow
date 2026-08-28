@@ -102,15 +102,22 @@ class ChaosOrchestrator:
             f"for {target_url}"
         )
 
+        import asyncio
+
         try:
-            # ── Stage 1: Chaos Injection ──────────────────────────────────────
+            # ── Stage 1: Chaos Injection (60s timeout) ────────────────────────
             await ws_manager.emit_status(
                 self.session_id, "injecting",
                 f"Injecting failures into {len(endpoints)} endpoints..."
             )
             chaos = ChaosAgent(self.db, self.session_id, target_url)
-            failure_results = await chaos.handle(endpoints)
-            await chaos.close()
+            try:
+                failure_results = await asyncio.wait_for(chaos.handle(endpoints), timeout=60.0)
+            except asyncio.TimeoutError:
+                logger.error(f"[Orchestrator] Chaos injection timed out after 60s for session {self.session_id}")
+                raise TimeoutError("Chaos injection timed out after 60s. Target site may be slow or unreachable.")
+            finally:
+                await chaos.close()
 
             unhandled = [r for r in failure_results if r["result"] == "unhandled"]
             logger.info(
@@ -123,31 +130,39 @@ class ChaosOrchestrator:
                 session.unhandled_count = len(unhandled)
                 await self.db.flush()
 
-            # ── Stage 2: Analysis ─────────────────────────────────────────────
+            # ── Stage 2: Analysis (45s timeout) ───────────────────────────────
             await ws_manager.emit_status(
                 self.session_id, "analysing",
                 "Analysing failure patterns..."
             )
             analyst = AnalystAgent(self.db, self.session_id)
-            analysis = await analyst.handle(failure_results)
+            try:
+                analysis = await asyncio.wait_for(analyst.handle(failure_results), timeout=45.0)
+            except asyncio.TimeoutError:
+                logger.error(f"[Orchestrator] Analysis stage timed out after 45s for session {self.session_id}")
+                raise TimeoutError("Failure analysis timed out after 45s.")
 
-            # ── Stage 3: Fix Generation ───────────────────────────────────────
+            # ── Stage 3: Fix Generation (90s timeout) ─────────────────────────
             await ws_manager.emit_status(
                 self.session_id, "fixing",
                 "Generating error handling code..."
             )
-            # Resolve token: per-user OAuth token > global fallback
             effective_token = github_token or settings.github_token
             fixer = FixAgent(
                 self.db, self.session_id,
                 repo_url=github_repo,
                 github_token=effective_token
             )
-            fix_result = await fixer.handle(analysis, failure_results)
+            try:
+                fix_result = await asyncio.wait_for(
+                    fixer.handle(analysis, failure_results),
+                    timeout=90.0
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"[Orchestrator] Fix generation timed out after 90s for session {self.session_id}")
+                raise TimeoutError("Fix generation timed out after 90s.")
 
-            # ── Stage 3.5: Fix Review ─────────────────────────────────────────
-            # ReviewAgent validates each fix like a senior developer.
-            # If fixes need revision, they go back to FixAgent for correction.
+            # ── Stage 3.5: Fix Review (60s timeout per round) ──────────────────
             if github_repo and effective_token:
                 await ws_manager.emit_status(
                     self.session_id, "reviewing",
@@ -161,7 +176,16 @@ class ChaosOrchestrator:
 
                 max_review_rounds = 2
                 for review_round in range(max_review_rounds):
-                    fix_result = await reviewer.handle(fix_result)
+                    try:
+                        fix_result = await asyncio.wait_for(
+                            reviewer.handle(fix_result),
+                            timeout=60.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            f"[Orchestrator] Code review round {review_round + 1} timed out — proceeding with generated fixes."
+                        )
+                        break
 
                     needs_revision = fix_result.get("needs_revision", [])
                     if not needs_revision:
@@ -185,10 +209,15 @@ class ChaosOrchestrator:
                         repo_url=github_repo,
                         github_token=effective_token
                     )
-                    revised_fixes = await revised_fixer.revise_fixes(needs_revision)
+                    try:
+                        revised_fixes = await asyncio.wait_for(
+                            revised_fixer.revise_fixes(needs_revision),
+                            timeout=60.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("[Orchestrator] Fix revision timed out — keeping original fixes.")
+                        revised_fixes = []
 
-                    # Merge revisions by identity — status-aware so
-                    # validation_failed revisions don't displace good fixes.
                     fix_result["fixes"] = self._merge_revised_fixes(
                         validated_fixes=fix_result.get("fixes", []),
                         rejected_fixes=needs_revision,
@@ -199,7 +228,6 @@ class ChaosOrchestrator:
                         if f.get("status") not in {FixStatus.VALIDATION_FAILED.value}
                     ])
 
-                    # Clear the needs_revision list for the next review round
                     fix_result.pop("needs_revision", None)
 
                     await ws_manager.emit_status(
@@ -207,14 +235,12 @@ class ChaosOrchestrator:
                         f"Re-reviewing revised fixes (round {review_round + 2})..."
                     )
                 else:
-                    # Max rounds reached — exclude any fixes still needing revision.
                     remaining = fix_result.pop("needs_revision", [])
                     if remaining:
                         logger.warning(
                             f"[Orchestrator] Max review rounds reached. "
                             f"{len(remaining)} fix(es) still need revision — excluded."
                         )
-                        # Carry them as unresolved so the report can show them
                         existing_skipped = fix_result.get("skipped_fixes", [])
                         fix_result["skipped_fixes"] = existing_skipped + remaining
                         fix_result["fixes_count"] = len(fix_result.get("fixes", []))
@@ -226,7 +252,7 @@ class ChaosOrchestrator:
                     f"{review_stats.get('revision_needed', 0)} revised"
                 )
 
-            # ── Stage 4: GitHub PRs ───────────────────────────────────────────
+            # ── Stage 4: GitHub PRs (45s timeout) ─────────────────────────────
             prs_opened = []
             prs_skipped_count = 0
             if github_repo and effective_token:
@@ -238,12 +264,23 @@ class ChaosOrchestrator:
                     self.db, self.session_id, github_repo,
                     github_token=effective_token,
                 )
-                prs_opened = await github.handle(
-                    fixes_result=fix_result,
-                    analysis=analysis,
-                    report_id=fix_result.get("report_id"),
-                )
-                # Accumulate PR-level skip count for the summary
+                try:
+                    prs_opened = await asyncio.wait_for(
+                        github.handle(
+                            fixes_result=fix_result,
+                            analysis=analysis,
+                            report_id=fix_result.get("report_id"),
+                        ),
+                        timeout=45.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(f"[Orchestrator] GitHub PR creation timed out after 45s for session {self.session_id}")
+                    await ws_manager.emit_status(
+                        self.session_id, "github_skipped",
+                        "GitHub PR creation timed out. Fix report is still available."
+                    )
+                    prs_opened = []
+
                 for pr in prs_opened:
                     prs_skipped_count += pr.get("fixes_skipped", 0)
             elif github_repo and not effective_token:
@@ -262,14 +299,11 @@ class ChaosOrchestrator:
                 session.completed_at = datetime.utcnow()
                 await self.db.flush()
 
-            # Total skipped = validation_failed + needs_review (unresolved) + pr_skipped
             total_skipped = (
                 len(fix_result.get("skipped_fixes", []))
                 + prs_skipped_count
             )
 
-            # Emit "complete" status first so the stage bar updates,
-            # then "report_ready" which triggers the completion modal.
             await ws_manager.emit_status(
                 self.session_id, "complete",
                 f"Done. Risk score: {analysis.get('risk_score', 0)}/100 | "

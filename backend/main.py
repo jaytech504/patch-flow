@@ -57,10 +57,22 @@ async def websocket_session(ws: WebSocket, session_id: str):
         ws_manager.disconnect(ws, session_id)
 
 
+from sqlalchemy import text
+from backend.db.session import AsyncSessionLocal
+
 @app.get("/health")
 async def health():
+    db_status = "healthy"
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception as e:
+        logger.error(f"[Health] Database ping failed: {e}")
+        db_status = f"unhealthy: {e}"
+
     return {
-        "status": "ok",
-        "service": "chaos-agent",
+        "status": "ok" if db_status == "healthy" else "degraded",
+        "service": "patchflow-api",
+        "database": db_status,
         "github_integration": bool(settings.github_token),
     }
