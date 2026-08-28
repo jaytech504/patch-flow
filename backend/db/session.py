@@ -6,12 +6,25 @@ from backend.db.models import Base
 
 settings = get_settings()
 
-# Handles postgres:// and postgresql:// prefixes, converting to postgresql+asyncpg://
-_db_url = settings.database_url
-if _db_url.startswith("postgres://"):
-    _db_url = _db_url.replace("postgres://", "postgresql+asyncpg://", 1)
-elif _db_url.startswith("postgresql://") and not _db_url.startswith("postgresql+asyncpg://"):
-    _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+def _normalize_db_url(url: str) -> str:
+    """
+    Normalizes PostgreSQL connection strings for asyncpg:
+    1. Converts postgres:// and postgresql:// to postgresql+asyncpg://
+    2. Converts sslmode= (libpq style) to ssl= (asyncpg style)
+    """
+    if not url:
+        return url
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    
+    # asyncpg expects 'ssl=' instead of 'sslmode='
+    url = url.replace("?sslmode=", "?ssl=").replace("&sslmode=", "&ssl=")
+    return url
+
+
+_db_url = _normalize_db_url(settings.database_url)
 
 engine = create_async_engine(_db_url, echo=False, poolclass=NullPool)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -23,15 +36,18 @@ async def ensure_db_exists():
         return
     
     try:
+        clean_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
+        clean_url = clean_url.replace("?sslmode=", "?ssl=").replace("&sslmode=", "&ssl=")
+        
         # Extract base url and db name
-        base_url, db_name = db_url.rsplit('/', 1)
-        # Handle query params if any
+        base_url, db_name = clean_url.rsplit('/', 1)
         if '?' in db_name:
             db_name = db_name.split('?')[0]
             
+        if db_name in ("defaultdb", "postgres"):
+            return
+            
         postgres_url = f"{base_url}/postgres"
-        postgres_url = postgres_url.replace("postgresql+asyncpg://", "postgresql://")
-        
         conn = await asyncpg.connect(postgres_url)
         try:
             exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", db_name)
