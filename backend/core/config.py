@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
-    jwt_expire_hours: int = 24
+    jwt_expire_hours: int = 72
 
     # Incident pipeline thresholds (used by SDK incident pipeline)
     incident_min_events: int = 3       # occurrences before fix is triggered

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL, WS_BASE_URL } from "@/lib/api-config";
+import { authFetch } from "@/lib/auth-fetch";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -188,15 +189,11 @@ export default function SessionReportPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const token = localStorage.getItem("patchflow_token");
-        const headers: Record<string, string> = {};
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-
-        const idRes = await fetch(`${API_BASE_URL}/api/reports/session/${sessionId}`, { headers });
+        const idRes = await authFetch(`/api/reports/session/${sessionId}`);
         if (!idRes.ok) throw new Error("Report not found");
         const { report_id } = await idRes.json();
 
-        const repRes = await fetch(`${API_BASE_URL}/api/reports/${report_id}`, { headers });
+        const repRes = await authFetch(`/api/reports/${report_id}`);
         if (!repRes.ok) throw new Error("Failed to load report");
         const d = await repRes.json();
 
@@ -250,7 +247,7 @@ export default function SessionReportPage() {
         setSkippedFixes(d.skipped_fixes ?? []);
 
         // PRs + repo presence
-        const sRes = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}`, { headers });
+        const sRes = await authFetch(`/api/sessions/${sessionId}`);
         if (sRes.ok) {
           const sd = await sRes.json();
           setHasRepo(!!sd.github_repo);

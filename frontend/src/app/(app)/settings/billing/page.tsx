@@ -7,6 +7,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/api-config";
+import { authFetch } from "@/lib/auth-fetch";
 import {
   CreditCard,
   Zap,
@@ -67,12 +68,7 @@ export default function BillingSettingsPage() {
   const fetchSubscription = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("patchflow_token");
-      const res = await fetch(`${API_BASE_URL}/api/billing/subscription`, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
+      const res = await authFetch("/api/billing/subscription");
       if (res.ok) {
         const data = await res.json();
         setSubData(data);
@@ -87,13 +83,9 @@ export default function BillingSettingsPage() {
   const handleUpgrade = async (tier: "pro" | "team") => {
     try {
       setActionLoading(tier);
-      const token = localStorage.getItem("patchflow_token");
-      const res = await fetch(`${API_BASE_URL}/api/billing/checkout`, {
+      const res = await authFetch("/api/billing/checkout", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tier,
           billing_cycle: billingCycle,
@@ -120,12 +112,8 @@ export default function BillingSettingsPage() {
   const handleOpenPortal = async () => {
     try {
       setActionLoading("portal");
-      const token = localStorage.getItem("patchflow_token");
-      const res = await fetch(`${API_BASE_URL}/api/billing/portal`, {
+      const res = await authFetch("/api/billing/portal", {
         method: "POST",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
       });
 
       if (res.ok) {

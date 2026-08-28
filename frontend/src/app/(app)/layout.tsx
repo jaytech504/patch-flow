@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { isTokenValid } from "@/lib/auth-fetch";
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
@@ -32,11 +33,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem("patchflow_token");
     if (!token) { router.push("/login"); return; }
+
+    // Load cached user info immediately for fast render
     try {
       const stored = localStorage.getItem("patchflow_user");
       if (stored) setUser(JSON.parse(stored));
     } catch {}
     setAuthorized(true);
+
+    // Then validate the token against the backend in the background
+    isTokenValid().then((valid) => {
+      if (!valid) {
+        localStorage.removeItem("patchflow_token");
+        localStorage.removeItem("patchflow_user");
+        router.push("/login?expired=1");
+      }
+    });
   }, [router]);
 
   // Close mobile sidebar on route change

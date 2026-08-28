@@ -11,6 +11,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/api-config";
+import { authFetch } from "@/lib/auth-fetch";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -81,10 +82,7 @@ export default function IncidentsPage() {
   const fetchIncidents = async (silent = false) => {
     if (!silent) setIsRefreshing(true);
     try {
-      const token = localStorage.getItem("patchflow_token");
-      const headers: Record<string, string> = {};
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      const r = await fetch(`${API_BASE_URL}/api/incidents`, { headers });
+      const r = await authFetch("/api/incidents");
       if (r.ok) {
         const data = await r.json();
         const incoming: Incident[] = data.incidents ?? [];

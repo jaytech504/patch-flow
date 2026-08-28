@@ -10,6 +10,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/api-config";
+import { authFetch } from "@/lib/auth-fetch";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -374,15 +375,10 @@ export default function SitesPage() {
 
   const [form, setForm] = useState({ name: "", url: "", github_repo: "", framework: "" });
 
-  const authHeaders = (): Record<string, string> => {
-    const token = localStorage.getItem("patchflow_token");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
   const loadSites = async () => {
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/api/sites`, { headers: authHeaders() });
+      const r = await authFetch("/api/sites");
       if (r.ok) setSites((await r.json()).sites ?? []);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -391,7 +387,7 @@ export default function SitesPage() {
   const loadRepos = async () => {
     setReposLoading(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/api/auth/repos`, { headers: authHeaders() });
+      const r = await authFetch("/api/auth/repos");
       if (r.ok) {
         const d = await r.json();
         setRepos(Array.isArray(d.repos) ? d.repos : []);
@@ -421,9 +417,9 @@ export default function SitesPage() {
     setSaving(true); setError(null);
     try {
       const body = { name: form.name.trim(), url: form.url.trim() || null, github_repo: form.github_repo || null, framework: form.framework || null };
-      const url    = editSite ? `${API_BASE_URL}/api/sites/${editSite.id}` : `${API_BASE_URL}/api/sites`;
+      const path   = editSite ? `/api/sites/${editSite.id}` : `/api/sites`;
       const method = editSite ? "PATCH" : "POST";
-      const r = await fetch(url, { method, headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const r = await authFetch(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "Failed to save site.");
       const saved: Site = await r.json();
       setShowForm(false);
@@ -442,7 +438,7 @@ export default function SitesPage() {
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/sites/${id}`, { method: "DELETE", headers: authHeaders() });
+      const res = await authFetch(`/api/sites/${id}`, { method: "DELETE" });
       if (res.ok) {
         setSites(p => p.filter(s => s.id !== id));
       } else {

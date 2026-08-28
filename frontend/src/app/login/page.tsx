@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { API_BASE_URL } from "@/lib/api-config";
 
-export default function LoginPage() {
+function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const sessionExpired = searchParams.get("expired") === "1";
 
   const handleGitHubLogin = async () => {
     setLoading(true);
@@ -44,6 +47,15 @@ export default function LoginPage() {
         <p className="text-sm text-muted-foreground mt-2 mb-8">
           Log in with your GitHub account to continue
         </p>
+
+        {sessionExpired && (
+          <div className="w-full p-3 mb-6 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg text-left flex items-center gap-2">
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            Your session has expired. Please sign in again to continue.
+          </div>
+        )}
 
         {error && (
           <div className="w-full p-3 mb-6 text-xs text-destructive bg-destructive/10 rounded-lg text-left">
@@ -81,5 +93,17 @@ export default function LoginPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50/50">
+        <div className="h-8 w-8 rounded-full border-4 border-primary border-r-transparent animate-spin" />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

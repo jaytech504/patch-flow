@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/api-config";
+import { authFetch } from "@/lib/auth-fetch";
 import { buttonVariants } from "@/components/ui/button";
 
 interface Repo {
@@ -79,16 +80,9 @@ export default function NewSessionPage() {
   // Fetch repos on mount
   useEffect(() => {
     const fetchRepos = async () => {
-      const token = localStorage.getItem("patchflow_token");
-      if (!token) return;
-
       setReposLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/repos`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await authFetch("/api/auth/repos");
         if (response.ok) {
           const data = await response.json();
           if (data && Array.isArray(data.repos)) {
@@ -155,20 +149,14 @@ export default function NewSessionPage() {
     setIsSubmitting(true);
     setError(null);
 
-    const token = localStorage.getItem("patchflow_token");
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
     try {
       let response: Response;
       
       if (apiType === "openapi") {
         if (!openapiUrl) throw new Error("Please specify the OpenAPI spec URL.");
-        response = await fetch(`${API_BASE_URL}/api/discovery/preview/spec-url`, {
+        response = await authFetch("/api/discovery/preview/spec-url", {
           method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             spec_url: openapiUrl,
           }),
@@ -178,9 +166,8 @@ export default function NewSessionPage() {
         const formData = new FormData();
         formData.append("spec_file", specFile);
 
-        response = await fetch(`${API_BASE_URL}/api/discovery/preview/spec-file`, {
+        response = await authFetch("/api/discovery/preview/spec-file", {
           method: "POST",
-          headers,
           body: formData,
         });
       } else if (apiType === "postman") {
@@ -188,17 +175,16 @@ export default function NewSessionPage() {
         const formData = new FormData();
         formData.append("collection_file", collectionFile);
 
-        response = await fetch(`${API_BASE_URL}/api/discovery/preview/postman`, {
+        response = await authFetch("/api/discovery/preview/postman", {
           method: "POST",
-          headers,
           body: formData,
         });
       } else {
         // Manual
         if (manualEndpoints.length === 0) throw new Error("Please add at least one endpoint.");
-        response = await fetch(`${API_BASE_URL}/api/discovery/preview/manual`, {
+        response = await authFetch("/api/discovery/preview/manual", {
           method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             endpoints: manualEndpoints.map(ep => ({
               path: ep.path,
@@ -250,16 +236,10 @@ export default function NewSessionPage() {
     setIsSubmitting(true);
     setError(null);
 
-    const token = localStorage.getItem("patchflow_token");
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
     try {
-      const response = await fetch(`${API_BASE_URL}/api/sessions/start`, {
+      const response = await authFetch("/api/sessions/start", {
         method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           draft_id: previewData?.draft_id,
           target_url: appUrl,

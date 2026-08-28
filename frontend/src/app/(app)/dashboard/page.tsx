@@ -10,6 +10,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/api-config";
+import { authFetch } from "@/lib/auth-fetch";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,14 +94,12 @@ export default function DashboardPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const token = localStorage.getItem("patchflow_token");
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
     try {
       const [sessRes, sitesRes, incRes] = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/api/sessions`, { headers }),
-        fetch(`${API_BASE_URL}/api/sites`, { headers }),
-        fetch(`${API_BASE_URL}/api/incidents`, { headers }),
+        authFetch("/api/sessions"),
+        authFetch("/api/sites"),
+        authFetch("/api/incidents"),
       ]);
 
       if (sessRes.status === "fulfilled" && sessRes.value.ok) {
