@@ -73,7 +73,7 @@ class BaseAgent(ABC):
         self.client = AsyncOpenAI(
             api_key=settings.gemma_api_key,
             base_url=settings.gemma_base_url,
-            timeout=60.0,
+            timeout=180.0,
         )
         self._tools: Dict[str, Tool] = {}
         # Tunable per-agent budgets to control token usage.

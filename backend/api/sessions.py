@@ -260,10 +260,15 @@ async def get_session(
         ],
         "failures": [
             {
-                "id": f.id, "endpoint_id": f.endpoint_id,
-                "failure_mode": f.failure_mode, "result": f.result.value,
+                "id": f.id,
+                "endpoint_id": f.endpoint_id,
+                "endpoint": {e.id: e.path for e in endpoints}.get(f.endpoint_id, f.endpoint_id),
+                "endpoint_path": {e.id: e.path for e in endpoints}.get(f.endpoint_id, f.endpoint_id),
+                "failure_mode": f.failure_mode,
+                "result": f.result.value if hasattr(f.result, "value") else str(f.result),
                 "status_code": f.status_code_received,
-                "error_leaked": f.error_leaked, "fix_generated": f.fix_generated,
+                "error_leaked": f.error_leaked,
+                "fix_generated": f.fix_generated,
             }
             for f in failures
         ],

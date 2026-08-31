@@ -70,14 +70,6 @@ Return JSON:
         result = await self.proxy.inject_failure(
             failure_mode_id, endpoint_path, method, payload
         )
-        # Stream to frontend immediately so judges see it happening live
-        await ws_manager.emit_failure_result(self.session_id, {
-            "failure_mode": failure_mode_id,
-            "endpoint": endpoint_path,
-            "status_code": result.get("status_code"),
-            "observation": result.get("observation"),
-            "error_leaked": result.get("error_leaked", False),
-        })
         return result
 
     async def handle(self, endpoints: list[dict]) -> list[dict]:
@@ -110,7 +102,6 @@ Return JSON:
 
     async def _chaos_endpoint(self, endpoint: dict) -> list[dict]:
         """Select and inject relevant failures for one endpoint."""
-        # Ask Qwen which failures to use for this endpoint
         selection_result = await self.run(
             task=f"""Select failure modes for endpoint {endpoint['method']} {endpoint['path']}.
 Dependencies: {endpoint.get('dependencies', [])}
@@ -151,9 +142,10 @@ Choose the most relevant failure modes to inject.""",
                 else:
                     result_status = FailureStatus.DEGRADED
 
-                # Persist
+                # Persist to database
+                record_id = str(uuid.uuid4())
                 failure_record = FailureResult(
-                    id=str(uuid.uuid4()),
+                    id=record_id,
                     session_id=self.session_id,
                     endpoint_id=endpoint["id"],
                     failure_mode=failure_id,
@@ -168,8 +160,20 @@ Choose the most relevant failure modes to inject.""",
                 self.db.add(failure_record)
                 await self.db.flush()
 
+                # Stream to frontend with persistent ID and status
+                await ws_manager.emit_failure_result(self.session_id, {
+                    "id": record_id,
+                    "failure_mode": failure_id,
+                    "endpoint": endpoint["path"],
+                    "endpoint_id": endpoint["id"],
+                    "result": result_status.value,
+                    "status_code": raw.get("status_code"),
+                    "observation": observation,
+                    "error_leaked": raw.get("error_leaked", False),
+                })
+
                 results.append({
-                    "id": failure_record.id,
+                    "id": record_id,
                     "endpoint_id": endpoint["id"],
                     "endpoint_path": endpoint["path"],
                     "failure_mode": failure_id,

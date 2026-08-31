@@ -105,17 +105,17 @@ class ChaosOrchestrator:
         import asyncio
 
         try:
-            # ── Stage 1: Chaos Injection (60s timeout) ────────────────────────
+            # ── Stage 1: Chaos Injection (180s timeout) ───────────────────────
             await ws_manager.emit_status(
                 self.session_id, "injecting",
                 f"Injecting failures into {len(endpoints)} endpoints..."
             )
             chaos = ChaosAgent(self.db, self.session_id, target_url)
             try:
-                failure_results = await asyncio.wait_for(chaos.handle(endpoints), timeout=60.0)
+                failure_results = await asyncio.wait_for(chaos.handle(endpoints), timeout=180.0)
             except asyncio.TimeoutError:
-                logger.error(f"[Orchestrator] Chaos injection timed out after 60s for session {self.session_id}")
-                raise TimeoutError("Chaos injection timed out after 60s. Target site may be slow or unreachable.")
+                logger.error(f"[Orchestrator] Chaos injection timed out after 180s for session {self.session_id}")
+                raise TimeoutError("Chaos injection timed out after 180s.")
             finally:
                 await chaos.close()
 
@@ -130,19 +130,19 @@ class ChaosOrchestrator:
                 session.unhandled_count = len(unhandled)
                 await self.db.flush()
 
-            # ── Stage 2: Analysis (45s timeout) ───────────────────────────────
+            # ── Stage 2: Analysis (90s timeout) ───────────────────────────────
             await ws_manager.emit_status(
                 self.session_id, "analysing",
                 "Analysing failure patterns..."
             )
             analyst = AnalystAgent(self.db, self.session_id)
             try:
-                analysis = await asyncio.wait_for(analyst.handle(failure_results), timeout=45.0)
+                analysis = await asyncio.wait_for(analyst.handle(failure_results), timeout=90.0)
             except asyncio.TimeoutError:
-                logger.error(f"[Orchestrator] Analysis stage timed out after 45s for session {self.session_id}")
-                raise TimeoutError("Failure analysis timed out after 45s.")
+                logger.error(f"[Orchestrator] Analysis stage timed out after 90s for session {self.session_id}")
+                raise TimeoutError("Failure analysis timed out after 90s.")
 
-            # ── Stage 3: Fix Generation (90s timeout) ─────────────────────────
+            # ── Stage 3: Fix Generation (300s timeout) ─────────────────────────
             await ws_manager.emit_status(
                 self.session_id, "fixing",
                 "Generating error handling code..."
@@ -156,13 +156,13 @@ class ChaosOrchestrator:
             try:
                 fix_result = await asyncio.wait_for(
                     fixer.handle(analysis, failure_results),
-                    timeout=90.0
+                    timeout=300.0
                 )
             except asyncio.TimeoutError:
-                logger.error(f"[Orchestrator] Fix generation timed out after 90s for session {self.session_id}")
-                raise TimeoutError("Fix generation timed out after 90s.")
+                logger.error(f"[Orchestrator] Fix generation timed out after 300s for session {self.session_id}")
+                fix_result = {"fixes": [], "fixes_count": 0, "skipped_fixes": []}
 
-            # ── Stage 3.5: Fix Review (60s timeout per round) ──────────────────
+            # ── Stage 3.5: Fix Review (120s timeout per round) ──────────────────
             if github_repo and effective_token:
                 await ws_manager.emit_status(
                     self.session_id, "reviewing",
@@ -179,7 +179,7 @@ class ChaosOrchestrator:
                     try:
                         fix_result = await asyncio.wait_for(
                             reviewer.handle(fix_result),
-                            timeout=60.0
+                            timeout=120.0
                         )
                     except asyncio.TimeoutError:
                         logger.warning(
@@ -212,7 +212,7 @@ class ChaosOrchestrator:
                     try:
                         revised_fixes = await asyncio.wait_for(
                             revised_fixer.revise_fixes(needs_revision),
-                            timeout=60.0
+                            timeout=120.0
                         )
                     except asyncio.TimeoutError:
                         logger.warning("[Orchestrator] Fix revision timed out — keeping original fixes.")
@@ -252,7 +252,7 @@ class ChaosOrchestrator:
                     f"{review_stats.get('revision_needed', 0)} revised"
                 )
 
-            # ── Stage 4: GitHub PRs (45s timeout) ─────────────────────────────
+            # ── Stage 4: GitHub PRs (90s timeout) ─────────────────────────────
             prs_opened = []
             prs_skipped_count = 0
             if github_repo and effective_token:
@@ -271,10 +271,10 @@ class ChaosOrchestrator:
                             analysis=analysis,
                             report_id=fix_result.get("report_id"),
                         ),
-                        timeout=45.0
+                        timeout=90.0
                     )
                 except asyncio.TimeoutError:
-                    logger.error(f"[Orchestrator] GitHub PR creation timed out after 45s for session {self.session_id}")
+                    logger.error(f"[Orchestrator] GitHub PR creation timed out after 90s for session {self.session_id}")
                     await ws_manager.emit_status(
                         self.session_id, "github_skipped",
                         "GitHub PR creation timed out. Fix report is still available."

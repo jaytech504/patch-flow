@@ -114,16 +114,28 @@ export default function LiveSessionPage() {
           })));
         }
 
-        // Load past failures
-        if (Array.isArray(data.failures)) {
-          setPills(data.failures.map((f: any) => ({
+        // Load past failures non-destructively
+        if (Array.isArray(data.failures) && data.failures.length > 0) {
+          const loadedPills: TestPill[] = data.failures.map((f: any) => ({
             id: f.id,
-            endpoint: f.endpoint_id,
+            endpoint: f.endpoint_path || f.endpoint || f.endpoint_id || "Unknown",
             failureMode: f.failure_mode,
             status: f.result,
             statusCode: f.status_code,
             errorLeaked: f.error_leaked,
-          })));
+          }));
+          setPills((prev) => {
+            const map = new Map<string, TestPill>();
+            for (const p of prev) {
+              const k = p.id || `${p.endpoint}:${p.failureMode}`;
+              map.set(k, p);
+            }
+            for (const p of loadedPills) {
+              const k = p.id || `${p.endpoint}:${p.failureMode}`;
+              map.set(k, p);
+            }
+            return Array.from(map.values());
+          });
         }
 
         // Set active stage status
@@ -206,17 +218,19 @@ export default function LiveSessionPage() {
                 }
             }
 
+            const endpointStr = payload.endpoint || payload.endpoint_path || payload.endpoint_id || "Unknown";
             const newPill: TestPill = {
               id: payload.id || Math.random().toString(36).substring(7),
-              endpoint: payload.endpoint_id || payload.endpoint || "Unknown",
+              endpoint: endpointStr,
               failureMode: payload.failure_mode,
               status: derivedStatus,
               statusCode: payload.status_code,
               errorLeaked: payload.error_leaked,
             };
             setPills((prev) => {
-              // Update if exists, otherwise append
-              const idx = prev.findIndex((p) => p.id === newPill.id);
+              const idx = prev.findIndex(
+                (p) => p.id === newPill.id || (p.endpoint === newPill.endpoint && p.failureMode === newPill.failureMode)
+              );
               if (idx > -1) {
                 const updated = [...prev];
                 updated[idx] = newPill;
@@ -330,7 +344,7 @@ export default function LiveSessionPage() {
     setActiveStage(0);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionUrlId}/retry`, {
+      const response = await authFetch(`/api/sessions/${sessionUrlId}/retry`, {
         method: "POST",
       });
       if (response.ok) {
