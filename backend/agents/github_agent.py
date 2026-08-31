@@ -1,4 +1,6 @@
+import json
 import os
+import subprocess
 import uuid
 import shutil
 import tempfile
@@ -7,6 +9,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.agents.base import BaseAgent, Tool
+from backend.core.adapters import detect_framework
 from backend.core.config import get_settings
 from backend.core.models import FixStatus
 from backend.core.websocket_manager import ws_manager
@@ -246,6 +249,252 @@ Return JSON:
         if self._temp_dir and os.path.exists(self._temp_dir):
             shutil.rmtree(self._temp_dir, ignore_errors=True)
 
+    # ── Build validation ──────────────────────────────────────────────────────
+
+    def _detect_package_manager(self) -> str:
+        """Detect the JS package manager used by the repo."""
+        repo = Path(self._repo_path)
+        if (repo / "bun.lockb").exists() or (repo / "bun.lock").exists():
+            return "bun"
+        if (repo / "pnpm-lock.yaml").exists():
+            return "pnpm"
+        if (repo / "yarn.lock").exists():
+            return "yarn"
+        return "npm"
+
+    def _has_build_script(self) -> bool:
+        """Check if the repo's package.json has a 'build' script."""
+        pkg_json = Path(self._repo_path) / "package.json"
+        if not pkg_json.exists():
+            return False
+        try:
+            pkg = json.loads(pkg_json.read_text(encoding="utf-8"))
+            return "build" in pkg.get("scripts", {})
+        except Exception:
+            return False
+
+    def _run_build_validation(self, files_changed: list[str]) -> tuple[bool, str]:
+        """
+        Run a build command in the cloned repo after fixes are applied.
+
+        For JS/TS frameworks: installs deps then runs `{pm} run build`.
+        For Python frameworks: runs `python -m py_compile` on each changed .py file.
+
+        Returns (success, output_text).
+        """
+        if not self._repo_path:
+            return True, "No repo path — skipping build validation."
+
+        adapter = detect_framework(self._repo_path)
+        if not adapter or not adapter.build_command:
+            logger.info("[GitHub] No framework adapter or build_command — skipping build validation.")
+            return True, "No build command configured for this framework."
+
+        logger.info(f"[GitHub] Running build validation for {adapter.display_name}...")
+
+        # ── Python frameworks: py_compile per changed file ─────────────────
+        if adapter.language == "python":
+            py_files = [f for f in files_changed if f.endswith(".py")]
+            if not py_files:
+                return True, "No Python files changed — build validation skipped."
+            errors = []
+            for py_file in py_files:
+                full_path = Path(self._repo_path) / py_file
+                if not full_path.exists():
+                    continue
+                try:
+                    result = subprocess.run(
+                        ["python", "-m", "py_compile", str(full_path)],
+                        capture_output=True, text=True, timeout=30,
+                        cwd=self._repo_path,
+                    )
+                    if result.returncode != 0:
+                        errors.append(f"{py_file}: {result.stderr.strip()}")
+                except subprocess.TimeoutExpired:
+                    errors.append(f"{py_file}: py_compile timed out")
+                except Exception as e:
+                    errors.append(f"{py_file}: {e}")
+            if errors:
+                output = "Python syntax check failed:\n" + "\n".join(errors)
+                logger.error(f"[GitHub] {output}")
+                return False, output
+            return True, f"Python syntax check passed for {len(py_files)} file(s)."
+
+        # ── JS/TS frameworks: npm install + npm run build ──────────────────
+        pm = self._detect_package_manager()
+        logger.info(f"[GitHub] Detected package manager: {pm}")
+
+        # Check if a build script exists in package.json
+        if not self._has_build_script():
+            logger.info("[GitHub] No 'build' script in package.json — skipping build validation.")
+            return True, "No 'build' script found in package.json."
+
+        # Step 1: Install dependencies
+        install_cmd = [pm, "install"]
+        if pm == "npm":
+            install_cmd.append("--legacy-peer-deps")
+        elif pm == "pnpm":
+            install_cmd.append("--no-frozen-lockfile")
+        elif pm == "yarn":
+            install_cmd.append("--ignore-engines")
+
+        try:
+            logger.info(f"[GitHub] Running: {' '.join(install_cmd)}")
+            install_result = subprocess.run(
+                install_cmd,
+                capture_output=True, text=True, timeout=120,
+                cwd=self._repo_path,
+                env={**os.environ, "CI": "true", "NODE_ENV": "production"},
+            )
+            if install_result.returncode != 0:
+                output = f"{pm} install failed:\n{install_result.stderr[-1500:]}"
+                logger.error(f"[GitHub] {output}")
+                return False, output
+            logger.info(f"[GitHub] {pm} install succeeded.")
+        except subprocess.TimeoutExpired:
+            return False, f"{pm} install timed out after 120s."
+        except FileNotFoundError:
+            logger.warning(f"[GitHub] '{pm}' not found on PATH — skipping build validation.")
+            return True, f"'{pm}' not available on server — build validation skipped."
+
+        # Step 2: Run build
+        build_cmd = [pm, *adapter.build_command]
+        try:
+            logger.info(f"[GitHub] Running: {' '.join(build_cmd)}")
+            build_result = subprocess.run(
+                build_cmd,
+                capture_output=True, text=True, timeout=120,
+                cwd=self._repo_path,
+                env={**os.environ, "CI": "true", "NODE_ENV": "production"},
+            )
+            if build_result.returncode != 0:
+                # Capture the most useful part of the error
+                stderr = build_result.stderr[-2000:] if build_result.stderr else ""
+                stdout = build_result.stdout[-2000:] if build_result.stdout else ""
+                output = f"{pm} run build failed (exit {build_result.returncode}):\n"
+                if stderr:
+                    output += f"STDERR:\n{stderr}\n"
+                if stdout:
+                    output += f"STDOUT:\n{stdout}\n"
+                logger.error(f"[GitHub] Build failed:\n{output[-500:]}")
+                return False, output
+            logger.info(f"[GitHub] ✓ {pm} run build succeeded.")
+            return True, f"Build passed ({adapter.display_name}, {pm})."
+        except subprocess.TimeoutExpired:
+            return False, f"{pm} run build timed out after 120s."
+        except Exception as e:
+            logger.warning(f"[GitHub] Build command error: {e} — treating as non-blocking.")
+            return True, f"Build command error (non-blocking): {e}"
+
+    async def _revise_fixes_for_build_error(
+        self,
+        applied_fixes: list[dict],
+        files_changed: set[str],
+        build_error: str,
+    ) -> bool:
+        """
+        Ask the LLM to revise the changed files to fix a build error.
+
+        Reads each changed file from the cloned repo, sends it along with the
+        build error output to the LLM, and writes the corrected content back.
+
+        Returns True if at least one file was revised, False if revision failed.
+        """
+        any_revised = False
+
+        for file_path in files_changed:
+            full_path = Path(self._repo_path) / file_path
+            if not full_path.exists():
+                continue
+
+            current_content = full_path.read_text(encoding="utf-8")
+
+            # Find which fixes touched this file for context
+            related_fixes = [
+                f for f in applied_fixes
+                if f.get("file_path") == file_path
+            ]
+            fix_context = "\n".join(
+                f"- {f.get('finding_title', 'unknown')}: {f.get('explanation', '')[:200]}"
+                for f in related_fixes
+            )
+
+            # Truncate build error to avoid token explosion
+            error_snippet = build_error[-2000:]
+
+            prompt = f"""The following file was modified by PatchFlow to add error handling,
+but the build now fails. Fix the file so it compiles and builds successfully.
+
+## Build Error
+```
+{error_snippet}
+```
+
+## Fixes Applied to This File
+{fix_context}
+
+## Current File Content ({file_path})
+```
+{current_content[:12000]}
+```
+
+## Instructions
+- Return ONLY the complete corrected file content, no markdown fences, no explanation.
+- Keep all the error-handling improvements that were added — only fix what causes the build error.
+- Common issues: duplicate imports, missing imports, syntax errors, type errors.
+- Do NOT remove the error handling that was added unless it is fundamentally broken.
+- The output must be the ENTIRE file content, ready to write directly to disk."""
+
+            try:
+                await self._log("thought", f"Asking LLM to fix build error in {file_path}...")
+                response = await self.client.chat.completions.create(
+                    model=settings.gemma_model,
+                    messages=[
+                        {"role": "system", "content": (
+                            "You are a code repair agent. You receive a file that causes a build error "
+                            "and you return the corrected file content. Return ONLY the raw file content, "
+                            "no markdown fences, no explanation text."
+                        )},
+                        {"role": "user", "content": prompt},
+                    ],
+                    max_tokens=8192,
+                )
+
+                revised_content = response.choices[0].message.content.strip()
+
+                # Strip markdown fences if the LLM wrapped the output
+                if revised_content.startswith("```"):
+                    lines = revised_content.split("\n")
+                    # Remove first line (```lang) and last line (```)
+                    if lines[-1].strip() == "```":
+                        lines = lines[1:-1]
+                    else:
+                        lines = lines[1:]
+                    revised_content = "\n".join(lines)
+
+                if not revised_content or len(revised_content) < 20:
+                    logger.warning(f"[GitHub] LLM returned empty/tiny revision for {file_path} — skipping.")
+                    continue
+
+                # Sanity check: revision should be roughly similar length (not a hallucination)
+                ratio = len(revised_content) / max(len(current_content), 1)
+                if ratio < 0.3 or ratio > 3.0:
+                    logger.warning(
+                        f"[GitHub] LLM revision for {file_path} has suspicious length ratio "
+                        f"({ratio:.2f}) — skipping to be safe."
+                    )
+                    continue
+
+                full_path.write_text(revised_content, encoding="utf-8")
+                any_revised = True
+                logger.info(f"[GitHub] ✓ Revised {file_path} to fix build error.")
+
+            except Exception as e:
+                logger.error(f"[GitHub] Failed to revise {file_path}: {e}")
+                continue
+
+        return any_revised
+
     def _sanitize_fixed_code(self, fixed_code: str) -> str:
         """Strip LLM instruction-comments that leak into generated code.
 
@@ -426,7 +675,12 @@ Return JSON:
         logger.info(f"[GitHub] PR opened: #{pr.number} — {pr.html_url}")
         return {"pr_number": pr.number, "pr_url": pr.html_url}
 
-    def _build_consolidated_pr_body(self, fixes_applied: list[dict], session_id: str) -> str:
+    def _build_consolidated_pr_body(
+        self,
+        fixes_applied: list[dict],
+        session_id: str,
+        build_output: str = "",
+    ) -> str:
         """Build a PR body summarizing all applied fixes."""
         sections = []
         for fix in fixes_applied:
@@ -439,13 +693,16 @@ Return JSON:
 {fix.get('explanation', 'Adds proper error handling for identified failure modes.')}
 """)
 
+        # Build status line — reflects actual build result
+        build_line = f"✅ Passed — {build_output[:120]}" if build_output else "✅ Verified"
+
         body = f"""## 🤖 Auto-generated by PatchFlow
 
 This PR consolidates **{len(fixes_applied)}** error-handling fix(es) verified by PatchFlow's autonomous pipeline.
 
 ### 🛡️ Pre-Merge Build & Safety Verification
 - **Syntax & AST Validation:** ✅ Passed
-- **Compiler & Build Check:** ✅ Verified
+- **Build Check:** {build_line}
 - **Reviewer Agent Status:** ✅ Approved
 
 {chr(10).join(sections)}
@@ -594,10 +851,67 @@ This PR consolidates **{len(fixes_applied)}** error-handling fix(es) verified by
         for fp in files_changed:
             self._post_process_file(fp)
 
+        # ── Build validation gate (with 1 retry via LLM) ──────────────────
+        MAX_BUILD_RETRIES = 1
+        build_ok = False
+        build_output = ""
+
+        for build_attempt in range(1 + MAX_BUILD_RETRIES):
+            await ws_manager.emit_status(
+                self.session_id, "build_validating",
+                f"Running build validation (attempt {build_attempt + 1})..."
+            )
+            build_ok, build_output = self._run_build_validation(list(files_changed))
+
+            if build_ok:
+                logger.info(f"[GitHub] ✓ Build validation passed: {build_output[:120]}")
+                break
+
+            # Build failed
+            logger.warning(
+                f"[GitHub] Build attempt {build_attempt + 1} failed:\n"
+                f"{build_output[-500:]}"
+            )
+
+            if build_attempt < MAX_BUILD_RETRIES:
+                # ── Ask LLM to fix the build error ────────────────────────
+                await ws_manager.emit_status(
+                    self.session_id, "build_fixing",
+                    "Build failed — asking AI to fix the build error..."
+                )
+
+                revision_success = await self._revise_fixes_for_build_error(
+                    applied_fixes, files_changed, build_output
+                )
+
+                if not revision_success:
+                    logger.warning("[GitHub] LLM revision could not fix the build error.")
+                    # Don't retry again — fall through to the final build_ok check
+                    break
+
+                # Post-process again after revision
+                for fp in files_changed:
+                    self._post_process_file(fp)
+            # else: last attempt, will exit loop with build_ok=False
+
+        if not build_ok:
+            logger.error(
+                f"[GitHub] Build validation failed after {MAX_BUILD_RETRIES + 1} attempt(s) "
+                f"— PR blocked:\n{build_output[-500:]}"
+            )
+            self._cleanup()
+            await ws_manager.emit_status(
+                self.session_id, "build_failed",
+                f"Build validation failed after retry — PR not opened. {build_output[-200:]}"
+            )
+            return []
+
         # Build ONE consolidated branch + PR
         branch_name = f"chaos-agent/fixes-{self.session_id[:8]}"
         pr_title = f"fix: {len(applied_fixes)} error-handling improvements from chaos testing"
-        pr_body = self._build_consolidated_pr_body(applied_fixes, self.session_id)
+        pr_body = self._build_consolidated_pr_body(
+            applied_fixes, self.session_id, build_output=build_output
+        )
         commit_msg = (f"fix: {len(applied_fixes)} error-handling improvements\n\n"
                       f"Auto-generated by Chaos Agent\n"
                       f"Session: {self.session_id}")

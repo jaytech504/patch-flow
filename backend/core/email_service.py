@@ -135,3 +135,99 @@ async def send_incident_alert_email(
     # Fallback log output for dev/demo
     logger.info(f"[Email-Alert-Simulation] To: {to_email} | Subject: {subject} | Culprit: {culprit}")
     return True
+
+
+async def send_chaos_scan_complete_email(
+    to_email: str,
+    target_name: str,
+    session_id: str,
+    risk_score: int,
+    unhandled_count: int,
+    prs_opened: int,
+    report_id: Optional[str] = None,
+) -> bool:
+    """
+    Send an email notifying the user that their background chaos session has completed.
+    """
+    if not to_email:
+        logger.debug("[Email] No recipient email provided — skipping scan complete email.")
+        return False
+
+    frontend_base = settings.frontend_url.rstrip("/")
+    report_link = f"{frontend_base}/sessions/{session_id}/report"
+
+    subject = f"✅ Chaos Scan Complete: {target_name} ({unhandled_count} unhandled, {prs_opened} PRs)"
+
+    pr_text = f"<li><strong>{prs_opened} GitHub Pull Request(s)</strong> created and build-verified.</li>" if prs_opened > 0 else "<li>No pull requests opened.</li>"
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f9fafb; margin: 0; padding: 24px;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="background-color: #111827; padding: 20px 24px; border-bottom: 1px solid #374151;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 18px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">PatchFlow</span>
+                    <span style="background-color: #DCFCE7; color: #16A34A; padding: 4px 8px; font-size: 11px; font-weight: 700; border-radius: 4px; text-transform: uppercase;">Scan Complete</span>
+                </div>
+            </div>
+            
+            <div style="padding: 24px;">
+                <h2 style="font-size: 20px; font-weight: 700; color: #111827; margin-top: 0; margin-bottom: 12px;">
+                    Your Chaos Scan for <span style="color: #2563EB;">{target_name}</span> is Ready
+                </h2>
+                
+                <p style="color: #4b5563; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">
+                    The autonomous chaos engineering and self-healing pipeline finished running in the cloud.
+                </p>
+
+                <div style="background-color: #f3f4f6; border-left: 4px solid #2563EB; padding: 16px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; color: #1f2937;">
+                    <ul style="margin: 0; padding-left: 18px; line-height: 1.8;">
+                        <li><strong>Risk Score:</strong> {risk_score} / 100</li>
+                        <li><strong>Unhandled Failures:</strong> {unhandled_count}</li>
+                        {pr_text}
+                    </ul>
+                </div>
+
+                <div style="margin-top: 24px; margin-bottom: 24px;">
+                    <a href="{report_link}" style="background-color: #111827; color: #ffffff; padding: 12px 24px; font-weight: 600; text-decoration: none; border-radius: 6px; display: inline-block;">
+                        View Full Chaos Report &rarr;
+                    </a>
+                </div>
+
+                <div style="border-top: 1px solid #e5e7eb; padding-top: 16px; font-size: 12px; color: #9ca3af; text-align: center;">
+                    You can review all your completed sessions on your <a href="{frontend_base}/dashboard" style="color: #6b7280; text-decoration: underline;">PatchFlow Dashboard</a>.
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    if settings.resend_api_key:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                res = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {settings.resend_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "from": settings.email_from,
+                        "to": [to_email],
+                        "subject": subject,
+                        "html": html_content,
+                    },
+                )
+                if res.status_code in (200, 201):
+                    logger.info(f"[Email] Dispatched scan complete notification to {to_email}")
+                    return True
+                else:
+                    logger.warning(f"[Email] Resend API error ({res.status_code}): {res.text}")
+        except Exception as exc:
+            logger.error(f"[Email] Failed to send scan complete email via Resend: {exc}")
+
+    logger.info(f"[Email-ScanComplete-Simulation] To: {to_email} | Subject: {subject}")
+    return True

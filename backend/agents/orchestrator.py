@@ -271,13 +271,13 @@ class ChaosOrchestrator:
                             analysis=analysis,
                             report_id=fix_result.get("report_id"),
                         ),
-                        timeout=90.0
+                        timeout=240.0
                     )
                 except asyncio.TimeoutError:
-                    logger.error(f"[Orchestrator] GitHub PR creation timed out after 90s for session {self.session_id}")
+                    logger.error(f"[Orchestrator] GitHub PR creation timed out after 240s for session {self.session_id}")
                     await ws_manager.emit_status(
                         self.session_id, "github_skipped",
-                        "GitHub PR creation timed out. Fix report is still available."
+                        "GitHub PR creation timed out (build validation may have been slow). Fix report is still available."
                     )
                     prs_opened = []
 
@@ -298,6 +298,25 @@ class ChaosOrchestrator:
                 from datetime import datetime
                 session.completed_at = datetime.utcnow()
                 await self.db.flush()
+
+                # Dispatch completion notification email if user has email configured
+                if session.user_id:
+                    try:
+                        from backend.db.models import User
+                        from backend.core.email_service import send_chaos_scan_complete_email
+                        user = await self.db.get(User, session.user_id)
+                        if user and user.email and getattr(user, "email_alerts_enabled", True):
+                            await send_chaos_scan_complete_email(
+                                to_email=user.email,
+                                target_name=session.target_name or "API Target",
+                                session_id=self.session_id,
+                                risk_score=analysis.get("risk_score", 0),
+                                unhandled_count=len(unhandled),
+                                prs_opened=len(prs_opened),
+                                report_id=fix_result.get("report_id"),
+                            )
+                    except Exception as email_err:
+                        logger.warning(f"[Orchestrator] Could not dispatch scan complete email: {email_err}")
 
             total_skipped = (
                 len(fix_result.get("skipped_fixes", []))

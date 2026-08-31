@@ -64,6 +64,13 @@ class FrameworkAdapter:
     # Each entry: (label, [command, args...])
     validation_commands: list[tuple[str, list[str]]] = field(default_factory=list)
 
+    # --- Build command --------------------------------------------------------
+    # The build command to run before pushing a PR.
+    # For JS/TS: ["run", "build"] — the package manager is prefixed at runtime.
+    # For Python: ["python", "-m", "py_compile"] — invoked per changed file.
+    # None means no build validation is available for this framework.
+    build_command: list[str] | None = None
+
 
 # ── Pre-check helpers (framework-specific) ────────────────────────────────────
 
@@ -317,6 +324,7 @@ _reg(FrameworkAdapter(
     validation_commands=[
         ("Python syntax", ["python", "-c", "import ast, sys; ast.parse(open(sys.argv[1]).read())"]),
     ],
+    build_command=["python", "-m", "py_compile"],
 ))
 
 _reg(FrameworkAdapter(
@@ -346,6 +354,7 @@ _reg(FrameworkAdapter(
     validation_commands=[
         ("Python syntax", ["python", "-c", "import ast, sys; ast.parse(open(sys.argv[1]).read())"]),
     ],
+    build_command=["python", "-m", "py_compile"],
 ))
 
 _reg(FrameworkAdapter(
@@ -386,6 +395,7 @@ _reg(FrameworkAdapter(
     validation_commands=[
         ("TypeScript", ["npx", "tsc", "--noEmit"]),
     ],
+    build_command=["run", "build"],
 ))
 
 _reg(FrameworkAdapter(
@@ -419,6 +429,7 @@ _reg(FrameworkAdapter(
     validation_commands=[
         ("TypeScript", ["npx", "tsc", "--noEmit"]),
     ],
+    build_command=["run", "build"],
 ))
 
 _reg(FrameworkAdapter(
@@ -450,6 +461,7 @@ _reg(FrameworkAdapter(
     validation_commands=[
         ("TypeScript", ["npx", "tsc", "--noEmit"]),
     ],
+    build_command=["run", "build"],
 ))
 
 _reg(FrameworkAdapter(
@@ -481,6 +493,7 @@ _reg(FrameworkAdapter(
     validation_commands=[
         ("TypeScript", ["npx", "tsc", "--noEmit"]),
     ],
+    build_command=["run", "build"],
 ))
 
 

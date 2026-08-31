@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, ArrowRight, Terminal, Layers, RefreshCw, CheckCircle2, X, Sparkles, Clock, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowRight, Terminal, Layers, RefreshCw, CheckCircle2, X, Sparkles, Clock, ArrowLeft, Cloud, Bell } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -52,38 +52,43 @@ export default function LiveSessionPage() {
   const [runFailed, setRunFailed] = useState(false);
   const [rerunning, setRerunning] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
-  const [showLongRunHint, setShowLongRunHint] = useState(false);
+  const [showBackgroundNotice, setShowBackgroundNotice] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
   const prevRunFinished = useRef(false);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Request browser notification permission once on start
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  // Show completion modal when run transitions from in-progress to finished
+  // Show completion modal and fire browser notification when run transitions from in-progress to finished
   useEffect(() => {
     if (runFinished && !prevRunFinished.current && !runFailed) {
       setShowCompletionModal(true);
+
+      // Trigger desktop browser notification if permitted
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        try {
+          new Notification("PatchFlow Chaos Scan Complete! 🎉", {
+            body: "Your autonomous chaos tests, compiler builds, and PR generation are complete. Click to view full report.",
+            icon: "/favicon.ico",
+          });
+        } catch {
+          // ignore notification errors in unsupported webview contexts
+        }
+      }
     }
     prevRunFinished.current = runFinished;
   }, [runFinished, runFailed]);
-
-  // Show a "you can leave" hint after 30 seconds of running
-  useEffect(() => {
-    if (runFinished || loading) return;
-    const timer = setTimeout(() => {
-      if (!runFinished) setShowLongRunHint(true);
-    }, 30_000);
-    return () => clearTimeout(timer);
-  }, [loading, runFinished]);
-
-  // Hide the hint when the run finishes
-  useEffect(() => {
-    if (runFinished) setShowLongRunHint(false);
-  }, [runFinished]);
 
   // Map backend status to stage index
   const getStageIndex = (status: string): number => {
@@ -494,27 +499,32 @@ export default function LiveSessionPage() {
         ) : null}
       </div>
 
-      {/* Long-running session hint */}
-      {showLongRunHint && !runFinished && !runFailed && (
-        <div className="flex items-center justify-between gap-4 px-5 py-3.5 bg-amber-50 border border-amber-200 rounded-xl animate-fade-in">
-          <div className="flex items-center gap-3">
-            <Clock className="h-4.5 w-4.5 text-amber-600 shrink-0" />
-            <p className="text-sm text-amber-800">
-              <span className="font-semibold">This scan is still running.</span>{" "}
-              You can safely return to the dashboard — we&apos;ll keep processing in the background and your results will be ready when you come back.
-            </p>
+      {/* Background Cloud Execution Notice */}
+      {showBackgroundNotice && !runFinished && !runFailed && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-5 py-4 bg-sky-50/80 border border-sky-200/80 rounded-2xl shadow-sm animate-fade-in">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="h-8 w-8 rounded-xl bg-sky-100 border border-sky-200 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+              <Cloud className="h-4.5 w-4.5 text-sky-600 animate-pulse" />
+            </div>
+            <div>
+              <p className="text-sm text-sky-950 font-medium leading-relaxed">
+                <span className="font-bold text-sky-900">Background Cloud Execution:</span>{" "}
+                This chaos test and PR generation pipeline runs autonomously on our servers. You can safely leave this page, close your browser, or head to your dashboard — the run will continue uninterrupted and your results will be waiting for you.
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
             <Link
               href="/dashboard"
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-amber-800 border-amber-300 bg-white hover:bg-amber-100 gap-1.5")}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-sky-900 border-sky-300 bg-white hover:bg-sky-100 gap-1.5 font-medium shadow-xs")}
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Dashboard
             </Link>
             <button
-              onClick={() => setShowLongRunHint(false)}
-              className="text-amber-400 hover:text-amber-600 transition-colors p-1"
+              onClick={() => setShowBackgroundNotice(false)}
+              className="text-sky-400 hover:text-sky-700 transition-colors p-1.5 rounded-lg hover:bg-sky-100"
+              title="Dismiss banner"
             >
               <X className="h-4 w-4" />
             </button>
