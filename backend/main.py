@@ -61,6 +61,7 @@ from sqlalchemy import text
 from backend.db.session import AsyncSessionLocal
 
 @app.get("/health")
+@app.get("/api/health")
 async def health():
     db_status = "healthy"
     try:
