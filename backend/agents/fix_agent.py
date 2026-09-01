@@ -83,6 +83,8 @@ Return JSON:
         self.language = "python"
         self.detected_framework = framework
         self._adapter: FrameworkAdapter | None = get_adapter(framework)
+        self.fixes: list[dict] = []
+        self.global_fixes: list[dict] = []
 
     @staticmethod
     def _normalise_fix_candidate(response: dict) -> dict:
@@ -151,67 +153,89 @@ Return JSON:
             except Exception as e:
                 logger.error(f"[Fix] Failed to clone repo {self.repo_url}: {e}")
 
+        self.fixes = []
+        self.global_fixes = []
         fixes = []
         global_fixes = []
 
         if cloned_successfully:
-            # Process each critical/high finding — split by individual endpoint
+            # Group actionable findings by endpoint so each endpoint gets ONE comprehensive fix
+            # covering all its detected failure modes without duplicate sequential LLM calls.
+            endpoint_to_findings: dict[str, list[dict]] = {}
+            unbound_findings: list[dict] = []
+
             for finding in actionable_findings:
                 affected_endpoints = finding.get("affected_endpoints", [])
                 if not affected_endpoints:
-                    # No specific endpoints — generate a single vacuum fix
-                    fallback_fix = await self._generate_vacuum_fix(finding)
-                    if fallback_fix:
-                        fixes.extend(fallback_fix)
-                    continue
+                    unbound_findings.append(finding)
+                else:
+                    for ep in affected_endpoints:
+                        if ep not in endpoint_to_findings:
+                            endpoint_to_findings[ep] = []
+                        endpoint_to_findings[ep].append(finding)
 
-                # Process each endpoint individually
-                for endpoint_path in affected_endpoints[:5]:
+            # Cap the endpoints to at most 3 per run so we stay comfortably within time windows
+            targeted_endpoints = list(endpoint_to_findings.keys())[:3]
+
+            for endpoint_path in targeted_endpoints:
+                ep_findings = endpoint_to_findings[endpoint_path]
+                combined_failure_modes = list({
+                    fm for f in ep_findings for fm in f.get("failure_modes", []) if fm
+                })
+                combined_titles = [f.get("title", "") for f in ep_findings if f.get("title")]
+                primary_finding = ep_findings[0]
+                primary_severity = "CRITICAL" if any(f.get("severity") == "CRITICAL" for f in ep_findings) else (
+                    "HIGH" if any(f.get("severity") == "HIGH" for f in ep_findings) else "MEDIUM"
+                )
+
+                try:
+                    await self._log(
+                        "thought",
+                        f"Locating endpoint {endpoint_path} for {len(ep_findings)} finding(s): {', '.join(combined_titles[:2])}"
+                    )
+
+                    # Try to find the method for this endpoint path from the DB
+                    method = "GET"  # fallback
                     try:
-                        await self._log("thought", f"Locating endpoint {endpoint_path} for finding: {finding.get('title')}")
+                        from backend.db.models import Endpoint
+                        from sqlalchemy import select
+                        stmt = select(Endpoint).where(Endpoint.session_id == self.session_id).where(Endpoint.path == endpoint_path)
+                        res = await self.db.execute(stmt)
+                        ep_record = res.scalar_one_or_none()
+                        if ep_record:
+                            method = ep_record.method
+                    except Exception as db_err:
+                        logger.warning(f"[Fix] Failed to lookup method for {endpoint_path}: {db_err}")
 
-                        # Try to find the method for this endpoint path from the DB
-                        method = "GET"  # fallback
-                        try:
-                            from backend.db.models import Endpoint
-                            from sqlalchemy import select
-                            stmt = select(Endpoint).where(Endpoint.session_id == self.session_id).where(Endpoint.path == endpoint_path)
-                            res = await self.db.execute(stmt)
-                            ep_record = res.scalar_one_or_none()
-                            if ep_record:
-                                method = ep_record.method
-                        except Exception as db_err:
-                            logger.warning(f"[Fix] Failed to lookup method for {endpoint_path}: {db_err}")
+                    # Try to locate programmatically first to save tokens
+                    location = self._locate_endpoint_programmatically(endpoint_path, method)
 
-                        # Try to locate programmatically first to save tokens
-                        location = self._locate_endpoint_programmatically(endpoint_path, method)
-
-                        if location:
-                            await self._log(
-                                "thought",
-                                f"Programmatically located endpoint {endpoint_path} ({method}) in "
-                                f"{location['file_path']} (lines {location['start_line']}-{location['end_line']})"
-                            )
-                        else:
-                            await self._log("thought", f"Could not programmatically locate {endpoint_path}. Falling back to LLM locator...")
-                            # Step 1: Locate the single endpoint's code block
-                            if self.detected_framework == "nextjs" or self.language in ("javascript", "typescript"):
-                                locator_steps = f"""Steps:
+                    if location:
+                        await self._log(
+                            "thought",
+                            f"Programmatically located endpoint {endpoint_path} ({method}) in "
+                            f"{location['file_path']} (lines {location['start_line']}-{location['end_line']})"
+                        )
+                    else:
+                        await self._log("thought", f"Could not programmatically locate {endpoint_path}. Falling back to LLM locator...")
+                        # Step 1: Locate the single endpoint's code block
+                        if self.detected_framework == "nextjs" or self.language in ("javascript", "typescript"):
+                            locator_steps = f"""Steps:
 1. Search for Next.js route or page files corresponding to "{endpoint_path}":
    - App Router: app/api/.../route.ts, app/api/.../route.js, app/.../page.tsx, src/app/...
    - Pages Router: pages/api/...ts, pages/api/...js, pages/...tsx, pages/...js, src/pages/...
 2. Read the file containing this endpoint
 3. Identify the COMPLETE handler function (e.g. `export async function {method}`, `export default async function handler`, `getServerSideProps`, or default export component)
 4. Return the start and end line numbers"""
-                            else:
-                                locator_steps = f"""Steps:
+                        else:
+                            locator_steps = f"""Steps:
 1. Search for route decorators matching "{endpoint_path}" (e.g. @app.get("{endpoint_path}") or @router.get("{endpoint_path}"))
 2. Read the file containing this endpoint
 3. Identify the COMPLETE function (decorator + def line + full body until the next decorator or top-level definition)
 4. Return the start and end line numbers"""
 
-                            location = await self.run(
-                                task=f"""Find the source code for ONE specific endpoint handler.
+                        location = await self.run(
+                            task=f"""Find the source code for ONE specific endpoint handler.
 
 Endpoint to find: {endpoint_path}
 Framework: {self.detected_framework}
@@ -229,68 +253,64 @@ Return JSON:
   "original_code": "the exact lines from start_line to end_line, copied character for character",
   "reasoning": "Why this is the correct location"
 }}""",
-                                context={"endpoint": endpoint_path, "finding_title": finding.get("title")}
-                            )
-
-                        file_path = location.get("file_path")
-                        original_code = location.get("original_code")
-                        start_line = location.get("start_line")
-                        end_line = location.get("end_line")
-
-                        if not file_path or not original_code:
-                            logger.warning(f"[Fix] Could not locate {endpoint_path}. Skipping.")
-                            continue
-
-                        # ── Immutable source snapshot ─────────────────────────
-                        # Captured once before any fix is applied to this file.
-                        # Used as the authoritative code_before — the LLM's
-                        # code_before is accepted only if it matches; otherwise
-                        # the snapshot takes precedence.
-                        snapshot = SourceSnapshot(
-                            file_path=file_path,
-                            start_line=start_line or 0,
-                            end_line=end_line or 0,
-                            content=original_code,
+                            context={"endpoint": endpoint_path, "finding_title": primary_finding.get("title")}
                         )
 
-                        generation_error = ""
-                        max_attempts = 2
-                        tailored_result = None
+                    file_path = location.get("file_path")
+                    original_code = location.get("original_code")
+                    start_line = location.get("start_line")
+                    end_line = location.get("end_line")
 
-                        for attempt in range(1, max_attempts + 1):
-                            # Always read latest file before generating each attempt
-                            current_file_state = ""
+                    if not file_path or not original_code:
+                        logger.warning(f"[Fix] Could not locate {endpoint_path}. Skipping.")
+                        continue
+
+                    # ── Immutable source snapshot ─────────────────────────
+                    snapshot = SourceSnapshot(
+                        file_path=file_path,
+                        start_line=start_line or 0,
+                        end_line=end_line or 0,
+                        content=original_code,
+                    )
+
+                    generation_error = ""
+                    max_attempts = 2
+                    tailored_result = None
+
+                    for attempt in range(1, max_attempts + 1):
+                        # Always read latest file before generating each attempt
+                        current_file_state = ""
+                        raw_file_state = ""
+                        try:
+                            raw_file_state = self._get_repo_file_content(file_path)
+                        except Exception:
                             raw_file_state = ""
-                            try:
-                                raw_file_state = self._get_repo_file_content(file_path)
-                            except Exception:
-                                raw_file_state = ""
-                            if raw_file_state:
-                                current_file_state = self._build_compact_file_context(
-                                    raw_content=raw_file_state,
-                                    start_line=start_line,
-                                    end_line=end_line,
-                                )
+                        if raw_file_state:
+                            current_file_state = self._build_compact_file_context(
+                                raw_content=raw_file_state,
+                                start_line=start_line,
+                                end_line=end_line,
+                            )
 
-                            await self._log(
-                                "thought",
-                                f"Generating fix for {endpoint_path} in {file_path}:{start_line}-{end_line} (attempt {attempt}/{max_attempts})"
-                            )
-                            lang_rules = self._get_lang_rules()
-                            retry_block = (
-                                f"\nPrevious attempt failed due to syntax error:\n{generation_error}\n"
-                                "You MUST correct the syntax and structure issues."
-                                if generation_error
-                                else ""
-                            )
-                            candidate = await self.run(
-                                task=f"""Generate a production-ready error handling fix for this SINGLE endpoint.
+                        await self._log(
+                            "thought",
+                            f"Generating fix for {endpoint_path} in {file_path}:{start_line}-{end_line} (attempt {attempt}/{max_attempts})"
+                        )
+                        lang_rules = self._get_lang_rules()
+                        retry_block = (
+                            f"\nPrevious attempt failed due to syntax error:\n{generation_error}\n"
+                            "You MUST correct the syntax and structure issues."
+                            if generation_error
+                            else ""
+                        )
+                        candidate = await self.run(
+                            task=f"""Generate a production-ready error handling fix for this SINGLE endpoint.
 
 Endpoint: {endpoint_path}
-Finding: {finding.get('title')}
+Findings: {', '.join(combined_titles)}
 Framework: {self.detected_framework}
 File: {file_path} (lines {start_line}-{end_line})
-Failure modes: {finding.get('failure_modes', [])}
+Failure modes to handle: {combined_failure_modes}
 
 Original Code (lines {start_line}-{end_line}):
 {original_code}
@@ -301,7 +321,7 @@ Current Full File State:
 Rules:
 - Replace ONLY this endpoint's function. Do NOT include other endpoints.
 - The code_before MUST be the exact original code above, character for character.
-- The code_after must be a drop-in replacement with proper error handling added.
+- The code_after must be a drop-in replacement with proper error handling added for all failure modes above.
 - CRITICAL: Do NOT call any function that does not exist in the file. If you need a helper, define it inline or inside the function.
 {lang_rules}
 - CRITICAL: Do NOT invent helper functions like `_get_cached()` or `_store_result()`. Inline the logic instead.
@@ -315,10 +335,10 @@ IMPORTANT: Output ONLY the JSON below. Do NOT write lengthy analysis or reasonin
 
 Return JSON:
 {{
-  "finding_title": "{finding.get('title')}",
-  "failure_modes": {finding.get('failure_modes', [])},
+  "finding_title": "{primary_finding.get('title')}",
+  "failure_modes": {combined_failure_modes},
   "affected_endpoints": ["{endpoint_path}"],
-  "severity": "{finding.get('severity', 'HIGH')}",
+  "severity": "{primary_severity}",
   "explanation": "What was wrong and what the fix does",
   "code_before": "exact original code to replace",
   "code_after": "fixed code with proper error handling",
@@ -326,116 +346,116 @@ Return JSON:
   "fix_type": "exception_handler",
   "imports_needed": ["list of imports/setup lines needed, e.g. packages/modules"]
 }}""",
-                                context={"endpoint": endpoint_path, "original_code": original_code}
+                            context={"endpoint": endpoint_path, "original_code": original_code}
+                        )
+                        candidate = self._normalise_fix_candidate(candidate)
+
+                        # Reject candidates with no actual fix code
+                        if not candidate.get("code_after", "").strip():
+                            generation_error = "LLM returned no code_after in response."
+                            logger.warning(
+                                f"[Fix] Empty code_after for {endpoint_path}, retrying. "
+                                f"Response keys: {sorted(candidate.keys())}"
                             )
-                            candidate = self._normalise_fix_candidate(candidate)
-
-                            # Reject candidates with no actual fix code
-                            if not candidate.get("code_after", "").strip():
-                                generation_error = "LLM returned no code_after in response."
-                                logger.warning(
-                                    f"[Fix] Empty code_after for {endpoint_path}, retrying. "
-                                    f"Response keys: {sorted(candidate.keys())}"
-                                )
-                                continue
-
-                            # Enforce immutable snapshot: code_before must come from
-                            # the snapshot, not the LLM (which may hallucinate it).
-                            candidate["file_path"] = file_path
-                            candidate["start_line"] = start_line
-                            candidate["end_line"] = end_line
-                            candidate["affected_endpoints"] = [endpoint_path]
-                            candidate["code_before"] = snapshot.content
-
-                            # ── PatchValidator — now a hard gate ─────────────
-                            # A FAILED validation (missing file_path, empty code,
-                            # unsafe path, secret leakage) blocks the fix from
-                            # being applied or promoted to a PR.  Warnings are
-                            # logged but do not block.
-                            validation = PatchValidator.validate(candidate)
-                            candidate["validation"] = validation.model_dump()
-
-                            if validation.status == "failed":
-                                fail_codes = ", ".join(
-                                    c.code for c in validation.checks if c.severity == "error"
-                                )
-                                logger.warning(
-                                    f"[Fix] Patch validation FAILED for {endpoint_path} "
-                                    f"({fail_codes}) — marking validation_failed, skipping apply."
-                                )
-                                candidate["status"] = FixStatus.VALIDATION_FAILED.value
-                                candidate["fix_mode"] = "patch"
-                                candidate["skip_reason"] = (
-                                    f"PatchValidator errors: {fail_codes}"
-                                )
-                                tailored_result = candidate
-                                break
-                            elif validation.status == "warnings":
-                                warn_codes = ", ".join(c.code for c in validation.checks)
-                                logger.warning(
-                                    f"[Fix] Patch validation warnings for {endpoint_path}: "
-                                    f"{warn_codes}"
-                                )
-
-                            # Auto-ensure framework critical imports if used in fix code
-                            imports_needed = list(candidate.get("imports_needed", []))
-                            fixed_code = candidate.get("code_after", "")
-                            if "NextResponse" in fixed_code and not any("next/server" in imp for imp in imports_needed):
-                                if "next/server" not in raw_file_state:
-                                    imports_needed.append("import { NextResponse } from 'next/server';")
-                                    candidate["imports_needed"] = imports_needed
-
-                            # Apply candidate to current file state sequentially
-                            applied, error_msg = self._apply_fix_to_repo_file(
-                                file_path=file_path,
-                                original_code=candidate.get("code_before", ""),
-                                fixed_code=fixed_code,
-                                imports_needed=imports_needed,
-                                start_line=start_line,
-                                end_line=end_line,
-                            )
-                            if not applied:
-                                generation_error = error_msg or "Failed to apply generated replacement to current file state."
-                                logger.warning(f"[Fix] Candidate fix could not be applied for {endpoint_path}: {generation_error}")
-                                continue
-
-                            # Validate full updated file syntax before accepting
-                            valid_syntax, syntax_err = self._validate_repo_file_syntax(file_path)
-                            if not valid_syntax:
-                                generation_error = syntax_err
-                                if raw_file_state:
-                                    self._set_repo_file_content(file_path, raw_file_state)
-                                logger.warning(f"[Fix] Syntax validation failed for {file_path}: {syntax_err}")
-                                continue
-
-                            # ── Compute unified diff ──────────────────────────
-                            # Generated after the fix is successfully applied so
-                            # the diff reflects the exact change that will land
-                            # in the PR, including any import additions.
-                            fix_candidate = FixCandidate.from_dict(candidate)
-                            fix_candidate.source_snapshot = snapshot
-                            fix_candidate.status = FixStatus.GENERATED
-                            fix_candidate.unified_diff = fix_candidate.compute_unified_diff()
-                            candidate = fix_candidate.to_dict()
-                            candidate["fix_mode"] = "patch"   # ← real repo patch
-
-                            tailored_result = candidate
-                            break
-
-                        if not tailored_result:
-                            logger.warning(f"[Fix] Could not generate a valid syntax-safe fix for {endpoint_path}. Skipping.")
                             continue
 
-                        fixes.append(tailored_result)
-                        status_label = tailored_result.get("status", FixStatus.GENERATED.value)
-                        logger.info(
-                            f"[Fix] Fix for {endpoint_path} @ {file_path}:{start_line}-{end_line} "
-                            f"— status={status_label}"
-                        )
+                        # Enforce immutable snapshot
+                        candidate["file_path"] = file_path
+                        candidate["start_line"] = start_line
+                        candidate["end_line"] = end_line
+                        candidate["affected_endpoints"] = [endpoint_path]
+                        candidate["code_before"] = snapshot.content
 
-                    except Exception as e:
-                        logger.error(f"[Fix] Failed fix for endpoint '{endpoint_path}': {e}")
+                        validation = PatchValidator.validate(candidate)
+                        candidate["validation"] = validation.model_dump()
+
+                        if validation.status == "failed":
+                            fail_codes = ", ".join(
+                                c.code for c in validation.checks if c.severity == "error"
+                            )
+                            logger.warning(
+                                f"[Fix] Patch validation FAILED for {endpoint_path} "
+                                f"({fail_codes}) — marking validation_failed, skipping apply."
+                            )
+                            candidate["status"] = FixStatus.VALIDATION_FAILED.value
+                            candidate["fix_mode"] = "patch"
+                            candidate["skip_reason"] = (
+                                f"PatchValidator errors: {fail_codes}"
+                            )
+                            tailored_result = candidate
+                            break
+                        elif validation.status == "warnings":
+                            warn_codes = ", ".join(c.code for c in validation.checks)
+                            logger.warning(
+                                f"[Fix] Patch validation warnings for {endpoint_path}: "
+                                f"{warn_codes}"
+                            )
+
+                        # Auto-ensure framework critical imports if used in fix code
+                        imports_needed = list(candidate.get("imports_needed", []))
+                        fixed_code = candidate.get("code_after", "")
+                        if "NextResponse" in fixed_code and not any("next/server" in imp for imp in imports_needed):
+                            if "next/server" not in raw_file_state:
+                                imports_needed.append("import { NextResponse } from 'next/server';")
+                                candidate["imports_needed"] = imports_needed
+
+                        # Apply candidate to current file state sequentially
+                        applied, error_msg = self._apply_fix_to_repo_file(
+                            file_path=file_path,
+                            original_code=candidate.get("code_before", ""),
+                            fixed_code=fixed_code,
+                            imports_needed=imports_needed,
+                            start_line=start_line,
+                            end_line=end_line,
+                        )
+                        if not applied:
+                            generation_error = error_msg or "Failed to apply generated replacement to current file state."
+                            logger.warning(f"[Fix] Candidate fix could not be applied for {endpoint_path}: {generation_error}")
+                            continue
+
+                        # Validate full updated file syntax before accepting
+                        valid_syntax, syntax_err = self._validate_repo_file_syntax(file_path)
+                        if not valid_syntax:
+                            generation_error = syntax_err
+                            if raw_file_state:
+                                self._set_repo_file_content(file_path, raw_file_state)
+                            logger.warning(f"[Fix] Syntax validation failed for {file_path}: {syntax_err}")
+                            continue
+
+                        # ── Compute unified diff ──────────────────────────
+                        fix_candidate = FixCandidate.from_dict(candidate)
+                        fix_candidate.source_snapshot = snapshot
+                        fix_candidate.status = FixStatus.GENERATED
+                        fix_candidate.unified_diff = fix_candidate.compute_unified_diff()
+                        candidate = fix_candidate.to_dict()
+                        candidate["fix_mode"] = "patch"
+
+                        tailored_result = candidate
+                        break
+
+                    if not tailored_result:
+                        logger.warning(f"[Fix] Could not generate a valid syntax-safe fix for {endpoint_path}. Skipping.")
                         continue
+
+                    fixes.append(tailored_result)
+                    self.fixes = fixes  # Keep self.fixes updated on every step
+                    status_label = tailored_result.get("status", FixStatus.GENERATED.value)
+                    logger.info(
+                        f"[Fix] Fix for {endpoint_path} @ {file_path}:{start_line}-{end_line} "
+                        f"— status={status_label}"
+                    )
+
+                except Exception as e:
+                    logger.error(f"[Fix] Failed fix for endpoint '{endpoint_path}': {e}")
+                    continue
+
+            # Fallback for any unbound findings if no endpoint fixes were generated
+            if not fixes and unbound_findings:
+                for finding in unbound_findings[:2]:
+                    fallback_fix = await self._generate_vacuum_fix(finding)
+                    if fallback_fix:
+                        fixes.extend(fallback_fix)
+                self.fixes = fixes
 
             self._cleanup()
         else:

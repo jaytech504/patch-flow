@@ -142,7 +142,7 @@ class ChaosOrchestrator:
                 logger.error(f"[Orchestrator] Analysis stage timed out after 90s for session {self.session_id}")
                 raise TimeoutError("Failure analysis timed out after 90s.")
 
-            # ── Stage 3: Fix Generation (300s timeout) ─────────────────────────
+            # ── Stage 3: Fix Generation (360s timeout) ─────────────────────────
             await ws_manager.emit_status(
                 self.session_id, "fixing",
                 "Generating error handling code..."
@@ -156,15 +156,26 @@ class ChaosOrchestrator:
             try:
                 fix_result = await asyncio.wait_for(
                     fixer.handle(analysis, failure_results),
-                    timeout=300.0
+                    timeout=360.0
                 )
             except asyncio.TimeoutError:
-                logger.error(f"[Orchestrator] Fix generation timed out after 300s for session {self.session_id}")
+                logger.warning(
+                    f"[Orchestrator] Fix generation timed out after 360s for session {self.session_id} "
+                    f"— recovering {len(getattr(fixer, 'fixes', []))} fix(es) generated before timeout."
+                )
                 try:
                     await self.db.rollback()
                 except Exception:
                     pass
-                fix_result = {"fixes": [], "fixes_count": 0, "skipped_fixes": []}
+                recovered_fixes = getattr(fixer, "fixes", [])
+                applied = [f for f in recovered_fixes if f.get("status") != FixStatus.VALIDATION_FAILED.value]
+                blocked = [f for f in recovered_fixes if f.get("status") == FixStatus.VALIDATION_FAILED.value]
+                fix_result = {
+                    "fixes": applied,
+                    "fixes_count": len(applied),
+                    "skipped_fixes": blocked,
+                    "global_fixes": getattr(fixer, "global_fixes", []),
+                }
 
             # ── Stage 3.5: Fix Review (120s timeout per round) ──────────────────
             if github_repo and effective_token:
