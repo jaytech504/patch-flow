@@ -254,7 +254,7 @@ Return JSON:
                         )
 
                         generation_error = ""
-                        max_attempts = 3
+                        max_attempts = 2
                         tailored_result = None
 
                         for attempt in range(1, max_attempts + 1):
@@ -538,12 +538,33 @@ Return JSON:
         content = full_path.read_text(encoding="utf-8")
         updated = content
 
+        # 1. Apply code replacement FIRST before inserting any new imports
+        if original_code and original_code in updated:
+            updated = updated.replace(original_code, fixed_code, 1)
+        elif original_code and original_code.strip() in updated:
+            updated = updated.replace(original_code.strip(), fixed_code.strip(), 1)
+        elif start_line and end_line:
+            lines = updated.splitlines()
+            if not (1 <= start_line <= end_line <= len(lines)):
+                return False, f"Line range {start_line}-{end_line} out of bounds for {file_path} ({len(lines)} lines)."
+            lines[start_line - 1:end_line] = (fixed_code or "").splitlines()
+            updated = "\n".join(lines)
+        else:
+            return False, "Neither exact code match nor valid line range replacement available."
+
+        # 2. Insert missing imports without shifting line numbers for the fix
         if imports_needed:
             lines = updated.splitlines()
-            last_import_line = 0
+            last_import_line = -1
+            directive_line = -1
             for i, line in enumerate(lines):
-                if line.startswith("import ") or line.startswith("from "):
+                stripped = line.strip()
+                if stripped in ('"use client";', "'use client';", '"use server";', "'use server';"):
+                    directive_line = i
+                if stripped.startswith("import ") or stripped.startswith("from "):
                     last_import_line = i
+
+            insert_pos = (last_import_line + 1) if last_import_line >= 0 else (directive_line + 1 if directive_line >= 0 else 0)
 
             new_imports = []
             for imp in imports_needed:
@@ -553,19 +574,8 @@ Return JSON:
                 if not any(existing.strip() == imp_line for existing in lines):
                     new_imports.append(imp_line)
             for offset, imp_line in enumerate(new_imports):
-                lines.insert(last_import_line + 1 + offset, imp_line)
+                lines.insert(insert_pos + offset, imp_line)
             updated = "\n".join(lines)
-
-        if original_code and original_code in updated:
-            updated = updated.replace(original_code, fixed_code, 1)
-        elif start_line and end_line:
-            lines = updated.splitlines()
-            if not (1 <= start_line <= end_line <= len(lines)):
-                return False, f"Line range {start_line}-{end_line} out of bounds for {file_path} ({len(lines)} lines)."
-            lines[start_line - 1:end_line] = (fixed_code or "").splitlines()
-            updated = "\n".join(lines)
-        else:
-            return False, "Neither exact code match nor valid line range replacement available."
 
         full_path.write_text(updated, encoding="utf-8")
         return True, ""

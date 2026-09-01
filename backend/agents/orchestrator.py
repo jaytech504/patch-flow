@@ -160,6 +160,10 @@ class ChaosOrchestrator:
                 )
             except asyncio.TimeoutError:
                 logger.error(f"[Orchestrator] Fix generation timed out after 300s for session {self.session_id}")
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
                 fix_result = {"fixes": [], "fixes_count": 0, "skipped_fixes": []}
 
             # ── Stage 3.5: Fix Review (120s timeout per round) ──────────────────
@@ -350,9 +354,16 @@ class ChaosOrchestrator:
 
         except Exception as e:
             logger.error(f"[Orchestrator] Pipeline failed: {e}")
-            session = await self.db.get(ChaosSession, self.session_id)
-            if session:
-                session.status = SessionStatus.FAILED
-                await self.db.flush()
+            try:
+                await self.db.rollback()
+            except Exception:
+                pass
+            try:
+                session = await self.db.get(ChaosSession, self.session_id)
+                if session:
+                    session.status = SessionStatus.FAILED
+                    await self.db.flush()
+            except Exception as db_err:
+                logger.warning(f"[Orchestrator] Could not update session status to FAILED: {db_err}")
             await ws_manager.emit_status(self.session_id, "failed", str(e))
             raise

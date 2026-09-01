@@ -300,18 +300,25 @@ class BaseAgent(ABC):
         )
         # Persist to DB
         if self.db and self.session_id:
-            step = AgentStep(
-                id=str(uuid.uuid4()),
-                session_id=self.session_id,
-                agent=self.name,
-                step_type=step_type,
-                content=content,
-                tool_name=tool_name,
-                tool_input=tool_input,
-                tool_output=tool_output if isinstance(tool_output, (dict, list)) else None,
-            )
-            self.db.add(step)
-            await self.db.flush()
+            try:
+                step = AgentStep(
+                    id=str(uuid.uuid4()),
+                    session_id=self.session_id,
+                    agent=self.name,
+                    step_type=step_type,
+                    content=content,
+                    tool_name=tool_name,
+                    tool_input=tool_input,
+                    tool_output=tool_output if isinstance(tool_output, (dict, list)) else None,
+                )
+                self.db.add(step)
+                await self.db.flush()
+            except Exception as e:
+                logger.warning(f"[{self.name}] Failed to persist AgentStep to DB: {e}")
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
 
     def _build_messages(self, task: str, context: dict = None) -> List[dict]:
         system = self.system_prompt

@@ -161,16 +161,16 @@ export default function LiveSessionPage() {
     }
   };
 
-  // Fallback polling every 3 seconds if WebSocket is disconnected during an active run
+  // Active polling every 3 seconds during an active run to guarantee state/pill sync
   useEffect(() => {
     if (runFinished) return;
     const interval = setInterval(() => {
-      if (!wsConnected && !runFinished) {
+      if (!runFinished) {
         fetchSessionState();
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [wsConnected, runFinished, sessionUrlId]);
+  }, [runFinished, sessionUrlId]);
 
   useEffect(() => {
     const loadSessionAndConnect = async () => {

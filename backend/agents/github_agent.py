@@ -542,56 +542,63 @@ but the build now fails. Fix the file so it compiles and builds successfully.
         # Sanitize LLM output — strip instruction-comments
         fixed_code = self._sanitize_fixed_code(fixed_code)
 
-        # Add missing imports — check EACH line individually to avoid duplicates
+        applied = False
+        updated = content
+
+        # Strategy 1: Exact string replacement
+        if original_code and original_code in updated:
+            updated = updated.replace(original_code, fixed_code, 1)
+            applied = True
+            logger.info(f"[GitHub] Fix applied via exact string match to {file_path}")
+        elif original_code and original_code.strip() in updated:
+            updated = updated.replace(original_code.strip(), fixed_code.strip(), 1)
+            applied = True
+            logger.info(f"[GitHub] Fix applied via trimmed string match to {file_path}")
+        elif start_line and end_line:
+            # Strategy 2: Line-range replacement
+            lines = updated.splitlines()
+            if 1 <= start_line <= end_line <= len(lines):
+                fixed_lines = fixed_code.splitlines()
+                lines[start_line - 1 : end_line] = fixed_lines
+                updated = "\n".join(lines)
+                applied = True
+                logger.info(f"[GitHub] Fix applied via line-range ({start_line}-{end_line}) to {file_path}")
+            else:
+                logger.warning(f"[GitHub] Line range {start_line}-{end_line} out of bounds for {file_path} ({len(lines)} lines)")
+
+        if not applied:
+            logger.warning(f"[GitHub] Could not apply fix to {file_path} -- neither string match nor line-range succeeded")
+            return False
+
+        # Add missing imports AFTER code replacement
         if imports_needed:
-            lines = content.splitlines()
-            last_import_line = 0
+            lines = updated.splitlines()
+            last_import_line = -1
+            directive_line = -1
             for i, line in enumerate(lines):
-                if line.startswith("import ") or line.startswith("from "):
+                stripped = line.strip()
+                if stripped in ('"use client";', "'use client';", '"use server";', "'use server';"):
+                    directive_line = i
+                if stripped.startswith("import ") or stripped.startswith("from "):
                     last_import_line = i
+
+            insert_pos = (last_import_line + 1) if last_import_line >= 0 else (directive_line + 1 if directive_line >= 0 else 0)
 
             new_imports = []
             for imp in imports_needed:
                 imp_stripped = imp.strip()
                 if not imp_stripped:
                     continue
-                # Skip if this exact import line already exists in the file
-                already_present = any(
-                    existing_line.strip() == imp_stripped
-                    for existing_line in lines
-                )
-                if not already_present:
+                if not any(existing_line.strip() == imp_stripped for existing_line in lines):
                     new_imports.append(imp_stripped)
 
             if new_imports:
                 for offset, imp_line in enumerate(new_imports):
-                    lines.insert(last_import_line + 1 + offset, imp_line)
-                content = "\n".join(lines)
+                    lines.insert(insert_pos + offset, imp_line)
+                updated = "\n".join(lines)
 
-        # Strategy 1: Exact string replacement
-        if original_code and original_code in content:
-            content = content.replace(original_code, fixed_code, 1)
-            full_path.write_text(content, encoding="utf-8")
-            logger.info(f"[GitHub] Fix applied via string match to {file_path}")
-            return True
-
-        # Strategy 2: Line-range replacement
-        if start_line and end_line:
-            lines = content.splitlines()
-            if 1 <= start_line <= end_line <= len(lines):
-                # Replace lines [start_line-1 : end_line] (0-indexed) with the fixed code
-                fixed_lines = fixed_code.splitlines()
-                lines[start_line - 1 : end_line] = fixed_lines
-                content = "\n".join(lines)
-                full_path.write_text(content, encoding="utf-8")
-                logger.info(f"[GitHub] Fix applied via line-range ({start_line}-{end_line}) to {file_path}")
-                return True
-            else:
-                logger.warning(f"[GitHub] Line range {start_line}-{end_line} out of bounds for {file_path} ({len(lines)} lines)")
-
-        # No strategy worked — skip this fix
-        logger.warning(f"[GitHub] Could not apply fix to {file_path} -- neither string match nor line-range succeeded")
-        return False
+        full_path.write_text(updated, encoding="utf-8")
+        return True
 
     def _post_process_file(self, file_path: str):
         """Clean up a file after all fixes have been applied.
