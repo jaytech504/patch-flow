@@ -88,6 +88,113 @@ def run_syntax_command(command: list[str], label: str) -> tuple[bool, str]:
     details = stderr or stdout or f"{label} syntax check failed with exit code {proc.returncode}."
     return False, details
 
+def _lightweight_bracket_check(path: Path) -> tuple[bool, str]:
+    """Fast structural validation for TS/TSX files.
+
+    Checks bracket / brace / parenthesis balance while skipping characters
+    inside string literals, template literals, and comments.  This catches
+    the most common LLM-generated corruption (missing ``}``, extra ``{``,
+    unmatched ``(``) without requiring node_modules or tsconfig context.
+    """
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        return False, f"File encoding error: {exc}"
+
+    if not content.strip():
+        return True, ""
+
+    stack: list[str] = []
+    openers = {"{": "}", "(": ")", "[": "]"}
+    closers = {"}", ")", "]"}
+    i = 0
+    length = len(content)
+
+    while i < length:
+        c = content[i]
+
+        # ── Skip single-line comments ──
+        if c == "/" and i + 1 < length and content[i + 1] == "/":
+            i = content.find("\n", i)
+            if i == -1:
+                break
+            i += 1
+            continue
+
+        # ── Skip block comments ──
+        if c == "/" and i + 1 < length and content[i + 1] == "*":
+            end = content.find("*/", i + 2)
+            i = end + 2 if end != -1 else length
+            continue
+
+        # ── Skip template literals ──
+        if c == "`":
+            i += 1
+            depth = 0
+            while i < length:
+                tc = content[i]
+                if tc == "\\" and i + 1 < length:
+                    i += 2
+                    continue
+                if tc == "$" and i + 1 < length and content[i + 1] == "{":
+                    depth += 1
+                    i += 2
+                    continue
+                if tc == "}" and depth > 0:
+                    depth -= 1
+                    i += 1
+                    continue
+                if tc == "`" and depth == 0:
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        # ── Skip string literals ──
+        if c in ('"', "'"):
+            quote = c
+            i += 1
+            while i < length:
+                sc = content[i]
+                if sc == "\\" and i + 1 < length:
+                    i += 2
+                    continue
+                if sc == quote:
+                    i += 1
+                    break
+                if sc == "\n":
+                    # Unterminated string on this line — stop scanning it
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        # ── Track brackets ──
+        if c in openers:
+            stack.append(openers[c])
+            i += 1
+            continue
+
+        if c in closers:
+            if not stack:
+                # Find line number for error
+                line_no = content[:i].count("\n") + 1
+                return False, f"Unexpected closing '{c}' at line {line_no} with no matching opener."
+            expected = stack.pop()
+            if c != expected:
+                line_no = content[:i].count("\n") + 1
+                return False, f"Mismatched bracket at line {line_no}: expected '{expected}' but got '{c}'."
+            i += 1
+            continue
+
+        i += 1
+
+    if stack:
+        remaining = "".join(stack)
+        return False, f"Unclosed brackets at end of file — expected: {remaining}"
+
+    return True, ""
+
 
 def validate_file_syntax(file_path: Path | str) -> tuple[bool, str]:
     """Validate syntax of an existing file on disk for supported languages."""
@@ -111,19 +218,16 @@ def validate_file_syntax(file_path: Path | str) -> tuple[bool, str]:
         return run_syntax_command(["node", "--check", str(path)], "Node.js")
 
     if ext in {".ts", ".tsx"}:
-        ok, msg = run_syntax_command([
-            "npx", "--yes", "tsc", "--noEmit",
-            "--skipLibCheck",
-            "--noResolve",
-            "--jsx", "react-jsx",
-            "--target", "esnext",
-            "--allowJs",
-            "--allowSyntheticDefaultImports",
-            str(path)
-        ], "TypeScript")
-        if ok:
-            return True, ""
-        return filter_typescript_syntax_errors(msg)
+        # ── Lightweight bracket-balance check ──────────────────────────────
+        # Running `tsc --noEmit --noResolve` on an isolated file WITHOUT
+        # node_modules, tsconfig.json, or type definitions consistently
+        # rejects valid JSX/TSX code (generics like Record<string, never>
+        # are misinterpreted as unclosed JSX tags).
+        #
+        # Instead we run a fast structural sanity check here and rely on
+        # the downstream github_agent build gate (`npm run build` with full
+        # project context) for authoritative compilation validation.
+        return _lightweight_bracket_check(path)
 
     if ext == ".go":
         return run_syntax_command(["gofmt", "-e", str(path)], "gofmt")
@@ -173,21 +277,14 @@ def validate_project_build(repo_path: Path | str, target_file: str | None = None
         # Node / npm / TypeScript project verification
         tsconfig = path / "tsconfig.json"
         if tsconfig.exists() or (target_file and Path(target_file).suffix.lower() in {".ts", ".tsx"}):
-            file_to_check = str(path / target_file) if target_file and (path / target_file).exists() else str(path)
-            ok, msg = run_syntax_command([
-                "npx", "--yes", "tsc", "--noEmit",
-                "--skipLibCheck",
-                "--noResolve",
-                "--jsx", "react-jsx",
-                "--target", "esnext",
-                "--allowJs",
-                "--allowSyntheticDefaultImports",
-                file_to_check
-            ], "npm/TypeScript")
-            if not ok:
-                ts_ok, filtered_err = filter_typescript_syntax_errors(msg)
-                if not ts_ok:
-                    return False, f"TypeScript build verification failed: {filtered_err}"
+            # Use lightweight bracket check for TS/TSX — real build validation
+            # happens downstream via `npm run build` in github_agent.
+            if target_file:
+                full_target = path / target_file
+                if full_target.exists():
+                    ok, msg = _lightweight_bracket_check(full_target)
+                    if not ok:
+                        return False, f"TypeScript structural check failed: {msg}"
 
         # If target file is JS/MJS/CJS, verify with node --check
         if target_file and Path(target_file).suffix.lower() in {".js", ".mjs", ".cjs"}:
