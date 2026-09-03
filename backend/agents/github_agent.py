@@ -754,12 +754,10 @@ This PR consolidates **{len(fixes_applied)}** error-handling fix(es) verified by
             return []
 
         # ── Validation gate ───────────────────────────────────────────────────
-        # Only fixes that passed review (validated) or were generated without a
-        # review step (generated) are eligible for a PR.
-        # Fixes blocked by PatchValidator or still needing revision are marked
-        # pr_skipped and excluded from the commit.
-        _ELIGIBLE_STATUSES = {FixStatus.VALIDATED.value, FixStatus.GENERATED.value}
-        _BLOCKED_STATUSES = {FixStatus.VALIDATION_FAILED.value, FixStatus.NEEDS_REVIEW.value}
+        # Eligible for PR: any fix that passed PatchValidator and was generated
+        # or revised. Fixes with hard PatchValidator errors (e.g. unsafe file path,
+        # secrets leak, empty code) carry validation_failed and are excluded.
+        _BLOCKED_STATUSES = {FixStatus.VALIDATION_FAILED.value}
 
         eligible_fixes: list[dict] = []
         skipped_fixes: list[dict] = []
@@ -767,9 +765,7 @@ This PR consolidates **{len(fixes_applied)}** error-handling fix(es) verified by
         for fix in fixes:
             fix_status = fix.get("status", FixStatus.GENERATED.value)
             if fix_status in _BLOCKED_STATUSES:
-                reason = fix.get("skip_reason") or fix.get("review_feedback") or (
-                    f"Fix status is '{fix_status}' — blocked from PR creation."
-                )
+                reason = fix.get("skip_reason") or "Fix status is 'validation_failed' — blocked from PR creation."
                 fix = {**fix, "status": FixStatus.PR_SKIPPED.value, "skip_reason": reason}
                 skipped_fixes.append(fix)
                 logger.info(

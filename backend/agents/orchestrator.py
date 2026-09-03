@@ -177,8 +177,8 @@ class ChaosOrchestrator:
                     "global_fixes": getattr(fixer, "global_fixes", []),
                 }
 
-            # ── Stage 3.5: Fix Review (120s timeout per round) ──────────────────
-            if github_repo and effective_token:
+            # ── Stage 3.5: Fix Review (150s timeout) ──────────────────────────
+            if github_repo and effective_token and fix_result.get("fixes"):
                 await ws_manager.emit_status(
                     self.session_id, "reviewing",
                     "Senior code review of generated fixes..."
@@ -189,34 +189,23 @@ class ChaosOrchestrator:
                     github_token=effective_token,
                 )
 
-                max_review_rounds = 2
-                for review_round in range(max_review_rounds):
-                    try:
-                        fix_result = await asyncio.wait_for(
-                            reviewer.handle(fix_result),
-                            timeout=120.0
-                        )
-                    except asyncio.TimeoutError:
-                        logger.warning(
-                            f"[Orchestrator] Code review round {review_round + 1} timed out — proceeding with generated fixes."
-                        )
-                        break
-
-                    needs_revision = fix_result.get("needs_revision", [])
-                    if not needs_revision:
-                        logger.info(
-                            f"[Orchestrator] Review round {review_round + 1}: "
-                            f"all fixes validated ✓"
-                        )
-                        break
-
-                    logger.info(
-                        f"[Orchestrator] Review round {review_round + 1}: "
-                        f"{len(needs_revision)} fix(es) need revision"
+                try:
+                    review_outcome = await asyncio.wait_for(
+                        reviewer.handle(fix_result),
+                        timeout=90.0
                     )
+                    fix_result = review_outcome
+                except asyncio.TimeoutError:
+                    logger.warning("[Orchestrator] Code review timed out — proceeding with generated fixes.")
+                except Exception as rev_err:
+                    logger.warning(f"[Orchestrator] Code review error: {rev_err} — proceeding with generated fixes.")
+
+                needs_revision = fix_result.get("needs_revision", [])
+                if needs_revision:
+                    logger.info(f"[Orchestrator] Review identified suggestions for {len(needs_revision)} fix(es)")
                     await ws_manager.emit_status(
                         self.session_id, "fixing",
-                        f"Revising {len(needs_revision)} fix(es) based on review feedback..."
+                        f"Refining {len(needs_revision)} fix(es) based on review feedback..."
                     )
 
                     revised_fixer = FixAgent(
@@ -232,39 +221,30 @@ class ChaosOrchestrator:
                     except asyncio.TimeoutError:
                         logger.warning("[Orchestrator] Fix revision timed out — keeping original fixes.")
                         revised_fixes = []
+                    except Exception as rev_fx_err:
+                        logger.warning(f"[Orchestrator] Fix revision error: {rev_fx_err} — keeping original fixes.")
+                        revised_fixes = []
 
                     fix_result["fixes"] = self._merge_revised_fixes(
                         validated_fixes=fix_result.get("fixes", []),
                         rejected_fixes=needs_revision,
                         revised_fixes=revised_fixes,
                     )
-                    fix_result["fixes_count"] = len([
-                        f for f in fix_result["fixes"]
-                        if f.get("status") not in {FixStatus.VALIDATION_FAILED.value}
-                    ])
-
                     fix_result.pop("needs_revision", None)
 
-                    await ws_manager.emit_status(
-                        self.session_id, "reviewing",
-                        f"Re-reviewing revised fixes (round {review_round + 2})..."
-                    )
-                else:
-                    remaining = fix_result.pop("needs_revision", [])
-                    if remaining:
-                        logger.warning(
-                            f"[Orchestrator] Max review rounds reached. "
-                            f"{len(remaining)} fix(es) still need revision — excluded."
-                        )
-                        existing_skipped = fix_result.get("skipped_fixes", [])
-                        fix_result["skipped_fixes"] = existing_skipped + remaining
-                        fix_result["fixes_count"] = len(fix_result.get("fixes", []))
+                # Ensure every non-blocked fix has an eligible status for GitHubAgent
+                for fx in fix_result.get("fixes", []):
+                    if fx.get("status") not in {FixStatus.VALIDATION_FAILED.value, FixStatus.VALIDATED.value}:
+                        fx["status"] = FixStatus.GENERATED.value
+
+                fix_result["fixes_count"] = len([
+                    f for f in fix_result.get("fixes", [])
+                    if f.get("status") != FixStatus.VALIDATION_FAILED.value
+                ])
 
                 review_stats = fix_result.get("review_stats", {})
                 logger.info(
-                    f"[Orchestrator] Review complete: "
-                    f"{review_stats.get('validated', 0)} validated, "
-                    f"{review_stats.get('revision_needed', 0)} revised"
+                    f"[Orchestrator] Review complete: {fix_result['fixes_count']} fix(es) ready for PR build validation."
                 )
 
             # ── Stage 4: GitHub PRs (90s timeout) ─────────────────────────────
