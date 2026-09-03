@@ -266,13 +266,13 @@ class ChaosOrchestrator:
                             analysis=analysis,
                             report_id=fix_result.get("report_id"),
                         ),
-                        timeout=240.0
+                        timeout=300.0
                     )
                 except asyncio.TimeoutError:
-                    logger.error(f"[Orchestrator] GitHub PR creation timed out after 240s for session {self.session_id}")
+                    logger.error(f"[Orchestrator] GitHub PR creation timed out after 300s for session {self.session_id}")
                     await ws_manager.emit_status(
                         self.session_id, "github_skipped",
-                        "GitHub PR creation timed out (build validation may have been slow). Fix report is still available."
+                        "GitHub PR creation timed out. Fix report is still available."
                     )
                     prs_opened = []
 
