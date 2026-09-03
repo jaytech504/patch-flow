@@ -40,12 +40,12 @@ export default function Home() {
             <div className="flex flex-col gap-6 max-w-2xl">
 
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground leading-[1.1]">
-                Stop finding bugs. <br />
-                <span className="text-primary">Start fixing them.</span>
+                Autonomous API Resilience. <br />
+                <span className="text-primary">From Chaos to Merged PRs.</span>
               </h1>
 
               <p className="text-lg md:text-xl text-text-secondary leading-relaxed font-medium">
-                The dual-engine reliability platform. Monitor live production exceptions with our zero-config SDK and stress-test APIs with proactive chaos injection. PatchFlow autonomously writes, compiler-verifies, and opens GitHub Pull Requests in minutes.
+                The dual-engine reliability platform for backend APIs and microservices. Proactively stress-test endpoints with 18+ chaos failure modes and monitor production crashes in real-time. PatchFlow autonomously writes, compiler-verifies, and opens GitHub Pull Requests in minutes.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
@@ -73,15 +73,15 @@ export default function Home() {
               <div className="flex items-center gap-6 text-xs text-text-secondary font-mono pt-2">
                 <div className="flex items-center gap-1.5">
                   <Check className="h-4 w-4 text-emerald-500" />
-                  <span>Next.js, FastAPI & Node</span>
+                  <span>FastAPI, Django, Express & Spring Boot</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-emerald-500" />
+                  <span>Autonomous GitHub PRs</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Check className="h-4 w-4 text-emerald-500" />
                   <span>Zero-Config SDK</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-emerald-500" />
-                  <span>Pre-Merge Build Checks</span>
                 </div>
               </div>
             </div>
@@ -96,14 +96,15 @@ export default function Home() {
         <section className="border-y border-border bg-muted/60 py-10">
           <div className="mx-auto max-w-7xl px-6 flex flex-col items-center">
             <p className="text-xs font-semibold text-text-secondary mb-6 uppercase tracking-widest">
-              Engineered for Modern Web Stacks & Workflows
+              Purpose-Built for Modern Backend Frameworks
             </p>
-            <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 text-foreground/75 font-semibold text-sm md:text-base">
-              <div className="flex items-center gap-2"><Server className="h-4 w-4 text-primary" /> Next.js (App & Pages)</div>
-              <div className="flex items-center gap-2"><Cpu className="h-4 w-4 text-primary" /> FastAPI & Python</div>
-              <div className="flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Node.js & Express</div>
+            <div className="flex flex-wrap justify-center items-center gap-8 md:gap-14 text-foreground/75 font-semibold text-sm md:text-base">
+              <div className="flex items-center gap-2"><Cpu className="h-4 w-4 text-primary" /> FastAPI (Python)</div>
+              <div className="flex items-center gap-2"><Server className="h-4 w-4 text-primary" /> Django & DRF</div>
+              <div className="flex items-center gap-2"><Layers className="h-4 w-4 text-primary" /> Express.js (Node.js)</div>
+              <div className="flex items-center gap-2"><Zap className="h-4 w-4 text-primary" /> Spring Boot (Java)</div>
+              <div className="flex items-center gap-2"><Flame className="h-4 w-4 text-primary" /> Flask</div>
               <div className="flex items-center gap-2"><GitPullRequest className="h-4 w-4 text-primary" /> GitHub Pull Requests</div>
-              <div className="flex items-center gap-2"><Terminal className="h-4 w-4 text-primary" /> TypeScript & Node Check</div>
             </div>
           </div>
         </section>
@@ -118,12 +119,54 @@ export default function Home() {
               Total reliability from pre-deploy to production.
             </h2>
             <p className="text-lg md:text-xl text-text-secondary font-medium">
-              PatchFlow guards your software lifecycle with both proactive chaos testing and reactive production auto-patching.
+              PatchFlow protects your software with proactive chaos engineering before deployment and reactive incident auto-patching in production.
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Engine 1: Real-time Incident Auto-Patching */}
+            {/* Engine 1: Proactive Chaos Testing */}
+            <div className="relative flex flex-col p-8 md:p-10 bg-card border border-border-strong rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 group">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                    <Shield className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-mono font-semibold uppercase tracking-wider text-primary">Engine 01 • Proactive</span>
+                    <h3 className="text-2xl font-bold text-foreground tracking-tight">Autonomous Chaos Testing</h3>
+                  </div>
+                </div>
+                <div className="w-3 h-3 rounded-full bg-primary"></div>
+              </div>
+
+              <p className="text-base text-text-secondary leading-relaxed font-medium mb-8">
+                Stress-test your backend APIs before shipping. PatchFlow automatically discovers endpoints from OpenAPI specs, Postman collections, or repo source code, injects 18+ aggressive failure modes, and opens consolidated Pull Requests with resilient error handling.
+              </p>
+
+              <div className="space-y-4 mb-8">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-sm font-medium text-foreground">Auto-discovery from OpenAPI URL, Postman collection, or repository files</span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-sm font-medium text-foreground">18 synthetic failure modes across latency, socket timeouts, and DB drops</span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-sm font-medium text-foreground">Reliability score (0-100) with security leakage and exception audits</span>
+                </div>
+              </div>
+
+              <div className="mt-auto pt-6 border-t border-border flex items-center justify-between">
+                <span className="text-xs font-mono text-text-secondary">Scan Modes: OpenAPI, Custom, Manual</span>
+                <Link href="/sessions/new" className="text-sm font-semibold text-primary inline-flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                  Launch Chaos Test <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+
+            {/* Engine 2: Real-time Incident Auto-Patching */}
             <div className="relative flex flex-col p-8 md:p-10 bg-card border border-border-strong rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 group">
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
@@ -131,7 +174,7 @@ export default function Home() {
                     <Flame className="h-6 w-6" />
                   </div>
                   <div>
-                    <span className="text-xs font-mono font-semibold uppercase tracking-wider text-red-500">Engine 01 • Reactive</span>
+                    <span className="text-xs font-mono font-semibold uppercase tracking-wider text-red-500">Engine 02 • Reactive</span>
                     <h3 className="text-2xl font-bold text-foreground tracking-tight">Production Incident Auto-Patching</h3>
                   </div>
                 </div>
@@ -142,7 +185,7 @@ export default function Home() {
               </div>
 
               <p className="text-base text-text-secondary leading-relaxed font-medium mb-8">
-                Install our 1-line SDK in your Next.js or Python backend. When an unhandled crash or exception reaches the threshold, PatchFlow activates Gemma AI to clone your repo, write a surgical fix, and open a ready-to-merge GitHub Pull Request.
+                Install our lightweight SDK in your Node.js or Python backend. When an unhandled crash or exception reaches threshold limits, PatchFlow activates AI agents to clone your repo, generate a surgical fix, and open a ready-to-merge GitHub Pull Request.
               </p>
 
               <div className="space-y-4 mb-8">
@@ -152,11 +195,11 @@ export default function Home() {
                 </div>
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                  <span className="text-sm font-medium text-foreground">Gemma AI generates AST-compliant error handlers & automatic imports</span>
+                  <span className="text-sm font-medium text-foreground">AI agents generate AST-compliant error handlers & framework imports</span>
                 </div>
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                  <span className="text-sm font-medium text-foreground">Pre-merge build verification with real compiler checks (<code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">tsc --noEmit</code>)</span>
+                  <span className="text-sm font-medium text-foreground">Pre-merge build verification with Python, Node, and TypeScript checks</span>
                 </div>
               </div>
 
@@ -164,48 +207,6 @@ export default function Home() {
                 <span className="text-xs font-mono text-text-secondary">Latency to Draft PR: &lt; 15 seconds</span>
                 <Link href="/sites" className="text-sm font-semibold text-primary inline-flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                   View Monitored Sites <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-            </div>
-
-            {/* Engine 2: Proactive Chaos Testing */}
-            <div className="relative flex flex-col p-8 md:p-10 bg-card border border-border-strong rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 group">
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                    <Shield className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-mono font-semibold uppercase tracking-wider text-primary">Engine 02 • Proactive</span>
-                    <h3 className="text-2xl font-bold text-foreground tracking-tight">Autonomous Chaos Testing</h3>
-                  </div>
-                </div>
-                <div className="w-3 h-3 rounded-full bg-primary"></div>
-              </div>
-
-              <p className="text-base text-text-secondary leading-relaxed font-medium mb-8">
-                Stress-test your API endpoints before deployment. PatchFlow automatically discovers endpoints from your OpenAPI spec or repository, injects 18+ aggressive failure modes, and resolves unhandled crashes with consolidated Pull Requests.
-              </p>
-
-              <div className="space-y-4 mb-8">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                  <span className="text-sm font-medium text-foreground">Auto-discovery from OpenAPI URL, Postman collection, or source code</span>
-                </div>
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                  <span className="text-sm font-medium text-foreground">18 synthetic failure modes across network, payloads, and state errors</span>
-                </div>
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                  <span className="text-sm font-medium text-foreground">Reliability Score (0-100) with security leakage and exception audits</span>
-                </div>
-              </div>
-
-              <div className="mt-auto pt-6 border-t border-border flex items-center justify-between">
-                <span className="text-xs font-mono text-text-secondary">Scan Modes: OpenAPI, Custom, Manual</span>
-                <Link href="/sessions/new" className="text-sm font-semibold text-primary inline-flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                  Launch Chaos Test <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
             </div>
@@ -220,10 +221,10 @@ export default function Home() {
                 Autonomous Pipeline
               </Badge>
               <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight text-foreground mb-6">
-                From runtime exception to merged PR.
+                From failure injection to merged PR.
               </h2>
               <p className="text-lg text-text-secondary font-medium">
-                Here is what happens behind the scenes in the seconds following a production crash.
+                Here is what happens behind the scenes in the seconds following a detected API failure.
               </p>
             </div>
 
@@ -233,9 +234,9 @@ export default function Home() {
                 <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold font-mono mb-5">
                   01
                 </div>
-                <h4 className="text-lg font-bold text-foreground mb-2">SDK Ingest & Fingerprint</h4>
+                <h4 className="text-lg font-bold text-foreground mb-2">Discovery & Failure Injection</h4>
                 <p className="text-sm text-text-secondary leading-relaxed">
-                  SDK captures unhandled exceptions with sanitized stack frames, extracts culprit files, and fingerprints deduplication.
+                  Discovers backend endpoints from OpenAPI or collections and injects aggressive synthetic failure modes into the API.
                 </p>
               </div>
 
@@ -246,7 +247,7 @@ export default function Home() {
                 </div>
                 <h4 className="text-lg font-bold text-foreground mb-2">FixAgent (Gemma AI)</h4>
                 <p className="text-sm text-text-secondary leading-relaxed">
-                  FixAgent clones the repository, locates the crashing endpoint, and generates a surgical, framework-tailored patch.
+                  FixAgent clones the repo, programmatically locates the route handler, and generates a framework-tailored resilience patch.
                 </p>
               </div>
 
@@ -257,7 +258,7 @@ export default function Home() {
                 </div>
                 <h4 className="text-lg font-bold text-foreground mb-2">Review & Build Verification</h4>
                 <p className="text-sm text-text-secondary leading-relaxed">
-                  ReviewAgent performs senior code review and runs real compiler checks (<code className="font-mono text-xs">tsc</code> / <code className="font-mono text-xs">node</code> / <code className="font-mono text-xs">python</code>) in the clone.
+                  ReviewAgent performs senior code review, verifies AST brackets, and runs compile checks before pushing changes.
                 </p>
               </div>
 
@@ -268,7 +269,7 @@ export default function Home() {
                 </div>
                 <h4 className="text-lg font-bold text-foreground mb-2">GitHubAgent Draft PR</h4>
                 <p className="text-sm text-text-secondary leading-relaxed">
-                  Opens a Draft PR with unified diff, occurrence metrics, and build verification status badge ready for 1-click merge.
+                  Opens a Pull Request with a consolidated branch, detailed failure mode descriptions, and verified diffs ready to merge.
                 </p>
               </div>
             </div>
@@ -287,12 +288,12 @@ export default function Home() {
                   High-quality patches you can merge with confidence.
                 </h2>
                 <p className="text-lg text-neutral-400 font-medium mb-8 leading-relaxed">
-                  No hallucinated imports or broken syntax. Every fix is applied directly to a clean clone of your codebase and tested against the TypeScript compiler or runtime checker before creating the PR.
+                  No hallucinated imports or broken syntax. Every fix is applied directly to a clean clone of your codebase and tested against the language runtime before creating the PR.
                 </p>
                 <ul className="flex flex-col gap-4">
                   <li className="flex items-center gap-3">
                     <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
-                    <span className="text-base font-medium text-neutral-200">Auto-imports missing symbols (<code className="text-primary font-mono text-xs">NextResponse</code>, <code className="text-primary font-mono text-xs">HTTPException</code>)</span>
+                    <span className="text-base font-medium text-neutral-200">Auto-imports missing symbols (<code className="text-primary font-mono text-xs">HTTPException</code>, <code className="text-primary font-mono text-xs">JsonResponse</code>, <code className="text-primary font-mono text-xs">ResponseEntity</code>)</span>
                   </li>
                   <li className="flex items-center gap-3">
                     <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
@@ -310,25 +311,28 @@ export default function Home() {
                 <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#1e1e1d]">
                   <div className="flex items-center gap-2 text-neutral-200">
                     <GitPullRequest className="h-4 w-4 text-emerald-400" />
-                    <span className="font-medium">fix: TypeError at app/crash/route.ts #104</span>
+                    <span className="font-medium">fix: 503 resilience on /api/v1/orders #14</span>
                   </div>
                   <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded px-2 py-0.5 text-xs font-semibold">
                     Build: Passed
                   </Badge>
                 </div>
                 <div className="p-6 bg-[#0c0c0b] text-neutral-200 leading-relaxed overflow-x-auto space-y-1">
-                  <div className="text-neutral-500 pb-2">{"// app/crash/route.ts"}</div>
-                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+ import { NextResponse } from 'next/server';"}</div>
-                  <div className="text-neutral-400 py-1">{"  export async function GET() {"}</div>
-                  <div className="text-rose-400 bg-rose-950/20 px-2 py-0.5 -mx-2">{"-     const title = data.notes.title;"}</div>
-                  <div className="text-rose-400 bg-rose-950/20 px-2 py-0.5 -mx-2">{"-     return NextResponse.json({ title });"}</div>
-                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+     try {"}</div>
-                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+         const title = data?.notes?.title ?? 'Untitled';"}</div>
-                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+         return NextResponse.json({ ok: true, title });"}</div>
-                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+     } catch (error) {"}</div>
-                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+         return NextResponse.json({ error: 'Failed to load' }, { status: 500 });"}</div>
-                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+     }"}</div>
-                  <div className="text-neutral-400">{"  }"}</div>
+                  <div className="text-neutral-500 pb-2">{"# routes/orders.py"}</div>
+                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+ from fastapi import HTTPException, status"}</div>
+                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+ from sqlalchemy.exc import SQLAlchemyError"}</div>
+                  <div className="text-neutral-400 py-1">{'  @router.get("/orders/{order_id}")'}</div>
+                  <div className="text-neutral-400">{'  async def get_order(order_id: str):'}</div>
+                  <div className="text-rose-400 bg-rose-950/20 px-2 py-0.5 -mx-2">{"-     order = await db.fetch_order(order_id)"}</div>
+                  <div className="text-rose-400 bg-rose-950/20 px-2 py-0.5 -mx-2">{'-     return {"ok": True, "order": order}'}</div>
+                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+     try:"}</div>
+                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+         order = await db.fetch_order(order_id)"}</div>
+                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+         if not order:"}</div>
+                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{'+             raise HTTPException(status_code=404, detail="Order not found")'}</div>
+                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{'+         return {"ok": True, "order": order}'}</div>
+                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{"+     except SQLAlchemyError as exc:"}</div>
+                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{'+         logger.error(f"Database error fetching order {order_id}: {exc}")'}</div>
+                  <div className="text-emerald-400 bg-emerald-950/20 px-2 py-0.5 -mx-2">{'+         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service unavailable")'}</div>
                 </div>
               </div>
             </div>

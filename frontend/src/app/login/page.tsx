@@ -3,15 +3,22 @@
 import Link from "next/link";
 import { Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { API_BASE_URL } from "@/lib/api-config";
 
 function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionExpiredDismissed, setSessionExpiredDismissed] = useState(false);
   const searchParams = useSearchParams();
-  const sessionExpired = searchParams.get("expired") === "1";
+  const sessionExpired = !sessionExpiredDismissed && searchParams.get("expired") === "1";
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("expired=")) {
+      window.history.replaceState({}, "", "/login");
+    }
+  }, []);
 
   const handleGitHubLogin = async () => {
     setLoading(true);
@@ -49,11 +56,21 @@ function LoginContent() {
         </p>
 
         {sessionExpired && (
-          <div className="w-full p-3 mb-6 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg text-left flex items-center gap-2">
-            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-            </svg>
-            Your session has expired. Please sign in again to continue.
+          <div className="w-full p-3 mb-6 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg text-left flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <span>Your session has expired. Please sign in again to continue.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSessionExpiredDismissed(true)}
+              className="text-amber-600 hover:text-amber-900 text-sm font-bold px-1"
+              aria-label="Dismiss banner"
+            >
+              ✕
+            </button>
           </div>
         )}
 

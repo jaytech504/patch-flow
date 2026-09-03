@@ -25,7 +25,7 @@ function forceLogout() {
   // Small delay to let any in-flight requests settle
   setTimeout(() => {
     sessionStorage.removeItem("patchflow_logging_out");
-    window.location.href = "/login?expired=1";
+    window.location.href = "/login";
   }, 100);
 }
 

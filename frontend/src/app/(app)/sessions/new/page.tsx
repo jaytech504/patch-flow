@@ -268,7 +268,7 @@ export default function NewSessionPage() {
   };
 
   return (
-    <div className={cn("mx-auto px-6 py-12 w-full flex flex-col bg-white min-h-[calc(100vh-4rem)]", step === "form" ? "max-w-2xl" : "max-w-4xl")}>
+    <div className={cn("mx-auto px-6 py-12 w-full flex flex-col bg-white min-h-[calc(100vh-4rem)]", step === "form" ? "max-w-4xl" : "max-w-5xl")}>
       {step === "form" ? (
         <>
           {/* Back to Dashboard */}
@@ -315,7 +315,7 @@ export default function NewSessionPage() {
               </Badge>
             </div>
             <p className="text-[11px] text-zinc-500 leading-relaxed">
-              Chaos testing & automated PR fixes are purpose-built for backend microservices and REST APIs. For frontend UI error tracking, use the <Link href="/sdk" className="underline font-medium text-primary">PatchFlow SDK</Link>.
+              Chaos testing & automated PR fixes are purpose-built for backend microservices and REST APIs. For frontend UI error tracking, use the <Link href="/sites" className="underline font-medium text-primary">PatchFlow SDK</Link>.
             </p>
           </div>
 

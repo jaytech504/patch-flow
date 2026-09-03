@@ -46,7 +46,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       if (!valid) {
         localStorage.removeItem("patchflow_token");
         localStorage.removeItem("patchflow_user");
-        router.push("/login?expired=1");
+        router.push("/login");
       }
     });
   }, [router]);

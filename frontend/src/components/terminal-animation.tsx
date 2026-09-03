@@ -4,15 +4,14 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 const commands = [
-  { text: "[SDK] Monitoring site 'Devhype' (Next.js / TypeScript)...", delay: 800, type: "system" },
-  { text: "🚨 Production crash captured: TypeError @ app/crash/route.ts:8", delay: 2000, type: "error" },
-  { text: "   Message: Cannot read properties of undefined (reading 'title')", delay: 3000, type: "error" },
-  { text: "⚡ Threshold reached (3 events) → Spawning Autonomous Incident Pipeline", delay: 4200, type: "system" },
-  { text: "🤖 FixAgent: Cloned repo & generated patch via Gemma", delay: 5600, type: "system" },
-  { text: "🛡️ ReviewAgent: Senior review passed & AST verified", delay: 6800, type: "system" },
-  { text: "🔨 Compiler: npx tsc --noEmit build check passed ✓", delay: 8000, type: "success" },
-  { text: "🚀 GitHubAgent: Draft PR #104 opened on GitHub!", delay: 9400, type: "success" },
-  { text: "✨ PatchFlow resolved production incident in 12.4s.", delay: 10800, type: "system" }
+  { text: "[PatchFlow] Chaos scanning billing-api (FastAPI / Python)...", delay: 800, type: "system" },
+  { text: "⚡ Injected failure: Socket timeout + DB drop on /api/v1/orders", delay: 2000, type: "error" },
+  { text: "🚨 Unhandled 500: SQLAlchemyError at routes/orders.py:42", delay: 3000, type: "error" },
+  { text: "🤖 FixAgent: Synthesized resilient patch with HTTPException & fallback", delay: 4400, type: "system" },
+  { text: "🛡️ ReviewAgent: AST syntax verified & error handler validated", delay: 5800, type: "system" },
+  { text: "🔨 Compiler: python -m py_compile routes/orders.py passed ✓", delay: 7200, type: "success" },
+  { text: "🚀 GitHubAgent: Pull Request #14 opened with merge-ready fix!", delay: 8800, type: "success" },
+  { text: "✨ Reliability hardened: API score updated to 98/100.", delay: 10400, type: "system" }
 ];
 
 export function TerminalAnimation() {
