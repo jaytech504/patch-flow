@@ -282,10 +282,40 @@ export default function NewSessionPage() {
             </Link>
           </div>
 
-          <div className="mb-8">
+          <div className="mb-6">
             <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Run New Test</h1>
             <p className="text-sm text-zinc-500 mt-1">
-              Configure endpoint failure injection scans against your API target.
+              Configure endpoint failure injection scans against your backend API target.
+            </p>
+          </div>
+
+          {/* Supported Backend Frameworks Banner */}
+          <div className="mb-6 p-4 rounded-xl border border-primary/20 bg-primary/5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <p className="text-xs font-semibold text-zinc-900 uppercase tracking-wider">
+                Supported Backend Frameworks
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              <Badge variant="outline" className="bg-white text-zinc-700 border-zinc-200 text-[11px] font-medium py-0.5">
+                🚀 FastAPI (Python)
+              </Badge>
+              <Badge variant="outline" className="bg-white text-zinc-700 border-zinc-200 text-[11px] font-medium py-0.5">
+                🐍 Django & DRF (Python)
+              </Badge>
+              <Badge variant="outline" className="bg-white text-zinc-700 border-zinc-200 text-[11px] font-medium py-0.5">
+                ⚡ Express.js (Node.js)
+              </Badge>
+              <Badge variant="outline" className="bg-white text-zinc-700 border-zinc-200 text-[11px] font-medium py-0.5">
+                ☕ Spring Boot (Java)
+              </Badge>
+              <Badge variant="outline" className="bg-white text-zinc-700 border-zinc-200 text-[11px] font-medium py-0.5">
+                🌶️ Flask (Python)
+              </Badge>
+            </div>
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              Chaos testing & automated PR fixes are purpose-built for backend microservices and REST APIs. For frontend UI error tracking, use the <Link href="/sdk" className="underline font-medium text-primary">PatchFlow SDK</Link>.
             </p>
           </div>
 
@@ -499,15 +529,18 @@ export default function NewSessionPage() {
                     </select>
                     <input
                       type="text"
-                      placeholder="e.g. /users"
+                      placeholder="e.g. /api/v1/users or /orders"
                       value={newPath}
                       onChange={(e) => setNewPath(e.target.value)}
-                      className="flex-1 px-4 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-zinc-400"
+                      className="flex-1 px-4 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-zinc-400 font-mono"
                     />
                     <Button type="button" onClick={addManualEndpoint} variant="outline" size="sm">
                       <Plus className="h-4 w-4 mr-1" /> Add
                     </Button>
                   </div>
+                  <p className="text-[11px] text-zinc-400">
+                    Enter the backend API path to target. Automated PRs will patch the corresponding controller or route handler.
+                  </p>
 
                   {/* Added Endpoints List */}
                   {manualEndpoints.length > 0 && (

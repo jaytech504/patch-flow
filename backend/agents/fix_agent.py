@@ -1186,6 +1186,94 @@ Return JSON:
                     except Exception as e:
                         logger.warning(f"[Fix] Error reading route/page file {candidate}: {e}")
 
+        # ── Django: locate via urls.py and trace to views.py ──────────────────
+        if self.language == "python" or (self._adapter and self._adapter.name == "django"):
+            for url_file in repo_path.rglob("*urls.py"):
+                if any(p in url_file.parts for p in _SKIP):
+                    continue
+                try:
+                    u_content = url_file.read_text(encoding="utf-8")
+                    if not any(v in u_content for v in path_variants):
+                        continue
+                    u_lines = u_content.splitlines()
+                    for u_idx, u_line in enumerate(u_lines):
+                        if any(v in u_line for v in path_variants):
+                            m_view = _re.search(r'(?:views\.)?([a-zA-Z_]\w*)(?:\.as_view\(\))?', u_line)
+                            if m_view:
+                                view_name = m_view.group(1)
+                                if view_name not in {"path", "re_path", "url", "include", "admin"}:
+                                    v_dir = url_file.parent
+                                    v_candidates = [
+                                        v_dir / "views.py",
+                                        v_dir / "views" / "__init__.py",
+                                        repo_path / "views.py",
+                                    ]
+                                    for v_file in v_candidates:
+                                        if v_file.exists() and v_file.is_file():
+                                            v_lines = v_file.read_text(encoding="utf-8").splitlines()
+                                            for v_idx, v_l in enumerate(v_lines):
+                                                if _re.search(rf'^(?:async\s+)?def\s+{view_name}\b', v_l.strip()) or _re.search(rf'^class\s+{view_name}\b', v_l.strip()):
+                                                    start_i = v_idx
+                                                    while start_i > 0 and v_lines[start_i - 1].strip().startswith("@"):
+                                                        start_i -= 1
+                                                    base_ind = len(v_l) - len(v_l.lstrip())
+                                                    end_i = v_idx + 1
+                                                    while end_i < len(v_lines):
+                                                        curr = v_lines[end_i]
+                                                        if curr.strip() and (len(curr) - len(curr.lstrip())) <= base_ind and not curr.strip().startswith((")", "]", "}")):
+                                                            break
+                                                        end_i += 1
+                                                    rel = str(v_file.relative_to(repo_path)).replace("\\", "/")
+                                                    return {
+                                                        "file_path": rel,
+                                                        "target_function": view_name,
+                                                        "start_line": start_i + 1,
+                                                        "end_line": end_i,
+                                                        "original_code": "\n".join(v_lines[start_i:end_i]),
+                                                        "reasoning": f"Django: traced route in {url_file.name} to view '{view_name}' in {rel}",
+                                                    }
+                except Exception as e:
+                    logger.warning(f"[Fix] Error reading Django url file {url_file}: {e}")
+
+        # ── Spring Boot (Java): locate in *Controller.java ─────────────────────
+        if self.language == "java" or (self._adapter and self._adapter.name == "springboot"):
+            for j_file in repo_path.rglob("*.java"):
+                if any(p in j_file.parts for p in _SKIP):
+                    continue
+                try:
+                    j_content = j_file.read_text(encoding="utf-8")
+                    if not any(v in j_content for v in path_variants):
+                        continue
+                    j_lines = j_content.splitlines()
+                    for j_idx, j_line in enumerate(j_lines):
+                        if any(v in j_line for v in path_variants):
+                            if _re.search(r'@(?:GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)', j_line):
+                                start_i = j_idx
+                                while start_i > 0 and j_lines[start_i - 1].strip().startswith("@"):
+                                    start_i -= 1
+                                brace_count = 0
+                                found_braces = False
+                                end_i = j_idx
+                                for scan_i in range(j_idx, len(j_lines)):
+                                    sl = j_lines[scan_i]
+                                    brace_count += sl.count("{") - sl.count("}")
+                                    if "{" in sl:
+                                        found_braces = True
+                                    if found_braces and brace_count <= 0:
+                                        end_i = scan_i + 1
+                                        break
+                                rel = str(j_file.relative_to(repo_path)).replace("\\", "/")
+                                return {
+                                    "file_path": rel,
+                                    "target_function": f"spring_{method.lower()}",
+                                    "start_line": start_i + 1,
+                                    "end_line": end_i,
+                                    "original_code": "\n".join(j_lines[start_i:end_i]),
+                                    "reasoning": f"Spring Boot: found mapping annotation in {rel}",
+                                }
+                except Exception as e:
+                    logger.warning(f"[Fix] Error reading Java controller {j_file}: {e}")
+
         for ext in extensions:
             for f in repo_path.rglob(f"*{ext}"):
                 if any(p in f.parts for p in _SKIP):

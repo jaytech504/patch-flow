@@ -286,6 +286,51 @@ def _hono_path_variants(path: str) -> list[str]:
     return [colon_path, path]
 
 
+def _django_precheck(code_after: str, imports: list[str]) -> list[str]:
+    issues: list[str] = []
+    if "JsonResponse(" in code_after:
+        has_import = any("JsonResponse" in i for i in imports) or "JsonResponse" in code_after.split("\n")[0]
+        if not has_import:
+            issues.append("JsonResponse used but not imported — add 'from django.http import JsonResponse'.")
+    if "Response(" in code_after and "JsonResponse(" not in code_after:
+        has_resp = any("Response" in i for i in imports) or "from rest_framework.response import" in code_after
+        if not has_resp:
+            issues.append("DRF Response used but not imported — add 'from rest_framework.response import Response'.")
+    if "status.HTTP_" in code_after:
+        has_status = any("status" in i for i in imports) or "from rest_framework import status" in code_after
+        if not has_status:
+            issues.append("DRF status used but not imported — add 'from rest_framework import status'.")
+    if "except Exception:" in code_after and "JsonResponse" not in code_after and "Response" not in code_after and "raise" not in code_after:
+        issues.append("Bare 'except Exception' without returning JsonResponse/Response or re-raising — client will receive no response.")
+    return issues
+
+
+def _django_path_variants(path: str) -> list[str]:
+    """Django routes often omit leading slash, e.g. path('users/', ...) or path('api/users', ...)."""
+    stripped = path.strip("/")
+    return [path, stripped, f"{stripped}/", f"/{stripped}/"]
+
+
+def _springboot_precheck(code_after: str, imports: list[str]) -> list[str]:
+    issues: list[str] = []
+    if "ResponseEntity" in code_after:
+        has_import = any("ResponseEntity" in i for i in imports) or "ResponseEntity" in code_after
+        if not has_import:
+            issues.append("ResponseEntity used but not imported — add 'import org.springframework.http.ResponseEntity;'.")
+    if "HttpStatus" in code_after:
+        has_import = any("HttpStatus" in i for i in imports) or "HttpStatus" in code_after
+        if not has_import:
+            issues.append("HttpStatus used but not imported — add 'import org.springframework.http.HttpStatus;'.")
+    return issues
+
+
+def _springboot_path_variants(path: str) -> list[str]:
+    """Spring Boot routes often use @GetMapping('/users') or @GetMapping('users')."""
+    stripped = path.strip("/")
+    curly = re.sub(r":(\w+)", r"{\1}", path)
+    return [path, f"/{stripped}", stripped, curly]
+
+
 # ── Adapter registry ──────────────────────────────────────────────────────────
 
 ADAPTERS: dict[str, FrameworkAdapter] = {}
@@ -496,6 +541,66 @@ _reg(FrameworkAdapter(
     build_command=["run", "build"],
 ))
 
+_reg(FrameworkAdapter(
+    name="django",
+    language="python",
+    display_name="Django / DRF",
+    py_deps=["django", "djangorestframework"],
+    marker_files=["manage.py", "wsgi.py", "asgi.py"],
+    source_patterns=[
+        r"from django",
+        r"import django",
+        r"from rest_framework",
+        r"urlpatterns\s*=",
+        r"@api_view\(",
+    ],
+    generation_rules=[
+        "Wrap view logic in try/except blocks to catch runtime and database errors.",
+        "For Django REST Framework (DRF): import status from 'rest_framework' and Response from 'rest_framework.response'. Return Response({'error': 'safe message'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR).",
+        "For standard Django views: return JsonResponse({'error': 'safe message'}, status=500) from 'django.http'.",
+        "Catch specific exceptions: DatabaseError, ObjectDoesNotExist, ValidationError before generic Exception.",
+        "Never return raw exception strings or database tracebacks in the response payload.",
+        "CRITICAL: Add all needed imports to imports_needed, e.g. 'from django.http import JsonResponse' or 'from rest_framework import status'.",
+    ],
+    route_patterns=[
+        r'(?:path|re_path|url)\s*\(\s*["\']',
+        r'@api_view\s*\(',
+    ],
+    path_variants_fn=_django_path_variants,
+    precheck_fn=_django_precheck,
+    validation_commands=[
+        ("Python syntax", ["python", "-c", "import ast, sys; ast.parse(open(sys.argv[1]).read())"]),
+    ],
+    build_command=["python", "-m", "py_compile"],
+))
+
+_reg(FrameworkAdapter(
+    name="springboot",
+    language="java",
+    display_name="Spring Boot",
+    marker_files=["pom.xml", "build.gradle", "build.gradle.kts", "mvnw", "gradlew"],
+    source_patterns=[
+        r"@SpringBootApplication",
+        r"@RestController",
+        r"@Controller",
+        r"org\.springframework",
+    ],
+    generation_rules=[
+        "Use ResponseEntity<T> to return structured JSON responses with appropriate HttpStatus.",
+        "Wrap database and service calls in try/catch blocks catching specific exceptions (DataAccessException, ResourceNotFoundException).",
+        "Use @ExceptionHandler or ControllerAdvice when global/centralized exception handling is preferred.",
+        "Never expose stack traces or internal entity models in error responses; return an ErrorResponse DTO or Map<String, Object>.",
+        "Preserve Java types, annotations, and package imports.",
+    ],
+    route_patterns=[
+        r'@(?:GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\s*\(\s*(?:(?:value|path)\s*=\s*)?["\']',
+    ],
+    path_variants_fn=_springboot_path_variants,
+    precheck_fn=_springboot_precheck,
+    validation_commands=[],
+    build_command=None,
+))
+
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
@@ -504,16 +609,22 @@ def get_adapter(framework: str) -> FrameworkAdapter | None:
     return ADAPTERS.get(framework)
 
 
+def all_adapters() -> list[FrameworkAdapter]:
+    """Return all registered framework adapters."""
+    return list(ADAPTERS.values())
+
+
 def detect_framework(repo_path: str) -> FrameworkAdapter | None:
     """
     Inspect a cloned repository and return the best-matching adapter.
 
     Priority:
-      1. package.json dep match (Node)
-      2. Python requirements/pyproject dep match
-      3. Marker file presence
-      4. Source pattern scan (first 120 source files)
-      5. None — caller falls back to generic rules
+      1. Java / Spring Boot build files (pom.xml, build.gradle)
+      2. Node: package.json dep match
+      3. Python requirements/pyproject dep match
+      4. Marker file presence
+      5. Source pattern scan (first 150 source files)
+      6. None — caller falls back to generic rules
     """
     import json
     import os
@@ -521,7 +632,11 @@ def detect_framework(repo_path: str) -> FrameworkAdapter | None:
 
     root = Path(repo_path)
 
-    # ── 1. Node: package.json ─────────────────────────────────────────────────
+    # ── 1. Java / Spring Boot ─────────────────────────────────────────────────
+    if (root / "pom.xml").exists() or (root / "build.gradle").exists() or (root / "build.gradle.kts").exists():
+        return ADAPTERS.get("springboot")
+
+    # ── 2. Node: package.json ─────────────────────────────────────────────────
     pkg = root / "package.json"
     if pkg.exists():
         try:
@@ -532,38 +647,38 @@ def detect_framework(repo_path: str) -> FrameworkAdapter | None:
             }
             # Order matters: more specific first
             for slug in ("nestjs", "hono", "nextjs", "express"):
-                adapter = ADAPTERS[slug]
-                if any(d in deps for d in adapter.npm_deps):
+                adapter = ADAPTERS.get(slug)
+                if adapter and any(d in deps for d in adapter.npm_deps):
                     return adapter
         except Exception:
             pass
 
-    # ── 2. Python requirements ────────────────────────────────────────────────
+    # ── 3. Python requirements ────────────────────────────────────────────────
     for req_file in ("requirements.txt", "pyproject.toml", "Pipfile"):
         req_path = root / req_file
         if req_path.exists():
             try:
                 content = req_path.read_text(encoding="utf-8").lower()
-                for slug in ("fastapi", "flask"):
-                    adapter = ADAPTERS[slug]
-                    if any(dep in content for dep in adapter.py_deps):
+                for slug in ("fastapi", "django", "flask"):
+                    adapter = ADAPTERS.get(slug)
+                    if adapter and any(dep in content for dep in adapter.py_deps):
                         return adapter
             except Exception:
                 pass
 
-    # ── 3. Marker files ───────────────────────────────────────────────────────
+    # ── 4. Marker files ───────────────────────────────────────────────────────
     for adapter in ADAPTERS.values():
         for marker in adapter.marker_files:
             if (root / marker).exists():
                 return adapter
 
-    # ── 4. Source pattern scan ────────────────────────────────────────────────
-    _SKIP = {".git", "node_modules", "__pycache__", "venv", ".venv", "dist", "build"}
-    _EXTS = {".py", ".ts", ".tsx", ".js", ".mjs"}
+    # ── 5. Source pattern scan ────────────────────────────────────────────────
+    _SKIP = {".git", "node_modules", "__pycache__", "venv", ".venv", "dist", "build", "target", ".gradle"}
+    _EXTS = {".py", ".ts", ".tsx", ".js", ".mjs", ".java"}
     scanned = 0
 
     for f in root.rglob("*"):
-        if scanned >= 120:
+        if scanned >= 150:
             break
         if not f.is_file() or f.suffix not in _EXTS:
             continue
