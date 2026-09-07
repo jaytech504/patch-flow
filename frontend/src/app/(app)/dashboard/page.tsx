@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Plus, CheckCircle2, XCircle, Activity, AlertTriangle,
   GitPullRequest, Gauge, Globe, Clock, ShieldCheck, ArrowRight,
@@ -91,6 +92,10 @@ export default function DashboardPage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "sessions" | "incidents" | "sites">("overview");
+  const [retryingSessionId, setRetryingSessionId] = useState<string | null>(null);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [retryErrorSessionId, setRetryErrorSessionId] = useState<string | null>(null);
+  const router = useRouter();
 
   const loadData = async () => {
     setLoading(true);
@@ -200,6 +205,29 @@ export default function DashboardPage() {
         <span>{status.charAt(0).toUpperCase() + status.slice(1)}</span>
       </div>
     );
+  };
+
+  const retrySession = async (sessionId: string) => {
+    if (retryingSessionId) return;
+    setRetryingSessionId(sessionId);
+    setRetryError(null);
+    setRetryErrorSessionId(null);
+
+    try {
+      const response = await authFetch(`/api/sessions/${sessionId}/retry`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || "Unable to restart this chaos scan.");
+      }
+      router.push(`/sessions/${sessionId}`);
+    } catch (error) {
+      setRetryError(error instanceof Error ? error.message : "Unable to restart this chaos scan.");
+      setRetryErrorSessionId(sessionId);
+    } finally {
+      setRetryingSessionId(null);
+    }
   };
 
   return (
@@ -506,39 +534,58 @@ export default function DashboardPage() {
                     {sessions.slice(0, 3).map((s) => {
                       const isRunning = !["complete", "completed", "failed"].includes(s.status.toLowerCase());
                       const linkTarget = isRunning ? `/sessions/${s.id}` : `/sessions/${s.id}/report`;
+                      const isFailed = s.status.toLowerCase() === "failed";
+                      const isRetrying = retryingSessionId === s.id;
                       return (
-                        <Link
+                        <div
                           key={s.id}
-                          href={linkTarget}
                           className="bg-white border border-[#E7E5E2] hover:border-[#D4D1CC] rounded-[14px] p-4 transition-all hover:shadow-xs block"
                         >
                           <div className="flex items-center justify-between mb-1.5">
-                            <div className="flex items-center gap-2.5">
+                            <Link href={linkTarget} className="flex items-center gap-2.5 min-w-0">
                               <span className="text-[15px] font-[700] text-[#111110]">{s.appName}</span>
                               {getStatusBadge(s.status)}
-                            </div>
-                            <span className="text-[12px] text-[#A3A099]">{s.date}</span>
-                          </div>
-                          <div className="text-[12px] font-mono text-[#6F6B66] truncate mb-3">{s.appUrl}</div>
-                          <div className="flex items-center gap-6 text-[12px]">
-                            <div>
-                              <span className="text-[#A3A099] mr-1.5">Endpoints:</span>
-                              <span className="font-[700] text-[#111110]">{s.endpointsTested}</span>
-                            </div>
-                            <div>
-                              <span className="text-[#A3A099] mr-1.5">Failures:</span>
-                              <span className={cn("font-[700]", s.failuresFound > 0 ? "text-[#DC2626]" : "text-[#111110]")}>
-                                {s.failuresFound}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[#A3A099] mr-1.5">Patches:</span>
-                              <span className={cn("font-[700]", s.fixesGenerated > 0 ? "text-[#16A34A]" : "text-[#111110]")}>
-                                {s.fixesGenerated}
-                              </span>
+                            </Link>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <span className="text-[12px] text-[#A3A099]">{s.date}</span>
+                              {isFailed && (
+                                <button
+                                  type="button"
+                                  onClick={() => retrySession(s.id)}
+                                  disabled={isRetrying}
+                                  className="inline-flex items-center gap-1 text-[11px] font-[700] text-[#FF5A1F] hover:text-[#E04E16] disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  <RefreshCw className={cn("h-3 w-3", isRetrying && "animate-spin")} />
+                                  {isRetrying ? "Retrying…" : "Retry scan"}
+                                </button>
+                              )}
                             </div>
                           </div>
-                        </Link>
+                          <Link href={linkTarget} className="block">
+                            <div className="text-[12px] font-mono text-[#6F6B66] truncate mb-3">{s.appUrl}</div>
+                            <div className="flex items-center gap-6 text-[12px]">
+                              <div>
+                                <span className="text-[#A3A099] mr-1.5">Endpoints:</span>
+                                <span className="font-[700] text-[#111110]">{s.endpointsTested}</span>
+                              </div>
+                              <div>
+                                <span className="text-[#A3A099] mr-1.5">Failures:</span>
+                                <span className={cn("font-[700]", s.failuresFound > 0 ? "text-[#DC2626]" : "text-[#111110]")}>
+                                  {s.failuresFound}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[#A3A099] mr-1.5">Patches:</span>
+                                <span className={cn("font-[700]", s.fixesGenerated > 0 ? "text-[#16A34A]" : "text-[#111110]")}>
+                                  {s.fixesGenerated}
+                                </span>
+                              </div>
+                            </div>
+                          </Link>
+                          {retryError && retryErrorSessionId === s.id && (
+                            <p role="alert" className="mt-2 text-[11px] font-medium text-[#DC2626]">{retryError}</p>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -619,39 +666,58 @@ export default function DashboardPage() {
                 sessions.map((s) => {
                   const isRunning = !["complete", "completed", "failed"].includes(s.status.toLowerCase());
                   const linkTarget = isRunning ? `/sessions/${s.id}` : `/sessions/${s.id}/report`;
+                  const isFailed = s.status.toLowerCase() === "failed";
+                  const isRetrying = retryingSessionId === s.id;
                   return (
-                    <Link
+                    <div
                       key={s.id}
-                      href={linkTarget}
                       className="bg-white border border-[#E7E5E2] hover:border-[#D4D1CC] rounded-[14px] p-5 transition-all hover:shadow-xs block"
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2.5">
+                        <Link href={linkTarget} className="flex items-center gap-2.5 min-w-0">
                           <span className="text-[16px] font-[700] text-[#111110]">{s.appName}</span>
                           {getStatusBadge(s.status)}
-                        </div>
-                        <span className="text-[13px] text-[#A3A099]">{s.date}</span>
-                      </div>
-                      <p className="text-[13px] font-mono text-[#6F6B66] truncate mb-4">{s.appUrl}</p>
-                      <div className="flex items-center gap-8">
-                        <div>
-                          <div className="text-[11px] text-[#A3A099] uppercase tracking-wider mb-0.5">Endpoints</div>
-                          <div className="text-[18px] font-[700] text-[#111110]">{s.endpointsTested}</div>
-                        </div>
-                        <div>
-                          <div className="text-[11px] text-[#A3A099] uppercase tracking-wider mb-0.5">Failures</div>
-                          <div className={cn("text-[18px] font-[700]", s.failuresFound > 0 ? "text-[#DC2626]" : "text-[#111110]")}>
-                            {s.failuresFound}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[11px] text-[#A3A099] uppercase tracking-wider mb-0.5">Patches</div>
-                          <div className={cn("text-[18px] font-[700]", s.fixesGenerated > 0 ? "text-[#16A34A]" : "text-[#111110]")}>
-                            {s.fixesGenerated}
-                          </div>
+                        </Link>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className="text-[13px] text-[#A3A099]">{s.date}</span>
+                          {isFailed && (
+                            <button
+                              type="button"
+                              onClick={() => retrySession(s.id)}
+                              disabled={isRetrying}
+                              className="inline-flex items-center gap-1 text-[12px] font-[700] text-[#FF5A1F] hover:text-[#E04E16] disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              <RefreshCw className={cn("h-3 w-3", isRetrying && "animate-spin")} />
+                              {isRetrying ? "Retrying…" : "Retry scan"}
+                            </button>
+                          )}
                         </div>
                       </div>
-                    </Link>
+                      <Link href={linkTarget} className="block">
+                        <p className="text-[13px] font-mono text-[#6F6B66] truncate mb-4">{s.appUrl}</p>
+                        <div className="flex items-center gap-8">
+                          <div>
+                            <div className="text-[11px] text-[#A3A099] uppercase tracking-wider mb-0.5">Endpoints</div>
+                            <div className="text-[18px] font-[700] text-[#111110]">{s.endpointsTested}</div>
+                          </div>
+                          <div>
+                            <div className="text-[11px] text-[#A3A099] uppercase tracking-wider mb-0.5">Failures</div>
+                            <div className={cn("text-[18px] font-[700]", s.failuresFound > 0 ? "text-[#DC2626]" : "text-[#111110]")}>
+                              {s.failuresFound}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[11px] text-[#A3A099] uppercase tracking-wider mb-0.5">Patches</div>
+                            <div className={cn("text-[18px] font-[700]", s.fixesGenerated > 0 ? "text-[#16A34A]" : "text-[#111110]")}>
+                              {s.fixesGenerated}
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                      {retryError && retryErrorSessionId === s.id && (
+                        <p role="alert" className="mt-2 text-[12px] font-medium text-[#DC2626]">{retryError}</p>
+                      )}
+                    </div>
                   );
                 })
               )}
