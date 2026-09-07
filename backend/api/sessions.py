@@ -287,6 +287,7 @@ async def get_session(
         ],
         "agent_steps": [
             {
+                "id": step.id,
                 "agent": step.agent,
                 "step_type": step.step_type,
                 "content": step.content,

@@ -158,7 +158,9 @@ Choose the most relevant failure modes to inject.""",
                     stack_trace_leaked=raw.get("stack_trace_leaked", False),
                 )
                 self.db.add(failure_record)
-                await self.db.flush()
+                # Make the result visible to polling/reconnecting clients before
+                # streaming it. A WebSocket disconnect must not hide a test.
+                await self.db.commit()
 
                 # Stream to frontend with persistent ID and status
                 await ws_manager.emit_failure_result(self.session_id, {
@@ -196,7 +198,7 @@ Choose the most relevant failure modes to inject.""",
         session = await self.db.get(ChaosSession, self.session_id)
         if session:
             session.status = status
-            await self.db.flush()
+            await self.db.commit()
 
     async def close(self):
         await self.proxy.close()

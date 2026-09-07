@@ -289,16 +289,11 @@ class BaseAgent(ABC):
 
     async def _log(self, step_type: str, content: str,
                    tool_name: str = None, tool_input: dict = None, tool_output=None):
-        # Stream to frontend
-        await ws_manager.emit_agent_step(
-            session_id=self.session_id or "system",
-            agent=self.name,
-            step_type=step_type,
-            content=content,
-            tool_name=tool_name,
-            tool_output=tool_output,
-        )
-        # Persist to DB
+        step_id = None
+        created_at = None
+
+        # Persist before broadcasting so reconnecting clients can replay the
+        # same entry from the session API without restarting the terminal view.
         if self.db and self.session_id:
             try:
                 step = AgentStep(
@@ -312,13 +307,28 @@ class BaseAgent(ABC):
                     tool_output=tool_output if isinstance(tool_output, (dict, list)) else None,
                 )
                 self.db.add(step)
-                await self.db.flush()
+                await self.db.commit()
+                step_id = step.id
+                created_at = step.created_at.isoformat() if step.created_at else None
             except Exception as e:
                 logger.warning(f"[{self.name}] Failed to persist AgentStep to DB: {e}")
                 try:
                     await self.db.rollback()
                 except Exception:
                     pass
+
+        # Streaming is best-effort; a disconnected browser must never stop the
+        # background pipeline.
+        await ws_manager.emit_agent_step(
+            session_id=self.session_id or "system",
+            agent=self.name,
+            step_type=step_type,
+            content=content,
+            tool_name=tool_name,
+            tool_output=tool_output,
+            step_id=step_id,
+            created_at=created_at,
+        )
 
     def _build_messages(self, task: str, context: dict = None) -> List[dict]:
         system = self.system_prompt

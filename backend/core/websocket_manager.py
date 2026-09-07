@@ -33,13 +33,16 @@ class WebSocketManager:
 
     async def emit_agent_step(self, session_id: str, agent: str,
                                step_type: str, content: str,
-                               tool_name: str = None, tool_output=None):
+                               tool_name: str = None, tool_output=None,
+                               step_id: str = None, created_at: str = None):
         await self.broadcast(session_id, "agent_step", {
+            "id": step_id,
             "agent": agent,
             "step_type": step_type,   # thought | tool_call | observation | conclusion
             "content": content,
             "tool_name": tool_name,
             "tool_output": tool_output,
+            "created_at": created_at,
         })
 
     async def emit_failure_result(self, session_id: str, failure: dict):

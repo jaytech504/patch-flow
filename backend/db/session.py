@@ -78,6 +78,7 @@ async def init_db():
         # a "column already exists" error on a re-deploy doesn't abort the
         # rest of startup.
         migrations = [
+            "ALTER TYPE sessionstatus ADD VALUE IF NOT EXISTS 'reviewing'",
             # Phase 1 — skipped_fixes column on reports table
             "ALTER TABLE reports ADD COLUMN IF NOT EXISTS skipped_fixes JSONB DEFAULT '[]'::jsonb",
             # Phase 4 — monitored_sites columns

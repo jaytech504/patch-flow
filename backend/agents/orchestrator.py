@@ -90,6 +90,14 @@ class ChaosOrchestrator:
 
         return merged
 
+    async def _set_stage(self, status: SessionStatus, message: str) -> None:
+        """Persist each visible stage before broadcasting it to clients."""
+        session = await self.db.get(ChaosSession, self.session_id)
+        if session:
+            session.status = status
+            await self.db.commit()
+        await ws_manager.emit_status(self.session_id, status.value, message)
+
     async def run_from_endpoints(
         self,
         target_url: str,
@@ -106,8 +114,8 @@ class ChaosOrchestrator:
 
         try:
             # ── Stage 1: Chaos Injection (180s timeout) ───────────────────────
-            await ws_manager.emit_status(
-                self.session_id, "injecting",
+            await self._set_stage(
+                SessionStatus.INJECTING,
                 f"Injecting failures into {len(endpoints)} endpoints..."
             )
             chaos = ChaosAgent(self.db, self.session_id, target_url)
@@ -128,11 +136,11 @@ class ChaosOrchestrator:
             session = await self.db.get(ChaosSession, self.session_id)
             if session:
                 session.unhandled_count = len(unhandled)
-                await self.db.flush()
+                await self.db.commit()
 
             # ── Stage 2: Analysis (90s timeout) ───────────────────────────────
-            await ws_manager.emit_status(
-                self.session_id, "analysing",
+            await self._set_stage(
+                SessionStatus.ANALYSING,
                 "Analysing failure patterns..."
             )
             analyst = AnalystAgent(self.db, self.session_id)
@@ -143,8 +151,8 @@ class ChaosOrchestrator:
                 raise TimeoutError("Failure analysis timed out after 90s.")
 
             # ── Stage 3: Fix Generation (360s timeout) ─────────────────────────
-            await ws_manager.emit_status(
-                self.session_id, "fixing",
+            await self._set_stage(
+                SessionStatus.FIXING,
                 "Generating error handling code..."
             )
             effective_token = github_token or settings.github_token
@@ -179,8 +187,8 @@ class ChaosOrchestrator:
 
             # ── Stage 3.5: Fix Review (150s timeout) ──────────────────────────
             if github_repo and effective_token and fix_result.get("fixes"):
-                await ws_manager.emit_status(
-                    self.session_id, "reviewing",
+                await self._set_stage(
+                    SessionStatus.REVIEWING,
                     "Senior code review of generated fixes..."
                 )
                 reviewer = ReviewAgent(
@@ -203,8 +211,8 @@ class ChaosOrchestrator:
                 needs_revision = fix_result.get("needs_revision", [])
                 if needs_revision:
                     logger.info(f"[Orchestrator] Review identified suggestions for {len(needs_revision)} fix(es)")
-                    await ws_manager.emit_status(
-                        self.session_id, "fixing",
+                    await self._set_stage(
+                        SessionStatus.FIXING,
                         f"Refining {len(needs_revision)} fix(es) based on review feedback..."
                     )
 
@@ -251,8 +259,8 @@ class ChaosOrchestrator:
             prs_opened = []
             prs_skipped_count = 0
             if github_repo and effective_token:
-                await ws_manager.emit_status(
-                    self.session_id, "opening_prs",
+                await self._set_stage(
+                    SessionStatus.OPENING_PRS,
                     f"Opening Pull Requests on {github_repo}..."
                 )
                 github = GitHubAgent(
@@ -292,7 +300,7 @@ class ChaosOrchestrator:
                 session.risk_score = analysis.get("risk_score", 0)
                 from datetime import datetime
                 session.completed_at = datetime.utcnow()
-                await self.db.flush()
+                await self.db.commit()
 
                 # Dispatch completion notification email if user has email configured
                 if session.user_id:

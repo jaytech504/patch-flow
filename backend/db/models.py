@@ -46,6 +46,7 @@ class SessionStatus(str, PyEnum):
     INJECTING = "injecting"
     ANALYSING = "analysing"
     FIXING = "fixing"
+    REVIEWING = "reviewing"
     OPENING_PRS = "opening_prs"
     COMPLETE = "complete"
     FAILED = "failed"

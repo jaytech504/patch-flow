@@ -12,6 +12,7 @@ import { API_BASE_URL, WS_BASE_URL } from "@/lib/api-config";
 import { authFetch } from "@/lib/auth-fetch";
 
 interface LogMessage {
+  id?: string;
   time: string;
   agent: string;
   type: string;
@@ -25,6 +26,25 @@ interface TestPill {
   status: "unhandled" | "handled" | "degraded";
   statusCode: number;
   errorLeaked: boolean;
+}
+
+interface SessionStep {
+  id?: string;
+  created_at?: string;
+  agent: string;
+  step_type: string;
+  content: string;
+}
+
+interface SessionFailure {
+  id: string;
+  endpoint_path?: string;
+  endpoint?: string;
+  endpoint_id?: string;
+  failure_mode: string;
+  result: TestPill["status"];
+  status_code: number;
+  error_leaked: boolean;
 }
 
 const STAGES = ["Discovering", "Injecting", "Analysing", "Fixing", "Reviewing", "Opening PRs"];
@@ -58,6 +78,21 @@ export default function LiveSessionPage() {
 
   const logsEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+
+  const mergeLogs = (incoming: LogMessage[]) => {
+    setLogs((previous) => {
+      const merged = new Map<string, LogMessage>();
+      for (const entry of previous) {
+        merged.set(entry.id || `${entry.time}:${entry.agent}:${entry.type}:${entry.content}`, entry);
+      }
+      for (const entry of incoming) {
+        merged.set(entry.id || `${entry.time}:${entry.agent}:${entry.type}:${entry.content}`, entry);
+      }
+      return Array.from(merged.values());
+    });
+  };
 
   // Request browser notification permission once on start
   useEffect(() => {
@@ -98,6 +133,7 @@ export default function LiveSessionPage() {
     if (s.includes("analys") || s.includes("analyz")) return 2;
     if (s.includes("fix")) return 3;
     if (s.includes("review")) return 4;
+    if (s.includes("github")) return 5;
     if (s.includes("pr")) return 5;
     if (s === "complete" || s === "completed") return 5;
     return 0;
@@ -111,7 +147,8 @@ export default function LiveSessionPage() {
 
         // Load past steps
         if (Array.isArray(data.agent_steps)) {
-          setLogs(data.agent_steps.map((step: any) => ({
+          mergeLogs(data.agent_steps.map((step: SessionStep) => ({
+            id: step.id,
             time: step.created_at ? new Date(step.created_at).toLocaleTimeString() : "",
             agent: step.agent.replace("Agent", ""),
             type: step.step_type,
@@ -121,7 +158,7 @@ export default function LiveSessionPage() {
 
         // Load past failures non-destructively
         if (Array.isArray(data.failures) && data.failures.length > 0) {
-          const loadedPills: TestPill[] = data.failures.map((f: any) => ({
+          const loadedPills: TestPill[] = data.failures.map((f: SessionFailure) => ({
             id: f.id,
             endpoint: f.endpoint_path || f.endpoint || f.endpoint_id || "Unknown",
             failureMode: f.failure_mode,
@@ -173,25 +210,19 @@ export default function LiveSessionPage() {
   }, [runFinished, sessionUrlId]);
 
   useEffect(() => {
+    let disposed = false;
     const loadSessionAndConnect = async () => {
       await fetchSessionState();
 
-      // 2. Connect to WebSocket stream
-      const wsUrl = `${WS_BASE_URL}/ws/${sessionUrlId}`;
-      const socket = new WebSocket(wsUrl);
-      wsRef.current = socket;
+      const connect = () => {
+        if (disposed) return;
+        const wsUrl = `${WS_BASE_URL}/ws/${sessionUrlId}`;
+        const socket = new WebSocket(wsUrl);
+        wsRef.current = socket;
 
       socket.onopen = () => {
+        reconnectAttemptsRef.current = 0;
         setWsConnected(true);
-        console.log(`WS connection opened for session ${sessionUrlId}`);
-      };
-
-      socket.onclose = () => {
-        setWsConnected(false);
-      };
-
-      socket.onerror = () => {
-        setWsConnected(false);
       };
 
       socket.onmessage = (event) => {
@@ -201,15 +232,13 @@ export default function LiveSessionPage() {
           const payload = msg.payload;
 
           if (type === "agent_step") {
-            setLogs((prev) => [
-              ...prev,
-              {
-                time: new Date().toLocaleTimeString(),
+            mergeLogs([{
+                id: payload.id,
+                time: payload.created_at ? new Date(payload.created_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
                 agent: payload.agent.replace("Agent", ""),
                 type: payload.step_type,
                 content: payload.content,
-              },
-            ]);
+            }]);
           } else if (type === "failure_result") {
             const observation = payload.observation || "";
             let derivedStatus = payload.result;
@@ -260,13 +289,17 @@ export default function LiveSessionPage() {
         }
       };
 
-      socket.onerror = (err) => {
-        console.error("WebSocket error:", err);
-      };
+      socket.onerror = () => socket.close();
 
       socket.onclose = () => {
-        console.log("WebSocket connection closed");
+        setWsConnected(false);
+        if (disposed) return;
+        const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current++, 15000);
+        reconnectTimerRef.current = setTimeout(connect, delay);
       };
+      };
+
+      connect();
     };
 
     const simulateMocks = () => {
@@ -287,6 +320,8 @@ export default function LiveSessionPage() {
     loadSessionAndConnect();
 
     return () => {
+      disposed = true;
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (wsRef.current) {
         wsRef.current.close();
       }
