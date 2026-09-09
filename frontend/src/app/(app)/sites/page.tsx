@@ -393,16 +393,6 @@ function SetupStepCard({ step, title, icon: Icon, children }: {
   );
 }
 
-function downloadSdkFile(file: string, filename: string) {
-  const link = document.createElement("a");
-  link.href = file;
-  link.download = filename;
-  link.rel = "noopener";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-
 // ── SDK Setup Panel ───────────────────────────────────────────────────────────
 
 function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, onApiKeyChange }: {
