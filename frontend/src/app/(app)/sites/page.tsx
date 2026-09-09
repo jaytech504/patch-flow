@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ElementType, type ReactNode } from "react";
 import {
   Globe, Plus, Trash2, Pencil, Loader2,
   Check, X, ExternalLink, Search, ChevronDown,
-  Key, Copy, Terminal, Activity,
-  AlertCircle, Download, Code, CheckCircle2,
-  Server, Zap, FileCode,
+  Key, Copy, Activity,
+  AlertCircle, Download, CheckCircle2,
+  Zap, FileCode, RefreshCw, ArrowRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,12 @@ interface Repo { name: string; full_name: string; }
 
 // ── Supported Frameworks Metadata ─────────────────────────────────────────────
 
+export interface CodeBlock {
+  label: string;
+  file: string;
+  code: string;
+}
+
 export interface FrameworkConfig {
   id: string;
   name: string;
@@ -52,11 +58,11 @@ export interface FrameworkConfig {
   description: string;
   downloadFile: string;
   downloadFilename: string;
-  placementHint: string;
+  placementPath: string;
   targetFile: string;
-  whereToAdd: string;
+  setupSummary: string;
   importantNote?: string;
-  codeSnippet: (apiKey: string, hostParam: string) => string;
+  codeBlocks: (apiKey: string, apiHost: string) => CodeBlock[];
 }
 
 export const SUPPORTED_FRAMEWORKS: FrameworkConfig[] = [
@@ -66,29 +72,30 @@ export const SUPPORTED_FRAMEWORKS: FrameworkConfig[] = [
     language: "Python",
     tag: "Async / ASGI",
     badgeColor: "bg-teal-50 text-teal-700 border-teal-200",
-    description: "ASGI middleware capturing unhandled exceptions across all async routes.",
+    description: "Captures unhandled exceptions across all async routes automatically.",
     downloadFile: "/sdk/patchflow.py",
     downloadFilename: "patchflow.py",
-    placementHint: "Place in your project root alongside main.py (or in your app directory)",
+    placementPath: "your-project/\n├── main.py\n└── patchflow.py  ← here",
     targetFile: "main.py",
-    whereToAdd: "Add once in your FastAPI main entry file. Automatically monitors every endpoint across your app.",
-    importantNote: "You do not need to wrap individual routes. The ASGI middleware intercepts crashes and unhandled exceptions globally.",
-    codeSnippet: (apiKey: string, hostParam: string) => `import os
+    setupSummary: "Add two lines after creating your FastAPI app. The SDK auto-installs ASGI middleware — no route changes needed.",
+    importantNote: "Do not wrap individual routes. One init call covers your entire API.",
+    codeBlocks: (_apiKey, apiHost) => [{
+      label: "Add to your main entry file",
+      file: "main.py",
+      code: `import os
 from fastapi import FastAPI
 import patchflow
-from patchflow import PatchFlowASGIMiddleware
 
 app = FastAPI()
 
-# 1. Initialise PatchFlow
-pf = patchflow.init(
-    api_key=os.getenv("PATCHFLOW_API_KEY", "${apiKey}")${hostParam}
+# Initialise PatchFlow — auto-installs ASGI middleware on your app
+patchflow.init(
+    api_key=os.environ["PATCHFLOW_API_KEY"],
+    host=os.getenv("PATCHFLOW_HOST", "${apiHost}"),
 )
 
-# 2. Register ASGI error middleware
-app.add_middleware(PatchFlowASGIMiddleware, patchflow=pf)
-
-# ... your normal routes remain unchanged ...`,
+# ... your routes stay exactly as they are ...`,
+    }],
   },
   {
     id: "express",
@@ -96,28 +103,37 @@ app.add_middleware(PatchFlowASGIMiddleware, patchflow=pf)
     language: "Node.js",
     tag: "JavaScript / TypeScript",
     badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
-    description: "Connect error middleware capturing sync and async route handler crashes.",
+    description: "Captures sync and async route handler crashes via error middleware.",
     downloadFile: "/sdk/patchflow.js",
     downloadFilename: "patchflow.js",
-    placementHint: "Place in project root or src/ directory",
-    targetFile: "server.js (or app.js)",
-    whereToAdd: "Add ONCE in your main server file. Do NOT put this on every route.",
-    importantNote: "Do NOT wrap or modify your individual route handlers. Placing app.use(patchflow.expressMiddleware()) once at the bottom catches unhandled errors and rejected promises across your entire API automatically.",
-    codeSnippet: (apiKey: string, hostParam: string) => `// Step 1: Add at the TOP of your server file
+    placementPath: "your-project/\n├── server.js\n└── patchflow.js  ← here",
+    targetFile: "server.js",
+    setupSummary: "Init at the top of your server file, then add error middleware once at the bottom — after all routes.",
+    importantNote: "Never add middleware per-route. One app.use() at the bottom covers everything.",
+    codeBlocks: (_apiKey, apiHost) => [
+      {
+        label: "Step A — top of file",
+        file: "server.js",
+        code: `const express = require('express');
 const patchflow = require('./patchflow');
 
+const app = express();
+
 patchflow.init({
-  apiKey: process.env.PATCHFLOW_API_KEY || '${apiKey}'${hostParam}
-});
+  apiKey: process.env.PATCHFLOW_API_KEY,
+  host: process.env.PATCHFLOW_HOST || '${apiHost}',
+});`,
+      },
+      {
+        label: "Step B — bottom of file, after all routes",
+        file: "server.js",
+        code: `// ... all your existing routes above ...
 
-// ... (keep ALL your existing routes untouched) ...
-// app.get('/api/users', (req, res) => { ... });
-// app.post('/api/orders', (req, res) => { ... });
-
-// Step 2: Add ONCE at the very BOTTOM, after all routes (before app.listen):
 app.use(patchflow.expressMiddleware());
 
 app.listen(4000);`,
+      },
+    ],
   },
   {
     id: "django",
@@ -125,27 +141,36 @@ app.listen(4000);`,
     language: "Python",
     tag: "Django 4+ / 5+",
     badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    description: "Django middleware capturing unhandled view exceptions & DRF crashes.",
+    description: "Captures unhandled view exceptions and DRF crashes project-wide.",
     downloadFile: "/sdk/patchflow.py",
     downloadFilename: "patchflow.py",
-    placementHint: "Place in project root alongside manage.py (or in your app directory)",
+    placementPath: "your-project/\n├── manage.py\n├── patchflow.py  ← here\n└── config/\n    └── settings.py",
     targetFile: "config/settings.py",
-    whereToAdd: "Add once to your Django settings file. Covers all views, URLs, and DRF endpoints across your project.",
-    importantNote: "Place 'patchflow.PatchFlowDjangoMiddleware' at or near the top of your MIDDLEWARE array.",
-    codeSnippet: (apiKey: string, hostParam: string) => `import os
+    setupSummary: "Add middleware to MIDDLEWARE, then call init at the bottom of settings.py.",
+    importantNote: "Put PatchFlowDjangoMiddleware at the top of MIDDLEWARE so it wraps all views.",
+    codeBlocks: (_apiKey, apiHost) => [
+      {
+        label: "Add middleware near the top of MIDDLEWARE",
+        file: "config/settings.py",
+        code: `MIDDLEWARE = [
+    'patchflow.PatchFlowDjangoMiddleware',  # ← add this line first
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    # ... rest of your middleware ...
+]`,
+      },
+      {
+        label: "Initialise at the bottom of settings.py",
+        file: "config/settings.py",
+        code: `import os
 import patchflow
 
-# 1. Initialise PatchFlow
 patchflow.init(
-    api_key=os.getenv("PATCHFLOW_API_KEY", "${apiKey}")${hostParam}
-)
-
-# 2. Add to MIDDLEWARE in settings.py:
-MIDDLEWARE = [
-    'patchflow.PatchFlowDjangoMiddleware', # Catches unhandled view exceptions globally
-    'django.middleware.security.SecurityMiddleware',
-    # ... your existing standard Django middlewares ...
-]`,
+    api_key=os.environ["PATCHFLOW_API_KEY"],
+    host=os.getenv("PATCHFLOW_HOST", "${apiHost}"),
+)`,
+      },
+    ],
   },
   {
     id: "springboot",
@@ -153,21 +178,22 @@ MIDDLEWARE = [
     language: "Java",
     tag: "Java 17+ / Spring 3+",
     badgeColor: "bg-green-50 text-green-700 border-green-200",
-    description: "@RestControllerAdvice interceptor capturing unhandled runtime exceptions.",
+    description: "Drop-in @RestControllerAdvice — zero extra dependencies.",
     downloadFile: "/sdk/PatchFlowAdvice.java",
     downloadFilename: "PatchFlowAdvice.java",
-    placementHint: "Place in src/main/java/com/yourpackage/ (Zero external dependencies required)",
-    targetFile: "src/main/java/.../PatchFlowAdvice.java",
-    whereToAdd: "Drop the file into your package. Spring Boot auto-detects @RestControllerAdvice to intercept errors globally.",
-    importantNote: "Zero extra Maven or Gradle dependencies required. Uses the standard Java 11+ HttpClient.",
-    codeSnippet: (apiKey: string, hostParam: string) => `// 1. Drop the downloaded PatchFlowAdvice.java into your source tree:
-//    src/main/java/com/example/demo/PatchFlowAdvice.java
+    placementPath: "src/main/java/com/yourpackage/\n└── PatchFlowAdvice.java  ← here",
+    targetFile: "PatchFlowAdvice.java",
+    setupSummary: "Drop the file into your package, update the package declaration, and set env vars. Spring Boot auto-detects it.",
+    importantNote: "No Maven or Gradle dependencies needed. Uses Java 11+ HttpClient built into the JDK.",
+    codeBlocks: (_apiKey, _apiHost) => [{
+      label: "Update the package declaration to match your project",
+      file: "PatchFlowAdvice.java (line 1)",
+      code: `// Change this line to your actual package:
+package com.yourcompany.yourapp;
 
-// 2. Set your API key in application.properties (or system env):
-PATCHFLOW_API_KEY=${apiKey}
-
-// That's it! Any unhandled exception thrown in any @RestController
-// is automatically captured and reported to PatchFlow.`,
+// The rest of the file stays as downloaded.
+// Spring Boot auto-registers @RestControllerAdvice — no config needed.`,
+    }],
   },
   {
     id: "flask",
@@ -175,28 +201,43 @@ PATCHFLOW_API_KEY=${apiKey}
     language: "Python",
     tag: "WSGI / Sync",
     badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
-    description: "Flask errorhandler hook capturing 500 crashes across all blueprints.",
+    description: "Captures 500 errors across all routes and blueprints.",
     downloadFile: "/sdk/patchflow.py",
     downloadFilename: "patchflow.py",
-    placementHint: "Place in project root next to app.py",
+    placementPath: "your-project/\n├── app.py\n└── patchflow.py  ← here",
     targetFile: "app.py",
-    whereToAdd: "Pass your Flask app instance once during initialization.",
-    importantNote: "Covers all routes and blueprints across your Flask application automatically.",
-    codeSnippet: (apiKey: string, hostParam: string) => `import os
+    setupSummary: "Pass your Flask app instance to init once. All routes and blueprints are covered automatically.",
+    importantNote: "Do not add error handlers per-route. One init call covers your entire app.",
+    codeBlocks: (_apiKey, apiHost) => [{
+      label: "Add after creating your Flask app",
+      file: "app.py",
+      code: `import os
 from flask import Flask
 import patchflow
 
 app = Flask(__name__)
 
-# Initialise PatchFlow with your Flask app object:
 patchflow.init(
-    api_key=os.getenv("PATCHFLOW_API_KEY", "${apiKey}"),
-    app=app${hostParam}
+    api_key=os.environ["PATCHFLOW_API_KEY"],
+    host=os.getenv("PATCHFLOW_HOST", "${apiHost}"),
+    app=app,
 )
 
-# ... all your normal routes and blueprints remain unchanged ...`,
+# ... your routes and blueprints stay unchanged ...`,
+    }],
   },
 ];
+
+function resolveFramework(site: Site): FrameworkConfig {
+  return SUPPORTED_FRAMEWORKS.find(
+    f => f.id === site.framework?.toLowerCase() ||
+      f.name.toLowerCase().includes(site.framework?.toLowerCase() || "")
+  ) || SUPPORTED_FRAMEWORKS[0];
+}
+
+function isMaskedApiKey(key: string): boolean {
+  return key.includes("…") || key === "YOUR_API_KEY" || key.endsWith("...");
+}
 
 // ── Repo dropdown ─────────────────────────────────────────────────────────────
 
@@ -258,17 +299,62 @@ function RepoDropdown({ value, repos, reposLoading, onChange }: {
   );
 }
 
+// ── Copyable code block ───────────────────────────────────────────────────────
+
+function CopyBlock({ id, code, copied, onCopy }: {
+  id: string; code: string; copied: string | null; onCopy: (id: string, text: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[14px_16px] rounded-[8px] overflow-x-auto leading-relaxed whitespace-pre">
+        {code}
+      </pre>
+      <button onClick={() => onCopy(id, code)}
+        className={cn("absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-[600] px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer",
+          copied === id ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+        {copied === id ? <><Check className="h-[11px] w-[11px]" />Copied</> : <><Copy className="h-[11px] w-[11px]" />Copy</>}
+      </button>
+    </div>
+  );
+}
+
+function SetupStepCard({ step, title, icon: Icon, children }: {
+  step: number; title: string; icon: ElementType; children: ReactNode;
+}) {
+  return (
+    <div className="border border-[#E7E5E2] rounded-[12px] overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 bg-[#FAFAF9] border-b border-[#E7E5E2]">
+        <span className="flex items-center justify-center h-6 w-6 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800] shrink-0">
+          {step}
+        </span>
+        <Icon className="h-4 w-4 text-[#FF5A1F] shrink-0" />
+        <span className="text-[14px] font-[700] text-[#111110]">{title}</span>
+      </div>
+      <div className="p-4 flex flex-col gap-3">{children}</div>
+    </div>
+  );
+}
+
 // ── SDK Setup Panel ───────────────────────────────────────────────────────────
 
-function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; onClose: () => void }) {
+function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, onApiKeyChange }: {
+  site: Site;
+  apiKey: string;
+  onClose: () => void;
+  onRefreshStatus: () => Promise<Site | null>;
+  onApiKeyChange: (key: string) => void;
+}) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState(initialApiKey);
+  const [generatingKey, setGeneratingKey] = useState(false);
+  const [checkingConnection, setCheckingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<"idle" | "active" | "pending">("idle");
 
-  // Match initial framework tab with site's configured framework
-  const initialFramework = SUPPORTED_FRAMEWORKS.find(
-    f => f.id === site.framework?.toLowerCase() || f.name.toLowerCase().includes(site.framework?.toLowerCase() || "")
-  )?.id || "fastapi";
-
-  const [selectedFw, setSelectedFw] = useState<string>(initialFramework);
+  const fw = resolveFramework(site);
+  const apiHost = API_BASE_URL.replace(/\/$/, "");
+  const masked = isMaskedApiKey(apiKey);
+  const envSnippet = `PATCHFLOW_API_KEY=${masked ? "your_api_key_here" : apiKey}\nPATCHFLOW_HOST=${apiHost}`;
+  const blocks = fw.codeBlocks(masked ? "your_api_key_here" : apiKey, apiHost);
 
   const copy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -276,199 +362,168 @@ function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; 
     setTimeout(() => setCopied(null), 1500);
   };
 
-  const liveHost = "https://patchflow-backend-xax6.onrender.com";
-  const needsHost = API_BASE_URL !== liveHost;
-  const hostParam = needsHost ? ", host: '" + API_BASE_URL + "'" : "";
+  const generateKey = async () => {
+    setGeneratingKey(true);
+    try {
+      const r = await authFetch(`/api/sites/${site.id}/generate-key`, { method: "POST" });
+      if (!r.ok) throw new Error("Failed to generate key");
+      const data = await r.json();
+      setApiKey(data.api_key);
+      onApiKeyChange(data.api_key);
+    } catch {
+      alert("Could not generate a new API key. Please try again.");
+    } finally {
+      setGeneratingKey(false);
+    }
+  };
 
-  const activeFw = SUPPORTED_FRAMEWORKS.find(f => f.id === selectedFw) || SUPPORTED_FRAMEWORKS[0];
-  const envSnippet = "PATCHFLOW_API_KEY=" + apiKey + (needsHost ? "\nPATCHFLOW_HOST=" + API_BASE_URL : "");
-  const codeSnippet = activeFw.codeSnippet(apiKey, hostParam);
+  const checkConnection = async () => {
+    setCheckingConnection(true);
+    const refreshed = await onRefreshStatus();
+    setConnectionStatus(refreshed?.sdk_status === "active" ? "active" : "pending");
+    setCheckingConnection(false);
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, scale: 0.97, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.2 }}
-        className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl w-full max-w-[740px] max-h-[92vh] flex flex-col overflow-hidden">
+        className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl w-full max-w-[680px] max-h-[92vh] flex flex-col overflow-hidden">
 
-        {/* Modal Header */}
-        <div className="flex items-center justify-between p-6 border-b border-[#E7E5E2] shrink-0 bg-white">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-[18px] font-[800] text-[#111110] tracking-tight">Connect {site.name}</h2>
-              <span className="text-[11px] font-[600] bg-[#FFF1EC] text-[#FF5A1F] px-2 py-0.5 rounded-full">
-                SDK Setup
-              </span>
-            </div>
-            <p className="text-[13px] text-[#6F6B66] mt-0.5">
-              Select your backend framework below for custom, copy-pasteable integration steps.
-            </p>
-          </div>
-          <button onClick={onClose} className="text-[#A3A099] hover:text-[#111110] p-1.5 rounded-[6px] hover:bg-[#F3F2F0] transition-colors">
-            <X className="h-[18px] w-[18px]" />
-          </button>
-        </div>
-
-        {/* Framework Selector Tabs */}
-        <div className="bg-[#F8FAFC] border-b border-[#E7E5E2] px-6 py-2.5 shrink-0 overflow-x-auto">
-          <div className="flex items-center gap-2 min-w-max">
-            {SUPPORTED_FRAMEWORKS.map(fw => {
-              const isSelected = fw.id === selectedFw;
-              return (
-                <button
-                  key={fw.id}
-                  onClick={() => setSelectedFw(fw.id)}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-[8px] text-[12px] font-[600] transition-all cursor-pointer",
-                    isSelected
-                      ? "bg-white text-[#111110] shadow-xs border border-[#E2E8F0]"
-                      : "text-[#6F6B66] hover:text-[#111110] hover:bg-[#F1F5F9]"
-                  )}
-                >
-                  <span>{fw.name}</span>
-                  <span className={cn("text-[10px] px-1.5 py-0.2 rounded font-[500] border", fw.badgeColor)}>
-                    {fw.language}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Content Body */}
-        <div className="p-6 flex flex-col gap-6 overflow-y-auto flex-1">
-
-          {/* Framework Banner Info */}
-          <div className="bg-[#FAFAF9] border border-[#E7E5E2] rounded-[10px] p-3.5 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-[8px] bg-white border border-[#E7E5E2] flex items-center justify-center shrink-0">
-                <Server className="h-4 w-4 text-[#FF5A1F]" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-[700] text-[#111110]">{activeFw.name} Integration</span>
-                  <span className="text-[10px] font-[600] text-[#6F6B66] bg-[#E7E5E2] px-1.5 py-0.5 rounded">{activeFw.tag}</span>
-                </div>
-                <p className="text-[12px] text-[#6F6B66] mt-0.5">{activeFw.description}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* ── STEP 1: Add Environment Variable ────────────────────────── */}
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">1</span>
-              <span className="text-[14px] font-[700] text-[#111110]">Set Environment Variable</span>
-            </div>
-            <p className="text-[12px] text-[#6F6B66] ml-7">
-              Add your site API key to your <code className="font-mono bg-[#F3F2F0] px-1.5 py-0.5 rounded text-[#111110]">.env</code> file or hosting platform (Render, Railway, Fly.io, etc.):
-            </p>
-            <div className="ml-7 relative">
-              <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[8px] overflow-x-auto">
-                {envSnippet}
-              </pre>
-              <button onClick={() => copy("env", envSnippet)}
-                className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors cursor-pointer",
-                  copied === "env" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                {copied === "env" ? <><Check className="h-[11px] w-[11px]" />Copied</> : <><Copy className="h-[11px] w-[11px]" />Copy</>}
-              </button>
-            </div>
-          </div>
-
-          {/* ── STEP 2: Download / Add SDK ──────────────────────────────── */}
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">2</span>
-              <span className="text-[14px] font-[700] text-[#111110]">Add SDK to your Project</span>
-            </div>
-            <div className="ml-7 flex flex-col gap-2">
-              <div className="flex items-center gap-3 flex-wrap">
-                <a
-                  href={activeFw.downloadFile}
-                  download={activeFw.downloadFilename}
-                  className="flex items-center gap-2 text-[12px] font-[700] text-white bg-[#111110] hover:bg-[#333] px-3.5 py-2 rounded-[8px] transition-colors"
-                >
-                  <Download className="h-[13px] w-[13px]" /> Download {activeFw.downloadFilename}
-                </a>
-                <span className="text-[12px] text-[#6F6B66]">{activeFw.placementHint}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* ── STEP 3: Setup Code ──────────────────────────────────────── */}
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">3</span>
-              <span className="text-[14px] font-[700] text-[#111110]">Initialize in your Code</span>
-            </div>
-            <div className="ml-7 flex flex-col gap-2.5">
-              {/* Target File Header (Outside Code) */}
-              <div className="flex items-center justify-between flex-wrap gap-2 bg-[#F8FAFC] border border-[#E2E8F0] px-3.5 py-2 rounded-[8px]">
-                <div className="flex items-center gap-2">
-                  <FileCode className="h-4 w-4 text-[#FF5A1F]" />
-                  <span className="text-[12px] text-[#6F6B66]">Target File:</span>
-                  <code className="text-[12px] font-mono font-[700] text-[#111110] bg-white border border-[#E2E8F0] px-2 py-0.5 rounded">
-                    {activeFw.targetFile}
-                  </code>
-                </div>
-                <span className="text-[11px] font-[600] text-[#047857] bg-[#ECFDF5] border border-[#A7F3D0] px-2 py-0.5 rounded-full">
-                  Add Once Globally
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b border-[#E7E5E2] shrink-0">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-[18px] font-[800] text-[#111110] tracking-tight">
+                  Set up {fw.name}
+                </h2>
+                <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-[600] border", fw.badgeColor)}>
+                  {fw.language}
                 </span>
               </div>
-
-              {/* Explanatory instruction */}
-              <p className="text-[12px] text-[#475569] leading-relaxed">
-                {activeFw.whereToAdd}
+              <p className="text-[13px] text-[#6F6B66] mt-1">
+                Follow these 4 steps to connect <strong className="text-[#111110] font-[600]">{site.name}</strong>.
               </p>
+            </div>
+            <button onClick={onClose} className="text-[#A3A099] hover:text-[#111110] p-1.5 rounded-[6px] hover:bg-[#F3F2F0] transition-colors shrink-0">
+              <X className="h-[18px] w-[18px]" />
+            </button>
+          </div>
+          <p className="text-[12px] text-[#475569] mt-3 leading-relaxed">{fw.setupSummary}</p>
+        </div>
 
-              {/* Pure Code Box */}
-              <div className="relative">
-                <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[14px_16px] rounded-[8px] overflow-x-auto leading-relaxed">
-                  {codeSnippet}
-                </pre>
-                <button onClick={() => copy("code", codeSnippet)}
-                  className={cn("absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-[600] px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer",
-                    copied === "code" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                  {copied === "code" ? <><Check className="h-[11px] w-[11px]" />Copied</> : <><Copy className="h-[11px] w-[11px]" />Copy Code</>}
-                </button>
-              </div>
+        {/* Steps */}
+        <div className="p-6 flex flex-col gap-4 overflow-y-auto flex-1">
 
-              {/* Global Coverage Clarification Callout */}
-              {activeFw.importantNote && (
-                <div className="bg-[#FFF8F5] border border-[#FFE2D5] rounded-[8px] p-3 text-[12px] text-[#9A3412] leading-relaxed flex items-start gap-2">
-                  <Zap className="h-4 w-4 text-[#FF5A1F] shrink-0 mt-0.5" />
-                  <div>
-                    <strong>Global Coverage:</strong> {activeFw.importantNote}
-                  </div>
+          {/* Step 1 — Download */}
+          <SetupStepCard step={1} title="Download the SDK file" icon={Download}>
+            <a href={fw.downloadFile} download={fw.downloadFilename}
+              className="inline-flex items-center gap-2 text-[12px] font-[700] text-white bg-[#111110] hover:bg-[#333] px-4 py-2.5 rounded-[8px] transition-colors w-fit">
+              <Download className="h-[13px] w-[13px]" />
+              Download {fw.downloadFilename}
+            </a>
+            <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[8px] p-3">
+              <p className="text-[11px] font-[600] text-[#6F6B66] uppercase tracking-wide mb-2">Place it here</p>
+              <pre className="text-[12px] font-mono text-[#111110] leading-relaxed whitespace-pre">{fw.placementPath}</pre>
+            </div>
+          </SetupStepCard>
+
+          {/* Step 2 — Env vars */}
+          <SetupStepCard step={2} title="Set environment variables" icon={Key}>
+            <p className="text-[12px] text-[#6F6B66] leading-relaxed">
+              Add these to your <code className="font-mono bg-[#F3F2F0] px-1.5 py-0.5 rounded text-[#111110]">.env</code> file
+              or your hosting dashboard (Render, Railway, Fly.io, etc.).
+            </p>
+
+            {masked && (
+              <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[8px] p-3 flex items-start gap-2.5">
+                <AlertCircle className="h-4 w-4 text-[#D97706] shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] text-[#92400E] leading-relaxed">
+                    Your full API key is only shown once at site creation. Generate a new key to copy it here.
+                  </p>
+                  <button onClick={generateKey} disabled={generatingKey}
+                    className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-[600] text-[#92400E] hover:text-[#78350F] cursor-pointer disabled:opacity-60">
+                    {generatingKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Generate new API key
+                  </button>
                 </div>
+              </div>
+            )}
+
+            <CopyBlock id="env" code={envSnippet} copied={copied} onCopy={copy} />
+          </SetupStepCard>
+
+          {/* Step 3 — Code */}
+          <SetupStepCard step={3} title="Add to your code" icon={FileCode}>
+            {blocks.map((block, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                {blocks.length > 1 && (
+                  <p className="text-[12px] font-[600] text-[#374151]">{block.label}</p>
+                )}
+                <div className="flex items-center gap-2">
+                  <FileCode className="h-3.5 w-3.5 text-[#FF5A1F]" />
+                  <code className="text-[11px] font-mono text-[#6F6B66] bg-[#F3F2F0] px-2 py-0.5 rounded">{block.file}</code>
+                </div>
+                <CopyBlock id={`code-${i}`} code={block.code} copied={copied} onCopy={copy} />
+              </div>
+            ))}
+
+            {fw.importantNote && (
+              <div className="bg-[#FFF8F5] border border-[#FFE2D5] rounded-[8px] p-3 text-[12px] text-[#9A3412] leading-relaxed flex items-start gap-2">
+                <Zap className="h-4 w-4 text-[#FF5A1F] shrink-0 mt-0.5" />
+                <span><strong>Tip:</strong> {fw.importantNote}</span>
+              </div>
+            )}
+          </SetupStepCard>
+
+          {/* Step 4 — Verify */}
+          <SetupStepCard step={4} title="Restart & verify connection" icon={Activity}>
+            <p className="text-[12px] text-[#6F6B66] leading-relaxed">
+              Restart your backend so the SDK initialises. On startup it sends a heartbeat automatically —
+              your site status will change to <strong className="text-[#16A34A]">SDK Active</strong>.
+            </p>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <button onClick={checkConnection} disabled={checkingConnection}
+                className="inline-flex items-center gap-2 text-[12px] font-[700] text-white bg-[#16A34A] hover:bg-[#15803D] px-4 py-2.5 rounded-[8px] transition-colors disabled:opacity-60 cursor-pointer">
+                {checkingConnection
+                  ? <><Loader2 className="h-[13px] w-[13px] animate-spin" />Checking…</>
+                  : <><Activity className="h-[13px] w-[13px]" />Check connection</>}
+              </button>
+              {site.sdk_status === "active" && connectionStatus === "idle" && (
+                <span className="flex items-center gap-1.5 text-[12px] font-[600] text-[#16A34A]">
+                  <CheckCircle2 className="h-4 w-4" /> Already connected
+                </span>
               )}
             </div>
-          </div>
 
-          {/* ── Automatic Verification ─────────────────────────────────── */}
-          <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-[12px] p-4 flex items-start gap-3">
-            <div className="h-8 w-8 rounded-full bg-[#DCFCE7] flex items-center justify-center shrink-0 mt-0.5">
-              <CheckCircle2 className="h-4 w-4 text-[#16A34A]" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[13px] font-[700] text-[#166534]">Automatic Verification</span>
-              <p className="text-[12px] text-[#166534]/90 leading-relaxed">
-                When your backend application starts up with PatchFlow initialized, it automatically sends a lightweight background heartbeat. This site&apos;s status on your dashboard will immediately update to <span className="font-[700] text-[#16A34A]">SDK Active</span>.
-              </p>
-              <p className="text-[11px] text-[#15803D] mt-0.5">
-                PatchFlow will now passively monitor your application for unhandled exceptions in real time, run root-cause analysis, and autonomously open GitHub Pull Requests.
-              </p>
-            </div>
-          </div>
+            {connectionStatus === "active" && (
+              <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-[8px] p-3 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-[#16A34A] shrink-0" />
+                <p className="text-[12px] text-[#166534] font-[600]">Connected — PatchFlow received your SDK heartbeat.</p>
+              </div>
+            )}
+            {connectionStatus === "pending" && (
+              <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[8px] p-3 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-[#D97706] shrink-0 mt-0.5" />
+                <p className="text-[12px] text-[#92400E] leading-relaxed">
+                  No heartbeat yet. Double-check your env vars and code, restart the server, then try again.
+                </p>
+              </div>
+            )}
+          </SetupStepCard>
 
         </div>
 
-        {/* Modal Footer */}
-        <div className="p-4 border-t border-[#E7E5E2] bg-[#FAFAF9] shrink-0 flex items-center justify-between">
-          <span className="text-[11px] text-[#A3A099]">You can re-open this guide at any time from your Sites dashboard.</span>
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-[#E7E5E2] bg-[#FAFAF9] shrink-0 flex items-center justify-between gap-4">
+          <span className="text-[11px] text-[#A3A099]">Re-open this guide anytime via Setup Guide on your dashboard.</span>
           <button onClick={onClose}
-            className="px-5 py-2 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] transition-colors cursor-pointer">
-            Done
+            className="inline-flex items-center gap-1.5 px-5 py-2 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] transition-colors cursor-pointer shrink-0">
+            Done <ArrowRight className="h-[13px] w-[13px]" />
           </button>
         </div>
       </motion.div>
@@ -587,6 +642,23 @@ export default function SitesPage() {
     return `${Math.floor(h / 24)}d ago`;
   };
 
+  const refreshSiteStatus = async (): Promise<Site | null> => {
+    if (!sdkSite) return null;
+    try {
+      const r = await authFetch("/api/sites");
+      if (!r.ok) return null;
+      const list: Site[] = (await r.json()).sites ?? [];
+      const updated = list.find(s => s.id === sdkSite.site.id) ?? null;
+      if (updated) {
+        setSites(list);
+        setSdkSite(prev => prev ? { ...prev, site: updated } : null);
+      }
+      return updated;
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <div className="mx-auto max-w-4xl px-6 py-10 w-full">
 
@@ -597,6 +669,8 @@ export default function SitesPage() {
             site={sdkSite.site}
             apiKey={sdkSite.apiKey}
             onClose={() => { setSdkSite(null); }}
+            onRefreshStatus={refreshSiteStatus}
+            onApiKeyChange={(key) => setSdkSite(prev => prev ? { ...prev, apiKey: key } : null)}
           />
         )}
       </AnimatePresence>
@@ -659,7 +733,7 @@ export default function SitesPage() {
                     <label className="text-[12px] font-[600] text-[#6F6B66] uppercase tracking-[0.04em]">
                       Backend Framework <span className="text-[#DC2626]">*</span>
                     </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    <div className="flex flex-col gap-2">
                       {SUPPORTED_FRAMEWORKS.map(fw => {
                         const isSelected = form.framework === fw.id;
                         return (
@@ -667,31 +741,33 @@ export default function SitesPage() {
                             key={fw.id}
                             onClick={() => setForm(p => ({ ...p, framework: fw.id }))}
                             className={cn(
-                              "p-3 rounded-[10px] border text-left cursor-pointer transition-all flex flex-col justify-between gap-2 relative",
+                              "px-3.5 py-3 rounded-[10px] border text-left cursor-pointer transition-all flex items-center gap-3",
                               isSelected
-                                ? "border-[#FF5A1F] bg-[#FFF8F5] shadow-xs ring-1 ring-[#FF5A1F]"
+                                ? "border-[#FF5A1F] bg-[#FFF8F5] ring-1 ring-[#FF5A1F]"
                                 : "border-[#E7E5E2] bg-white hover:border-[#D4D1CC] hover:bg-[#FAFAF9]"
                             )}
                           >
-                            <div className="flex items-start justify-between">
-                              <span className="text-[13px] font-[700] text-[#111110]">{fw.name}</span>
-                              {isSelected && (
-                                <div className="h-4 w-4 rounded-full bg-[#FF5A1F] text-white flex items-center justify-center">
-                                  <Check className="h-2.5 w-2.5 stroke-[3]" />
-                                </div>
-                              )}
+                            <div className={cn(
+                              "h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors",
+                              isSelected ? "border-[#FF5A1F] bg-[#FF5A1F]" : "border-[#D4D1CC]"
+                            )}>
+                              {isSelected && <Check className="h-2.5 w-2.5 text-white stroke-[3]" />}
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className={cn("text-[10px] px-1.5 py-0.2 rounded font-[500] border", fw.badgeColor)}>
-                                {fw.language}
-                              </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[13px] font-[700] text-[#111110]">{fw.name}</span>
+                                <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-[500] border", fw.badgeColor)}>
+                                  {fw.language}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-[#6F6B66] mt-0.5 truncate">{fw.description}</p>
                             </div>
                           </div>
                         );
                       })}
                     </div>
-                    <p className="text-[11px] text-[#6F6B66] mt-0.5">
-                      Only officially supported backend engines are shown. Custom setup instructions will be provided immediately upon connection.
+                    <p className="text-[11px] text-[#A3A099]">
+                      Tailored setup steps appear right after you connect.
                     </p>
                   </div>
                 </div>

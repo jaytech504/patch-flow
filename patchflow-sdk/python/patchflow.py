@@ -74,6 +74,7 @@ def init(
     host: str | None = None,
     environment: str | None = None,
     app: Any = None,           # Flask app, optional
+    auto_install: bool = True,
     debug: bool = False,
 ) -> "PatchFlow":
     """
@@ -104,7 +105,7 @@ def init(
     # ── Auto-install FastAPI / Starlette ASGI middleware ──────────────────────
     # Detect if we're inside a FastAPI app by checking the call stack for
     # a FastAPI or Starlette Application object.
-    else:
+    elif auto_install:
         _try_install_fastapi(_instance, debug)
 
     # ── Fallback: install sys.excepthook for non-web scripts ─────────────────
