@@ -62,13 +62,45 @@ const SCENARIOS = {
       },
     ],
   },
+  django: {
+    error_type: 'DoesNotExist',
+    error_message: 'Item matching query does not exist.',
+    endpoint: '/api/items/999/',
+    method: 'GET',
+    status_code: 500,
+    framework: 'django',
+    stack_frames: [
+      {
+        filename: 'demo_app/views.py',
+        lineno: 18,
+        function: 'get_item',
+        context_line: 'item = Item.objects.get(id=item_id)',
+      },
+    ],
+  },
+  springboot: {
+    error_type: 'NullPointerException',
+    error_message: 'Cannot invoke "Order.getStatus()" because "order" is null',
+    endpoint: '/api/orders/999',
+    method: 'GET',
+    status_code: 500,
+    framework: 'springboot',
+    stack_frames: [
+      {
+        filename: 'src/main/java/com/example/demo/OrderController.java',
+        lineno: 27,
+        function: 'getOrder',
+        context_line: 'String status = order.getStatus().toLowerCase();',
+      },
+    ],
+  },
 };
 
 function parseArgs() {
   const args = process.argv.slice(2);
   const parsed = {
-    host: 'http://localhost:8000',
-    framework: 'nextjs',
+    host: 'https://patchflow-backend-xax6.onrender.com',
+    framework: 'express',
     count: 3,
   };
   for (let i = 0; i < args.length; i++) {

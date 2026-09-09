@@ -86,6 +86,38 @@ SCENARIOS = {
             },
         ],
     },
+    "django": {
+        "error_type": "DoesNotExist",
+        "error_message": "Item matching query does not exist.",
+        "endpoint": "/api/items/999/",
+        "method": "GET",
+        "status_code": 500,
+        "framework": "django",
+        "stack_frames": [
+            {
+                "filename": "demo_app/views.py",
+                "lineno": 18,
+                "function": "get_item",
+                "context_line": "item = Item.objects.get(id=item_id)",
+            },
+        ],
+    },
+    "springboot": {
+        "error_type": "NullPointerException",
+        "error_message": "Cannot invoke \"Order.getStatus()\" because \"order\" is null",
+        "endpoint": "/api/orders/999",
+        "method": "GET",
+        "status_code": 500,
+        "framework": "springboot",
+        "stack_frames": [
+            {
+                "filename": "src/main/java/com/example/demo/OrderController.java",
+                "lineno": 27,
+                "function": "getOrder",
+                "context_line": "String status = order.getStatus().toLowerCase();",
+            },
+        ],
+    },
 }
 
 
@@ -118,7 +150,7 @@ def main():
     parser.add_argument("--host", default="https://patchflow-backend-xax6.onrender.com", help="PatchFlow API host")
     parser.add_argument(
         "--framework",
-        choices=["fastapi", "nextjs", "express", "hono"],
+        choices=["fastapi", "nextjs", "express", "hono", "django", "springboot"],
         default="fastapi",
         help="Framework template to simulate (default: fastapi)",
     )
