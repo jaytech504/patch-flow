@@ -53,6 +53,9 @@ export interface FrameworkConfig {
   downloadFile: string;
   downloadFilename: string;
   placementHint: string;
+  targetFile: string;
+  whereToAdd: string;
+  importantNote?: string;
   codeSnippet: (apiKey: string, hostParam: string) => string;
   testCurl: string;
 }
@@ -67,9 +70,11 @@ export const SUPPORTED_FRAMEWORKS: FrameworkConfig[] = [
     description: "ASGI middleware capturing unhandled exceptions across all async routes.",
     downloadFile: "/sdk/patchflow.py",
     downloadFilename: "patchflow.py",
-    placementHint: "Place in project root alongside main.py (or in your app package)",
-    codeSnippet: (apiKey: string, hostParam: string) => `# main.py
-import os
+    placementHint: "Place in your project root alongside main.py (or in your app directory)",
+    targetFile: "main.py",
+    whereToAdd: "Add once in your FastAPI main entry file. Automatically monitors every endpoint across your app.",
+    importantNote: "You do not need to wrap individual routes. The ASGI middleware intercepts crashes and unhandled exceptions globally.",
+    codeSnippet: (apiKey: string, hostParam: string) => `import os
 from fastapi import FastAPI
 import patchflow
 from patchflow import PatchFlowASGIMiddleware
@@ -84,7 +89,7 @@ pf = patchflow.init(
 # 2. Register ASGI error middleware
 app.add_middleware(PatchFlowASGIMiddleware, patchflow=pf)
 
-# Your normal routes below...`,
+# ... your normal routes remain unchanged ...`,
     testCurl: "curl http://localhost:8000/api/crash",
   },
   {
@@ -97,21 +102,21 @@ app.add_middleware(PatchFlowASGIMiddleware, patchflow=pf)
     downloadFile: "/sdk/patchflow.js",
     downloadFilename: "patchflow.js",
     placementHint: "Place in project root or src/ directory",
-    codeSnippet: (apiKey: string, hostParam: string) => `// server.js or app.js
-const express = require('express');
+    targetFile: "server.js (or app.js)",
+    whereToAdd: "Add ONCE in your main server file. Do NOT put this on every route.",
+    importantNote: "Do NOT wrap or modify your individual route handlers. Placing app.use(patchflow.expressMiddleware()) once at the bottom catches unhandled errors and rejected promises across your entire API automatically.",
+    codeSnippet: (apiKey: string, hostParam: string) => `// Step 1: Add at the TOP of your server file
 const patchflow = require('./patchflow');
 
-const app = express();
-
-// 1. Initialise PatchFlow
 patchflow.init({
   apiKey: process.env.PATCHFLOW_API_KEY || '${apiKey}'${hostParam}
 });
 
-// ... your regular routes ...
-app.get('/api/users', (req, res) => { /* ... */ });
+// ... (keep ALL your existing routes untouched) ...
+// app.get('/api/users', (req, res) => { ... });
+// app.post('/api/orders', (req, res) => { ... });
 
-// 2. Add PatchFlow error middleware AFTER all routes:
+// Step 2: Add ONCE at the very BOTTOM, after all routes (before app.listen):
 app.use(patchflow.expressMiddleware());
 
 app.listen(4000);`,
@@ -127,8 +132,10 @@ app.listen(4000);`,
     downloadFile: "/sdk/patchflow.py",
     downloadFilename: "patchflow.py",
     placementHint: "Place in project root alongside manage.py (or in your app directory)",
-    codeSnippet: (apiKey: string, hostParam: string) => `# config/settings.py
-import os
+    targetFile: "config/settings.py",
+    whereToAdd: "Add once to your Django settings file. Covers all views, URLs, and DRF endpoints across your project.",
+    importantNote: "Place 'patchflow.PatchFlowDjangoMiddleware' at or near the top of your MIDDLEWARE array.",
+    codeSnippet: (apiKey: string, hostParam: string) => `import os
 import patchflow
 
 # 1. Initialise PatchFlow
@@ -138,9 +145,9 @@ patchflow.init(
 
 # 2. Add to MIDDLEWARE in settings.py:
 MIDDLEWARE = [
-    'patchflow.PatchFlowDjangoMiddleware', # Catches unhandled view exceptions
+    'patchflow.PatchFlowDjangoMiddleware', # Catches unhandled view exceptions globally
     'django.middleware.security.SecurityMiddleware',
-    # ... other standard Django middlewares ...
+    # ... your existing standard Django middlewares ...
 ]`,
     testCurl: "curl http://localhost:8000/api/items/999/",
   },
@@ -154,15 +161,17 @@ MIDDLEWARE = [
     downloadFile: "/sdk/PatchFlowAdvice.java",
     downloadFilename: "PatchFlowAdvice.java",
     placementHint: "Place in src/main/java/com/yourpackage/ (Zero external dependencies required)",
-    codeSnippet: (apiKey: string, hostParam: string) => `// 1. Download PatchFlowAdvice.java and drop it into:
+    targetFile: "src/main/java/.../PatchFlowAdvice.java",
+    whereToAdd: "Drop the file into your package. Spring Boot auto-detects @RestControllerAdvice to intercept errors globally.",
+    importantNote: "Zero extra Maven or Gradle dependencies required. Uses the standard Java 11+ HttpClient.",
+    codeSnippet: (apiKey: string, hostParam: string) => `// 1. Drop the downloaded PatchFlowAdvice.java into your source tree:
 //    src/main/java/com/example/demo/PatchFlowAdvice.java
-// Spring Boot auto-detects @RestControllerAdvice!
 
 // 2. Set your API key in application.properties (or system env):
 PATCHFLOW_API_KEY=${apiKey}
 
-// Any unhandled exception thrown in your @RestController is
-// automatically captured and dispatched to PatchFlow!`,
+// That's it! Any unhandled exception thrown in any @RestController
+// is automatically captured and reported to PatchFlow.`,
     testCurl: "curl http://localhost:8080/api/orders/999",
   },
   {
@@ -175,20 +184,22 @@ PATCHFLOW_API_KEY=${apiKey}
     downloadFile: "/sdk/patchflow.py",
     downloadFilename: "patchflow.py",
     placementHint: "Place in project root next to app.py",
-    codeSnippet: (apiKey: string, hostParam: string) => `# app.py
-import os
+    targetFile: "app.py",
+    whereToAdd: "Pass your Flask app instance once during initialization.",
+    importantNote: "Covers all routes and blueprints across your Flask application automatically.",
+    codeSnippet: (apiKey: string, hostParam: string) => `import os
 from flask import Flask
 import patchflow
 
 app = Flask(__name__)
 
-# Initialise PatchFlow with your Flask app instance
+# Initialise PatchFlow with your Flask app object:
 patchflow.init(
     api_key=os.getenv("PATCHFLOW_API_KEY", "${apiKey}"),
     app=app${hostParam}
 )
 
-# ... your regular routes ...`,
+# ... all your normal routes and blueprints remain unchanged ...`,
     testCurl: "curl http://localhost:5000/api/users/999",
   },
 ];
@@ -273,10 +284,10 @@ function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; 
 
   const liveHost = "https://patchflow-backend-xax6.onrender.com";
   const needsHost = API_BASE_URL !== liveHost;
-  const hostParam = needsHost ? `,\n    host: '${API_BASE_URL}'` : "";
+  const hostParam = needsHost ? ", host: '" + API_BASE_URL + "'" : "";
 
   const activeFw = SUPPORTED_FRAMEWORKS.find(f => f.id === selectedFw) || SUPPORTED_FRAMEWORKS[0];
-  const envSnippet = `PATCHFLOW_API_KEY=${apiKey}${needsHost ? `\nPATCHFLOW_HOST=${API_BASE_URL}` : ""}`;
+  const envSnippet = "PATCHFLOW_API_KEY=" + apiKey + (needsHost ? "\nPATCHFLOW_HOST=" + API_BASE_URL : "");
   const codeSnippet = activeFw.codeSnippet(apiKey, hostParam);
 
   return (
@@ -396,15 +407,47 @@ function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; 
               <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">3</span>
               <span className="text-[14px] font-[700] text-[#111110]">Initialize in your Code</span>
             </div>
-            <div className="ml-7 relative">
-              <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[14px_16px] rounded-[8px] overflow-x-auto leading-relaxed">
-                {codeSnippet}
-              </pre>
-              <button onClick={() => copy("code", codeSnippet)}
-                className={cn("absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-[600] px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer",
-                  copied === "code" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                {copied === "code" ? <><Check className="h-[11px] w-[11px]" />Copied</> : <><Copy className="h-[11px] w-[11px]" />Copy Code</>}
-              </button>
+            <div className="ml-7 flex flex-col gap-2.5">
+              {/* Target File Header (Outside Code) */}
+              <div className="flex items-center justify-between flex-wrap gap-2 bg-[#F8FAFC] border border-[#E2E8F0] px-3.5 py-2 rounded-[8px]">
+                <div className="flex items-center gap-2">
+                  <FileCode className="h-4 w-4 text-[#FF5A1F]" />
+                  <span className="text-[12px] text-[#6F6B66]">Target File:</span>
+                  <code className="text-[12px] font-mono font-[700] text-[#111110] bg-white border border-[#E2E8F0] px-2 py-0.5 rounded">
+                    {activeFw.targetFile}
+                  </code>
+                </div>
+                <span className="text-[11px] font-[600] text-[#047857] bg-[#ECFDF5] border border-[#A7F3D0] px-2 py-0.5 rounded-full">
+                  Add Once Globally
+                </span>
+              </div>
+
+              {/* Explanatory instruction */}
+              <p className="text-[12px] text-[#475569] leading-relaxed">
+                {activeFw.whereToAdd}
+              </p>
+
+              {/* Pure Code Box */}
+              <div className="relative">
+                <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[14px_16px] rounded-[8px] overflow-x-auto leading-relaxed">
+                  {codeSnippet}
+                </pre>
+                <button onClick={() => copy("code", codeSnippet)}
+                  className={cn("absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-[600] px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer",
+                    copied === "code" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+                  {copied === "code" ? <><Check className="h-[11px] w-[11px]" />Copied</> : <><Copy className="h-[11px] w-[11px]" />Copy Code</>}
+                </button>
+              </div>
+
+              {/* Global Coverage Clarification Callout */}
+              {activeFw.importantNote && (
+                <div className="bg-[#FFF8F5] border border-[#FFE2D5] rounded-[8px] p-3 text-[12px] text-[#9A3412] leading-relaxed flex items-start gap-2">
+                  <Zap className="h-4 w-4 text-[#FF5A1F] shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Global Coverage:</strong> {activeFw.importantNote}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
