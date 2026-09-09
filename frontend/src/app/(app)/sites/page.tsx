@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   Globe, Plus, Trash2, Pencil, Loader2,
   Check, X, ExternalLink, Search, ChevronDown,
-  Key, Copy, Terminal, ChevronRight, Activity,
-  AlertCircle, RefreshCw,
+  Key, Copy, Terminal, Activity,
+  AlertCircle, Download, Code, CheckCircle2,
+  Server, Zap, FileCode,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -40,9 +41,156 @@ interface Site {
 
 interface Repo { name: string; full_name: string; }
 
-const FRAMEWORKS = [
-  "fastapi", "flask", "nextjs", "express", "nestjs", "hono",
-  "django", "rails", "other",
+// ── Supported Frameworks Metadata ─────────────────────────────────────────────
+
+export interface FrameworkConfig {
+  id: string;
+  name: string;
+  language: string;
+  tag: string;
+  badgeColor: string;
+  description: string;
+  downloadFile: string;
+  downloadFilename: string;
+  placementHint: string;
+  codeSnippet: (apiKey: string, hostParam: string) => string;
+  testCurl: string;
+}
+
+export const SUPPORTED_FRAMEWORKS: FrameworkConfig[] = [
+  {
+    id: "fastapi",
+    name: "FastAPI",
+    language: "Python",
+    tag: "Async / ASGI",
+    badgeColor: "bg-teal-50 text-teal-700 border-teal-200",
+    description: "ASGI middleware capturing unhandled exceptions across all async routes.",
+    downloadFile: "/sdk/patchflow.py",
+    downloadFilename: "patchflow.py",
+    placementHint: "Place in project root alongside main.py (or in your app package)",
+    codeSnippet: (apiKey: string, hostParam: string) => `# main.py
+import os
+from fastapi import FastAPI
+import patchflow
+from patchflow import PatchFlowASGIMiddleware
+
+app = FastAPI()
+
+# 1. Initialise PatchFlow
+pf = patchflow.init(
+    api_key=os.getenv("PATCHFLOW_API_KEY", "${apiKey}")${hostParam}
+)
+
+# 2. Register ASGI error middleware
+app.add_middleware(PatchFlowASGIMiddleware, patchflow=pf)
+
+# Your normal routes below...`,
+    testCurl: "curl http://localhost:8000/api/crash",
+  },
+  {
+    id: "express",
+    name: "Express.js",
+    language: "Node.js",
+    tag: "JavaScript / TypeScript",
+    badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
+    description: "Connect error middleware capturing sync and async route handler crashes.",
+    downloadFile: "/sdk/patchflow.js",
+    downloadFilename: "patchflow.js",
+    placementHint: "Place in project root or src/ directory",
+    codeSnippet: (apiKey: string, hostParam: string) => `// server.js or app.js
+const express = require('express');
+const patchflow = require('./patchflow');
+
+const app = express();
+
+// 1. Initialise PatchFlow
+patchflow.init({
+  apiKey: process.env.PATCHFLOW_API_KEY || '${apiKey}'${hostParam}
+});
+
+// ... your regular routes ...
+app.get('/api/users', (req, res) => { /* ... */ });
+
+// 2. Add PatchFlow error middleware AFTER all routes:
+app.use(patchflow.expressMiddleware());
+
+app.listen(4000);`,
+    testCurl: "curl http://localhost:4000/api/products/999",
+  },
+  {
+    id: "django",
+    name: "Django / DRF",
+    language: "Python",
+    tag: "Django 4+ / 5+",
+    badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    description: "Django middleware capturing unhandled view exceptions & DRF crashes.",
+    downloadFile: "/sdk/patchflow.py",
+    downloadFilename: "patchflow.py",
+    placementHint: "Place in project root alongside manage.py (or in your app directory)",
+    codeSnippet: (apiKey: string, hostParam: string) => `# config/settings.py
+import os
+import patchflow
+
+# 1. Initialise PatchFlow
+patchflow.init(
+    api_key=os.getenv("PATCHFLOW_API_KEY", "${apiKey}")${hostParam}
+)
+
+# 2. Add to MIDDLEWARE in settings.py:
+MIDDLEWARE = [
+    'patchflow.PatchFlowDjangoMiddleware', # Catches unhandled view exceptions
+    'django.middleware.security.SecurityMiddleware',
+    # ... other standard Django middlewares ...
+]`,
+    testCurl: "curl http://localhost:8000/api/items/999/",
+  },
+  {
+    id: "springboot",
+    name: "Spring Boot",
+    language: "Java",
+    tag: "Java 17+ / Spring 3+",
+    badgeColor: "bg-green-50 text-green-700 border-green-200",
+    description: "@RestControllerAdvice interceptor capturing unhandled runtime exceptions.",
+    downloadFile: "/sdk/PatchFlowAdvice.java",
+    downloadFilename: "PatchFlowAdvice.java",
+    placementHint: "Place in src/main/java/com/yourpackage/ (Zero external dependencies required)",
+    codeSnippet: (apiKey: string, hostParam: string) => `// 1. Download PatchFlowAdvice.java and drop it into:
+//    src/main/java/com/example/demo/PatchFlowAdvice.java
+// Spring Boot auto-detects @RestControllerAdvice!
+
+// 2. Set your API key in application.properties (or system env):
+PATCHFLOW_API_KEY=${apiKey}
+
+// Any unhandled exception thrown in your @RestController is
+// automatically captured and dispatched to PatchFlow!`,
+    testCurl: "curl http://localhost:8080/api/orders/999",
+  },
+  {
+    id: "flask",
+    name: "Flask",
+    language: "Python",
+    tag: "WSGI / Sync",
+    badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
+    description: "Flask errorhandler hook capturing 500 crashes across all blueprints.",
+    downloadFile: "/sdk/patchflow.py",
+    downloadFilename: "patchflow.py",
+    placementHint: "Place in project root next to app.py",
+    codeSnippet: (apiKey: string, hostParam: string) => `# app.py
+import os
+from flask import Flask
+import patchflow
+
+app = Flask(__name__)
+
+# Initialise PatchFlow with your Flask app instance
+patchflow.init(
+    api_key=os.getenv("PATCHFLOW_API_KEY", "${apiKey}"),
+    app=app${hostParam}
+)
+
+# ... your regular routes ...`,
+    testCurl: "curl http://localhost:5000/api/users/999",
+  },
 ];
 
 // ── Repo dropdown ─────────────────────────────────────────────────────────────
@@ -72,7 +220,7 @@ function RepoDropdown({ value, repos, reposLoading, onChange }: {
           reposLoading ? "bg-[#F8FAFC] cursor-not-allowed" : "bg-white hover:border-[#D4D1CC]")}>
         {reposLoading
           ? <span className="flex items-center gap-2 text-[#A3A099]"><Loader2 className="h-[13px] w-[13px] animate-spin" />Loading repos…</span>
-          : <span className={value ? "font-mono text-[#111110]" : "text-[#A3A099]"}>{value || "Select a repository"}</span>}
+          : <span className={value ? "font-mono text-[#111110]" : "text-[#A3A099]"}>{value || "Select connected repository"}</span>}
         <div className="flex items-center gap-1.5">
           {value && <span onClick={e => { e.stopPropagation(); onChange(""); }} className="text-[11px] text-[#A3A099] hover:text-[#6F6B66] px-1 rounded">Clear</span>}
           <ChevronDown className="h-[13px] w-[13px] text-[#A3A099]" />
@@ -109,7 +257,13 @@ function RepoDropdown({ value, repos, reposLoading, onChange }: {
 
 function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; onClose: () => void }) {
   const [copied, setCopied] = useState<string | null>(null);
-  const [tab, setTab] = useState<"node" | "python">("node");
+
+  // Match initial framework tab with site's configured framework
+  const initialFramework = SUPPORTED_FRAMEWORKS.find(
+    f => f.id === site.framework?.toLowerCase() || f.name.toLowerCase().includes(site.framework?.toLowerCase() || "")
+  )?.id || "fastapi";
+
+  const [selectedFw, setSelectedFw] = useState<string>(initialFramework);
 
   const copy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -120,132 +274,119 @@ function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; 
   const liveHost = "https://patchflow-backend-xax6.onrender.com";
   const needsHost = API_BASE_URL !== liveHost;
   const hostParam = needsHost ? `,\n    host: '${API_BASE_URL}'` : "";
-  const hostPyParam = needsHost ? `,\n    host="${API_BASE_URL}"` : "";
 
+  const activeFw = SUPPORTED_FRAMEWORKS.find(f => f.id === selectedFw) || SUPPORTED_FRAMEWORKS[0];
   const envSnippet = `PATCHFLOW_API_KEY=${apiKey}${needsHost ? `\nPATCHFLOW_HOST=${API_BASE_URL}` : ""}`;
-
-  const nextInstrumentationCode = `// instrumentation.ts — place in project root (or src/)
-import patchflow from './patchflow'; // or from '@/lib/patchflow'
-
-export function register() {
-  patchflow.init({
-    apiKey: process.env.PATCHFLOW_API_KEY!${hostParam}
-  });
-}
-
-// ⚡ Automatically intercepts all unhandled errors across all API routes & pages:
-export async function onRequestError(err: any, request: any) {
-  patchflow.captureException(err, {
-    endpoint: request?.path || '',
-    method: request?.method || 'GET',
-    framework: 'nextjs',
-  });
-}`;
-
-  const nextConfigCode = `// next.config.js (Required for Next.js 14)
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    instrumentationHook: true,
-  },
-};
-
-module.exports = nextConfig;`;
-
-  const expressCode = `const patchflow = require('./patchflow');
-
-patchflow.init({
-  apiKey: process.env.PATCHFLOW_API_KEY${hostParam}
-});
-
-// ... your routes ...
-
-// Add this AFTER all routes:
-app.use(patchflow.expressMiddleware());`;
-
-  const pythonCode = `import os
-import patchflow
-
-# Add to the top of your main.py:
-patchflow.init(
-    api_key=os.getenv("PATCHFLOW_API_KEY")${hostPyParam}
-)`;
+  const codeSnippet = activeFw.codeSnippet(apiKey, hostParam);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0, scale: 0.97, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.2 }}
-        className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl w-full max-w-[620px] max-h-[92vh] overflow-y-auto">
+        className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl w-full max-w-[740px] max-h-[92vh] flex flex-col overflow-hidden">
 
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-[#E7E5E2]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between p-6 border-b border-[#E7E5E2] shrink-0 bg-white">
           <div>
-            <h2 className="text-[18px] font-[800] text-[#111110] tracking-tight">Connect {site.name}</h2>
-            <p className="text-[13px] text-[#6F6B66] mt-0.5">Quick 3-step setup guide for your application</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-[18px] font-[800] text-[#111110] tracking-tight">Connect {site.name}</h2>
+              <span className="text-[11px] font-[600] bg-[#FFF1EC] text-[#FF5A1F] px-2 py-0.5 rounded-full">
+                SDK Setup
+              </span>
+            </div>
+            <p className="text-[13px] text-[#6F6B66] mt-0.5">
+              Select your backend framework below for custom, copy-pasteable integration steps.
+            </p>
           </div>
-          <button onClick={onClose} className="text-[#A3A099] hover:text-[#111110] p-1.5 rounded-[6px] hover:bg-[#F3F2F0]">
+          <button onClick={onClose} className="text-[#A3A099] hover:text-[#111110] p-1.5 rounded-[6px] hover:bg-[#F3F2F0] transition-colors">
             <X className="h-[18px] w-[18px]" />
           </button>
         </div>
 
-        <div className="p-6 flex flex-col gap-6">
+        {/* Framework Selector Tabs */}
+        <div className="bg-[#F8FAFC] border-b border-[#E7E5E2] px-6 py-2.5 shrink-0 overflow-x-auto">
+          <div className="flex items-center gap-2 min-w-max">
+            {SUPPORTED_FRAMEWORKS.map(fw => {
+              const isSelected = fw.id === selectedFw;
+              return (
+                <button
+                  key={fw.id}
+                  onClick={() => setSelectedFw(fw.id)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-[8px] text-[12px] font-[600] transition-all cursor-pointer",
+                    isSelected
+                      ? "bg-white text-[#111110] shadow-xs border border-[#E2E8F0]"
+                      : "text-[#6F6B66] hover:text-[#111110] hover:bg-[#F1F5F9]"
+                  )}
+                >
+                  <span>{fw.name}</span>
+                  <span className={cn("text-[10px] px-1.5 py-0.2 rounded font-[500] border", fw.badgeColor)}>
+                    {fw.language}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div className="p-6 flex flex-col gap-6 overflow-y-auto flex-1">
+
+          {/* Framework Banner Info */}
+          <div className="bg-[#FAFAF9] border border-[#E7E5E2] rounded-[10px] p-3.5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-[8px] bg-white border border-[#E7E5E2] flex items-center justify-center shrink-0">
+                <Server className="h-4 w-4 text-[#FF5A1F]" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-[700] text-[#111110]">{activeFw.name} Integration</span>
+                  <span className="text-[10px] font-[600] text-[#6F6B66] bg-[#E7E5E2] px-1.5 py-0.5 rounded">{activeFw.tag}</span>
+                </div>
+                <p className="text-[12px] text-[#6F6B66] mt-0.5">{activeFw.description}</p>
+              </div>
+            </div>
+          </div>
 
           {/* ── STEP 1: Add Environment Variable ────────────────────────── */}
           <div className="flex flex-col gap-2.5">
             <div className="flex items-center gap-2">
               <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">1</span>
-              <span className="text-[14px] font-[700] text-[#111110]">Set your Environment Variable</span>
+              <span className="text-[14px] font-[700] text-[#111110]">Set Environment Variable</span>
             </div>
             <p className="text-[12px] text-[#6F6B66] ml-7">
-              Add this to your <code className="font-mono bg-[#F3F2F0] px-1.5 py-0.5 rounded text-[#111110]">.env.local</code> file and your hosting settings (e.g. Vercel / Render / Fly.io):
+              Add your site API key to your <code className="font-mono bg-[#F3F2F0] px-1.5 py-0.5 rounded text-[#111110]">.env</code> file or hosting platform (Render, Railway, Fly.io, etc.):
             </p>
             <div className="ml-7 relative">
               <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[8px] overflow-x-auto">
                 {envSnippet}
               </pre>
               <button onClick={() => copy("env", envSnippet)}
-                className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
+                className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors cursor-pointer",
                   copied === "env" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
                 {copied === "env" ? <><Check className="h-[11px] w-[11px]" />Copied</> : <><Copy className="h-[11px] w-[11px]" />Copy</>}
               </button>
             </div>
           </div>
 
-          {/* ── STEP 2: Download SDK ────────────────────────────────────── */}
+          {/* ── STEP 2: Download / Add SDK ──────────────────────────────── */}
           <div className="flex flex-col gap-2.5">
             <div className="flex items-center gap-2">
               <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">2</span>
-              <span className="text-[14px] font-[700] text-[#111110]">Download the SDK File</span>
+              <span className="text-[14px] font-[700] text-[#111110]">Add SDK to your Project</span>
             </div>
             <div className="ml-7 flex flex-col gap-2">
-              <div className="flex gap-2 bg-[#F3F2F0] rounded-[8px] p-1 w-fit">
-                {(["node", "python"] as const).map(t => (
-                  <button key={t} onClick={() => setTab(t)}
-                    className={cn("px-3 py-1 text-[12px] font-[600] rounded-[6px] transition-colors",
-                      tab === t ? "bg-white text-[#111110] shadow-xs" : "text-[#6F6B66] hover:text-[#111110]")}>
-                    {t === "node" ? "Next.js / Node.js" : "FastAPI / Python"}
-                  </button>
-                ))}
+              <div className="flex items-center gap-3 flex-wrap">
+                <a
+                  href={activeFw.downloadFile}
+                  download={activeFw.downloadFilename}
+                  className="flex items-center gap-2 text-[12px] font-[700] text-white bg-[#111110] hover:bg-[#333] px-3.5 py-2 rounded-[8px] transition-colors"
+                >
+                  <Download className="h-[13px] w-[13px]" /> Download {activeFw.downloadFilename}
+                </a>
+                <span className="text-[12px] text-[#6F6B66]">{activeFw.placementHint}</span>
               </div>
-
-              {tab === "node" ? (
-                <div className="flex items-center gap-3">
-                  <a href="/sdk/patchflow.js" download="patchflow.js"
-                    className="flex items-center gap-2 text-[12px] font-[700] text-white bg-[#111110] hover:bg-[#333] px-3.5 py-2 rounded-[8px] transition-colors">
-                    <Terminal className="h-[13px] w-[13px]" /> Download patchflow.js
-                  </a>
-                  <span className="text-[12px] text-[#6F6B66]">Place in your project root or <code className="font-mono bg-[#F3F2F0] px-1 rounded">lib/</code></span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <a href="/sdk/patchflow.py" download="patchflow.py"
-                    className="flex items-center gap-2 text-[12px] font-[700] text-white bg-[#111110] hover:bg-[#333] px-3.5 py-2 rounded-[8px] transition-colors">
-                    <Terminal className="h-[13px] w-[13px]" /> Download patchflow.py
-                  </a>
-                  <span className="text-[12px] text-[#6F6B66]">Place in your project root next to <code className="font-mono bg-[#F3F2F0] px-1 rounded">main.py</code></span>
-                </div>
-              )}
             </div>
           </div>
 
@@ -255,102 +396,58 @@ patchflow.init(
               <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">3</span>
               <span className="text-[14px] font-[700] text-[#111110]">Initialize in your Code</span>
             </div>
-
-            <div className="ml-7 flex flex-col gap-3">
-              {tab === "node" && (
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[12px] font-[700] text-[#111110]">
-                        Next.js: Create <code className="font-mono bg-[#F3F2F0] px-1 rounded text-[#FF5A1F]">instrumentation.ts</code>
-                      </span>
-                      <span className="text-[10px] font-[600] bg-[#F0FDF4] text-[#16A34A] px-2 py-0.5 rounded-full">
-                        Global — covers all routes automatically
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[#6F6B66] mb-1.5 leading-relaxed">
-                      Place this in your project root (or <code className="font-mono text-[#111110]">src/</code>) — catches all server & API crashes across your entire app:
-                    </p>
-                    <div className="relative">
-                      <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[8px] overflow-x-auto leading-relaxed">
-                        {nextInstrumentationCode}
-                      </pre>
-                      <button onClick={() => copy("next", nextInstrumentationCode)}
-                        className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
-                          copied === "next" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                        {copied === "next" ? <Check className="h-[11px] w-[11px]" /> : <Copy className="h-[11px] w-[11px]" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Next.js 14 Alert */}
-                  <div className="p-3 bg-[#FFF8F5] border border-[#FFE2D5] rounded-[8px] flex flex-col gap-1.5">
-                    <span className="text-[12px] font-[700] text-[#C2410C]">⚡ Using Next.js 14?</span>
-                    <p className="text-[11px] text-[#7C2D12] leading-relaxed">
-                      Next.js 14 requires enabling the instrumentation hook in <code className="font-mono font-[600] bg-[#FFEDE3] px-1 rounded">next.config.js</code> so it runs automatically on startup:
-                    </p>
-                    <div className="relative">
-                      <pre className="bg-[#111110] text-[#F8F8F2] text-[11px] font-mono p-[10px_12px] rounded-[6px] overflow-x-auto">
-                        {nextConfigCode}
-                      </pre>
-                      <button onClick={() => copy("config", nextConfigCode)}
-                        className={cn("absolute top-2 right-2 flex items-center gap-1 text-[10px] font-[600] px-2 py-0.5 rounded-[4px] transition-colors",
-                          copied === "config" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                        {copied === "config" ? <Check className="h-[10px] w-[10px]" /> : <Copy className="h-[10px] w-[10px]" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <details className="group border border-[#E7E5E2] rounded-[8px] p-3 bg-[#FAFAF9]">
-                    <summary className="text-[12px] font-[700] text-[#374151] cursor-pointer hover:text-[#111110] select-none flex items-center justify-between">
-                      <span>Using Express?</span>
-                      <span className="text-[11px] text-[#A3A099] font-[500]">Middleware setup ▸</span>
-                    </summary>
-                    <div className="mt-2 relative">
-                      <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[6px] overflow-x-auto">
-                        {expressCode}
-                      </pre>
-                      <button onClick={() => copy("express", expressCode)}
-                        className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
-                          copied === "express" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                        {copied === "express" ? <Check className="h-[11px] w-[11px]" /> : <Copy className="h-[11px] w-[11px]" />}
-                      </button>
-                    </div>
-                  </details>
-                </div>
-              )}
-
-              {tab === "python" && (
-                <div>
-                  <span className="text-[12px] font-[600] text-[#111110] block mb-1">Add to the top of <code className="font-mono bg-[#F3F2F0] px-1 rounded">main.py</code>:</span>
-                  <div className="relative">
-                    <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[12px_14px] rounded-[8px] overflow-x-auto leading-relaxed">
-                      {pythonCode}
-                    </pre>
-                    <button onClick={() => copy("python", pythonCode)}
-                      className={cn("absolute top-2 right-2 flex items-center gap-1 text-[11px] font-[600] px-2 py-1 rounded-[5px] transition-colors",
-                        copied === "python" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                      {copied === "python" ? <Check className="h-[11px] w-[11px]" /> : <Copy className="h-[11px] w-[11px]" />}
-                    </button>
-                  </div>
-                </div>
-              )}
+            <div className="ml-7 relative">
+              <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[14px_16px] rounded-[8px] overflow-x-auto leading-relaxed">
+                {codeSnippet}
+              </pre>
+              <button onClick={() => copy("code", codeSnippet)}
+                className={cn("absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-[600] px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer",
+                  copied === "code" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+                {copied === "code" ? <><Check className="h-[11px] w-[11px]" />Copied</> : <><Copy className="h-[11px] w-[11px]" />Copy Code</>}
+              </button>
             </div>
           </div>
 
-          {/* ── Status Banner ───────────────────────────────────────────── */}
-          <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-[10px] p-[14px_16px] flex flex-col gap-1.5">
-            <span className="text-[12px] font-[700] text-[#16A34A] flex items-center gap-1.5">
-              <Check className="h-4 w-4" /> Automatic Verification
-            </span>
-            <p className="text-[12px] text-[#374151]">
-              The moment your app starts up with PatchFlow initialized, it automatically sends a background ping. Your site status on this dashboard will turn <span className="font-[700] text-[#16A34A]">SDK Active</span> immediately!
-            </p>
+          {/* ── STEP 4: Verification & Test ──────────────────────────────── */}
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">4</span>
+              <span className="text-[14px] font-[700] text-[#111110]">Verify & Trigger Test Incident</span>
+            </div>
+            <div className="ml-7 flex flex-col gap-2.5">
+              <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-[10px] p-[12px_14px] flex items-start gap-2.5">
+                <CheckCircle2 className="h-4 w-4 text-[#16A34A] shrink-0 mt-0.5" />
+                <p className="text-[12px] text-[#166534] leading-relaxed">
+                  <strong>Automatic Heartbeat:</strong> When your app boots with PatchFlow initialized, it automatically sends a background ping. This site&apos;s badge will turn <span className="font-[700] text-[#16A34A]">SDK Active</span> immediately!
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[12px] text-[#6F6B66] mb-1.5">
+                  To test the autonomous fix pipeline, trigger this endpoint 3 times:
+                </p>
+                <div className="relative">
+                  <pre className="bg-[#111110] text-[#F8F8F2] text-[11px] font-mono p-[10px_12px] rounded-[6px] overflow-x-auto">
+                    {activeFw.testCurl}
+                  </pre>
+                  <button onClick={() => copy("curl", activeFw.testCurl)}
+                    className={cn("absolute top-2 right-2 flex items-center gap-1 text-[10px] font-[600] px-2 py-0.5 rounded-[4px] transition-colors cursor-pointer",
+                      copied === "curl" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
+                    {copied === "curl" ? <Check className="h-[10px] w-[10px]" /> : <Copy className="h-[10px] w-[10px]" />}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
+        </div>
+
+        {/* Modal Footer */}
+        <div className="p-4 border-t border-[#E7E5E2] bg-[#FAFAF9] shrink-0 flex items-center justify-between">
+          <span className="text-[11px] text-[#A3A099]">You can re-open this guide at any time from your Sites dashboard.</span>
           <button onClick={onClose}
-            className="w-full py-2.5 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] transition-colors cursor-pointer">
-            Done — Close Guide
+            className="px-5 py-2 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] transition-colors cursor-pointer">
+            Done
           </button>
         </div>
       </motion.div>
@@ -373,7 +470,7 @@ export default function SitesPage() {
   const [deletingId,        setDeletingId]        = useState<string | null>(null);
   const [error,             setError]             = useState<string | null>(null);
 
-  const [form, setForm] = useState({ name: "", url: "", github_repo: "", framework: "" });
+  const [form, setForm] = useState({ name: "", url: "", github_repo: "", framework: "fastapi" });
 
   const loadSites = async () => {
     setLoading(true);
@@ -400,20 +497,21 @@ export default function SitesPage() {
 
   const openCreate = () => {
     setEditSite(null);
-    setForm({ name: "", url: "", github_repo: "", framework: "" });
+    setForm({ name: "", url: "", github_repo: "", framework: "fastapi" });
     setError(null);
     setShowForm(true);
   };
 
   const openEdit = (site: Site) => {
     setEditSite(site);
-    setForm({ name: site.name, url: site.url ?? "", github_repo: site.github_repo ?? "", framework: site.framework ?? "" });
+    setForm({ name: site.name, url: site.url ?? "", github_repo: site.github_repo ?? "", framework: site.framework ?? "fastapi" });
     setError(null);
     setShowForm(true);
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { setError("Name is required."); return; }
+    if (!form.name.trim()) { setError("Site name is required."); return; }
+    if (!form.framework) { setError("Please select a supported framework."); return; }
     setSaving(true); setError(null);
     try {
       const body = { name: form.name.trim(), url: form.url.trim() || null, github_repo: form.github_repo || null, framework: form.framework || null };
@@ -487,11 +585,11 @@ export default function SitesPage() {
         <div>
           <h1 className="text-[28px] font-[800] text-[#111110] tracking-tight">Monitored Sites</h1>
           <p className="text-[14px] text-[#6F6B66] mt-0.5">
-            Connect your apps. PatchFlow captures real errors and opens fix PRs automatically.
+            Connect your backend services. PatchFlow captures production errors and opens verified fix PRs automatically.
           </p>
         </div>
         <button onClick={openCreate}
-          className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] transition-colors">
+          className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] transition-colors cursor-pointer">
           <Plus className="h-[14px] w-[14px]" /> Connect Site
         </button>
       </div>
@@ -501,45 +599,86 @@ export default function SitesPage() {
         {showForm && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowForm(false)} />
+              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-xs" onClick={() => setShowForm(false)} />
             <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.97, y: 8 }} transition={{ duration: 0.18 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-xl w-full max-w-[480px] p-6 flex flex-col gap-5">
+              <div className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-xl w-full max-w-[560px] p-6 flex flex-col gap-5 max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-[17px] font-[700] text-[#111110]">{editSite ? "Edit Site" : "Connect a Site"}</h2>
-                  <button onClick={() => setShowForm(false)} className="text-[#A3A099] hover:text-[#111110]"><X className="h-[18px] w-[18px]" /></button>
+                  <div>
+                    <h2 className="text-[17px] font-[700] text-[#111110]">{editSite ? "Edit Site Settings" : "Connect a Backend Service"}</h2>
+                    <p className="text-[12px] text-[#6F6B66] mt-0.5">Configure your repository and select your backend framework.</p>
+                  </div>
+                  <button onClick={() => setShowForm(false)} className="text-[#A3A099] hover:text-[#111110] cursor-pointer p-1"><X className="h-[18px] w-[18px]" /></button>
                 </div>
+
                 {error && <p className="text-[12px] font-[600] text-[#DC2626] bg-[#FEF2F2] border border-[#FECACA] rounded-[6px] px-3 py-2">{error}</p>}
+
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[12px] font-[600] text-[#6F6B66] uppercase tracking-[0.04em]">Site Name <span className="text-[#DC2626]">*</span></label>
                     <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. payments-api"
                       className="px-3 py-2 border border-[#E7E5E2] rounded-[8px] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#FF5A1F]" />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[12px] font-[600] text-[#6F6B66] uppercase tracking-[0.04em]">Production URL</label>
-                    <input value={form.url} onChange={e => setForm(p => ({ ...p, url: e.target.value }))} placeholder="https://api.acme.com"
-                      className="px-3 py-2 border border-[#E7E5E2] rounded-[8px] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#FF5A1F]" />
-                  </div>
+
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[12px] font-[600] text-[#6F6B66] uppercase tracking-[0.04em]">GitHub Repository</label>
                     <RepoDropdown value={form.github_repo} repos={repos} reposLoading={reposLoading} onChange={v => setForm(p => ({ ...p, github_repo: v }))} />
-                    <p className="text-[11px] text-[#A3A099]">PatchFlow clones this repo to generate and open fix PRs.</p>
+                    <p className="text-[11px] text-[#A3A099]">PatchFlow clones this repo to locate source code and open fix PRs.</p>
                   </div>
+
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[12px] font-[600] text-[#6F6B66] uppercase tracking-[0.04em]">Framework</label>
-                    <select value={form.framework} onChange={e => setForm(p => ({ ...p, framework: e.target.value }))}
-                      className="px-3 py-2 border border-[#E7E5E2] rounded-[8px] text-[13px] bg-white focus:outline-none focus:ring-1 focus:ring-[#FF5A1F]">
-                      <option value="">— Auto-detect from repo —</option>
-                      {FRAMEWORKS.map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
+                    <label className="text-[12px] font-[600] text-[#6F6B66] uppercase tracking-[0.04em]">Production URL (Optional)</label>
+                    <input value={form.url} onChange={e => setForm(p => ({ ...p, url: e.target.value }))} placeholder="https://api.acme.com"
+                      className="px-3 py-2 border border-[#E7E5E2] rounded-[8px] text-[13px] focus:outline-none focus:ring-1 focus:ring-[#FF5A1F]" />
+                  </div>
+
+                  {/* Framework Selection Cards */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[12px] font-[600] text-[#6F6B66] uppercase tracking-[0.04em]">
+                      Backend Framework <span className="text-[#DC2626]">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {SUPPORTED_FRAMEWORKS.map(fw => {
+                        const isSelected = form.framework === fw.id;
+                        return (
+                          <div
+                            key={fw.id}
+                            onClick={() => setForm(p => ({ ...p, framework: fw.id }))}
+                            className={cn(
+                              "p-3 rounded-[10px] border text-left cursor-pointer transition-all flex flex-col justify-between gap-2 relative",
+                              isSelected
+                                ? "border-[#FF5A1F] bg-[#FFF8F5] shadow-xs ring-1 ring-[#FF5A1F]"
+                                : "border-[#E7E5E2] bg-white hover:border-[#D4D1CC] hover:bg-[#FAFAF9]"
+                            )}
+                          >
+                            <div className="flex items-start justify-between">
+                              <span className="text-[13px] font-[700] text-[#111110]">{fw.name}</span>
+                              {isSelected && (
+                                <div className="h-4 w-4 rounded-full bg-[#FF5A1F] text-white flex items-center justify-center">
+                                  <Check className="h-2.5 w-2.5 stroke-[3]" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className={cn("text-[10px] px-1.5 py-0.2 rounded font-[500] border", fw.badgeColor)}>
+                                {fw.language}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] text-[#6F6B66] mt-0.5">
+                      Only officially supported backend engines are shown. Custom setup instructions will be provided immediately upon connection.
+                    </p>
                   </div>
                 </div>
+
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-[13px] font-[600] text-[#6F6B66] border border-[#E7E5E2] rounded-[8px] hover:bg-[#F3F2F0] transition-colors">Cancel</button>
+                  <button onClick={() => setShowForm(false)} className="flex-1 py-2 text-[13px] font-[600] text-[#6F6B66] border border-[#E7E5E2] rounded-[8px] hover:bg-[#F3F2F0] transition-colors cursor-pointer">Cancel</button>
                   <button onClick={handleSave} disabled={saving}
-                    className="flex-1 py-2 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] flex items-center justify-center gap-1.5 disabled:opacity-60">
+                    className="flex-1 py-2 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] flex items-center justify-center gap-1.5 disabled:opacity-60 cursor-pointer">
                     {saving ? <Loader2 className="h-[14px] w-[14px] animate-spin" /> : <Check className="h-[14px] w-[14px]" />}
                     {editSite ? "Save Changes" : "Connect Site"}
                   </button>
@@ -575,7 +714,7 @@ export default function SitesPage() {
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={() => setConfirmDeleteSite(null)}
-                    className="flex-1 py-2.5 text-[13px] font-[600] text-[#6F6B66] border border-[#E7E5E2] rounded-[8px] hover:bg-[#F3F2F0] transition-colors"
+                    className="flex-1 py-2.5 text-[13px] font-[600] text-[#6F6B66] border border-[#E7E5E2] rounded-[8px] hover:bg-[#F3F2F0] transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -586,7 +725,7 @@ export default function SitesPage() {
                       await handleDelete(id);
                     }}
                     disabled={deletingId === confirmDeleteSite.id}
-                    className="flex-1 py-2.5 text-[13px] font-[600] text-white bg-[#DC2626] hover:bg-[#B91C1C] rounded-[8px] flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+                    className="flex-1 py-2.5 text-[13px] font-[600] text-white bg-[#DC2626] hover:bg-[#B91C1C] rounded-[8px] flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60 cursor-pointer"
                   >
                     {deletingId === confirmDeleteSite.id ? <Loader2 className="h-[14px] w-[14px] animate-spin" /> : <Trash2 className="h-[14px] w-[14px]" />}
                     Delete Site
@@ -604,9 +743,9 @@ export default function SitesPage() {
       ) : sites.length === 0 ? (
         <div className="bg-white border border-[#E7E5E2] rounded-[14px] p-12 text-center">
           <Globe className="h-8 w-8 text-[#D4D1CC] mx-auto mb-3" />
-          <p className="text-[14px] font-[600] text-[#111110]">No sites connected yet</p>
-          <p className="text-[13px] text-[#6F6B66] mt-1 mb-4">Connect your first app to start receiving automated incident fixes.</p>
-          <button onClick={openCreate} className="inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px]">
+          <p className="text-[14px] font-[600] text-[#111110]">No backend services connected yet</p>
+          <p className="text-[13px] text-[#6F6B66] mt-1 mb-4">Connect your FastAPI, Express, Django, or Spring Boot API to enable autonomous error fixes.</p>
+          <button onClick={openCreate} className="inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] cursor-pointer">
             <Plus className="h-[14px] w-[14px]" /> Connect Site
           </button>
         </div>
@@ -615,6 +754,10 @@ export default function SitesPage() {
           {sites.map((site, i) => {
             const sdkMeta = sdkStatusMeta(site.sdk_status);
             const SdkIcon = sdkMeta.icon;
+            const fwConfig = SUPPORTED_FRAMEWORKS.find(
+              f => f.id === site.framework?.toLowerCase() || f.name.toLowerCase().includes(site.framework?.toLowerCase() || "")
+            );
+
             return (
               <motion.div key={site.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04, duration: 0.25 }}
@@ -628,12 +771,12 @@ export default function SitesPage() {
                         <SdkIcon className="h-[9px] w-[9px]" />
                         {sdkMeta.label}
                       </span>
-                      {site.sdk_status !== "active" && (
-                        <button onClick={() => setSdkSite({ site, apiKey: site.api_keys[0]?.prefix + "…" })}
-                          className="text-[11px] font-[600] text-[#FF5A1F] hover:underline">
-                          Setup SDK →
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setSdkSite({ site, apiKey: site.api_keys[0]?.prefix ? `${site.api_keys[0].prefix}…` : "YOUR_API_KEY" })}
+                        className="text-[11px] font-[600] text-[#FF5A1F] hover:underline cursor-pointer flex items-center gap-0.5"
+                      >
+                        Setup Guide →
+                      </button>
                     </div>
                     {/* Meta */}
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[#6F6B66]">
@@ -648,10 +791,12 @@ export default function SitesPage() {
                         </a>
                       )}
                       {site.framework && (
-                        <span className="bg-[#F8FAFC] border border-[#E2E8F0] px-[6px] py-[1px] rounded-[4px] font-[500]">{site.framework}</span>
+                        <span className={cn("px-[7px] py-[1px] rounded-[4px] font-[600] text-[11px] border", fwConfig?.badgeColor || "bg-[#F8FAFC] border-[#E2E8F0]")}>
+                          {fwConfig?.name || site.framework}
+                        </span>
                       )}
                       {site.sdk_last_seen && (
-                        <span className="text-[#A3A099]">Last seen {timeAgo(site.sdk_last_seen)}</span>
+                        <span className="text-[#A3A099]">Last ping {timeAgo(site.sdk_last_seen)}</span>
                       )}
                     </div>
                     {/* API key prefix */}
@@ -666,11 +811,11 @@ export default function SitesPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => openEdit(site)} className="p-1.5 text-[#A3A099] hover:text-[#111110] hover:bg-[#F3F2F0] rounded-[6px]">
+                    <button onClick={() => openEdit(site)} className="p-1.5 text-[#A3A099] hover:text-[#111110] hover:bg-[#F3F2F0] rounded-[6px] cursor-pointer">
                       <Pencil className="h-[14px] w-[14px]" />
                     </button>
                     <button onClick={() => setConfirmDeleteSite(site)} disabled={deletingId === site.id}
-                      className="p-1.5 text-[#A3A099] hover:text-[#DC2626] hover:bg-[#FEF2F2] rounded-[6px] disabled:opacity-50">
+                      className="p-1.5 text-[#A3A099] hover:text-[#DC2626] hover:bg-[#FEF2F2] rounded-[6px] disabled:opacity-50 cursor-pointer">
                       {deletingId === site.id ? <Loader2 className="h-[14px] w-[14px] animate-spin" /> : <Trash2 className="h-[14px] w-[14px]" />}
                     </button>
                   </div>

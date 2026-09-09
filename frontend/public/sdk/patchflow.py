@@ -331,6 +331,38 @@ class PatchFlowASGIMiddleware:
             raise  # re-raise so FastAPI's own error handling still runs
 
 
+# ── Django integration ────────────────────────────────────────────────────────
+
+class PatchFlowDjangoMiddleware:
+    """
+    Django middleware that captures unhandled exceptions in request handlers.
+
+    Usage in settings.py:
+        MIDDLEWARE = [
+            'patchflow.PatchFlowDjangoMiddleware',
+            ...
+        ]
+    """
+
+    def __init__(self, get_response: Any):
+        self.get_response = get_response
+
+    def __call__(self, request: Any) -> Any:
+        return self.get_response(request)
+
+    def process_exception(self, request: Any, exception: Exception) -> None:
+        if _instance:
+            endpoint = getattr(request, "path", "")
+            method = getattr(request, "method", "")
+            _instance.capture_exception(
+                exception,
+                endpoint=endpoint,
+                method=method,
+                status_code=500,
+            )
+        return None  # Let standard Django error handlers continue
+
+
 # ── Flask integration ─────────────────────────────────────────────────────────
 
 def _install_flask(app: Any, pf: "PatchFlow") -> None:
