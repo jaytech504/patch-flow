@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ElementType, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   Globe, Plus, Trash2, Pencil, Loader2,
   Check, X, ExternalLink, Search, ChevronDown,
@@ -318,6 +319,50 @@ function CopyBlock({ id, code, copied, onCopy }: {
   );
 }
 
+function useBodyScrollLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [locked]);
+}
+
+function ModalPortal({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return createPortal(children, document.body);
+}
+
+function ConnectSiteModal({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  useBodyScrollLock(true);
+  return (
+    <ModalPortal>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[150]"
+      >
+        <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
+        <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 8 }}
+            transition={{ duration: 0.18 }}
+            onClick={(e) => e.stopPropagation()}
+            className="pointer-events-auto w-full max-w-[560px]"
+          >
+            {children}
+          </motion.div>
+        </div>
+      </motion.div>
+    </ModalPortal>
+  );
+}
+
 function SetupStepCard({ step, title, icon: Icon, children }: {
   step: number; title: string; icon: ElementType; children: ReactNode;
 }) {
@@ -384,12 +429,33 @@ function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, 
     setCheckingConnection(false);
   };
 
+  useBodyScrollLock(true);
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0, scale: 0.97, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.97 }} transition={{ duration: 0.2 }}
-        className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl w-full max-w-[680px] max-h-[92vh] flex flex-col overflow-hidden">
+    <ModalPortal>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[200]"
+      >
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+          onClick={onClose}
+          aria-hidden
+        />
+
+        {/* Dialog */}
+        <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 10 }}
+            transition={{ duration: 0.2 }}
+            onClick={(e) => e.stopPropagation()}
+            className="pointer-events-auto bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl w-full max-w-[680px] max-h-[min(90vh,820px)] flex flex-col overflow-hidden"
+          >
 
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-[#E7E5E2] shrink-0">
@@ -412,10 +478,18 @@ function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, 
             </button>
           </div>
           <p className="text-[12px] text-[#475569] mt-3 leading-relaxed">{fw.setupSummary}</p>
+          <div className="flex gap-1.5 mt-4" aria-hidden>
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="flex-1 h-1 rounded-full bg-[#FF5A1F]/15">
+                <div className="h-full w-full rounded-full bg-[#FF5A1F]/50" />
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-[#A3A099] mt-1.5">4 steps · scroll down to complete each one</p>
         </div>
 
-        {/* Steps */}
-        <div className="p-6 flex flex-col gap-4 overflow-y-auto flex-1">
+        {/* Steps — min-h-0 lets flex child scroll correctly */}
+        <div className="p-6 flex flex-col gap-4 overflow-y-auto flex-1 min-h-0 overscroll-contain">
 
           {/* Step 1 — Download */}
           <SetupStepCard step={1} title="Download the SDK file" icon={Download}>
@@ -526,8 +600,10 @@ function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, 
             Done <ArrowRight className="h-[13px] w-[13px]" />
           </button>
         </div>
+          </motion.div>
+        </div>
       </motion.div>
-    </motion.div>
+    </ModalPortal>
   );
 }
 
@@ -598,9 +674,11 @@ export default function SitesPage() {
       const saved: Site = await r.json();
       setShowForm(false);
       await loadSites();
-      // Show SDK setup on create (API key is in the response exactly once)
+      // Open setup after connect form unmounts so overlays don't stack
       if (!editSite && saved.api_key) {
-        setSdkSite({ site: saved, apiKey: saved.api_key });
+        requestAnimationFrame(() => {
+          setSdkSite({ site: saved, apiKey: saved.api_key! });
+        });
       }
     } catch (e: any) {
       setError(e.message);
@@ -692,13 +770,8 @@ export default function SitesPage() {
       {/* Connect form modal */}
       <AnimatePresence>
         {showForm && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-xs" onClick={() => setShowForm(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.97, y: 8 }} transition={{ duration: 0.18 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-xl w-full max-w-[560px] p-6 flex flex-col gap-5 max-h-[92vh] overflow-y-auto">
+          <ConnectSiteModal onClose={() => setShowForm(false)}>
+              <div className="bg-white rounded-[16px] border border-[#E7E5E2] shadow-xl w-full max-w-[560px] p-6 flex flex-col gap-5 max-h-[min(90vh,720px)] overflow-y-auto overscroll-contain">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-[17px] font-[700] text-[#111110]">{editSite ? "Edit Site Settings" : "Connect a Backend Service"}</h2>
@@ -781,8 +854,7 @@ export default function SitesPage() {
                   </button>
                 </div>
               </div>
-            </motion.div>
-          </>
+          </ConnectSiteModal>
         )}
 
         {/* Delete Confirmation Modal */}
