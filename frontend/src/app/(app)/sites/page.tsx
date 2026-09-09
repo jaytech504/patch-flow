@@ -307,16 +307,34 @@ function CopyBlock({ id, code, copied, onCopy }: {
 }) {
   return (
     <div className="relative">
-      <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[14px_16px] rounded-[8px] overflow-x-auto leading-relaxed whitespace-pre">
+      <pre className="bg-[#111110] text-[#F8F8F2] text-[12px] font-mono p-[14px_16px] pr-[72px] rounded-[8px] overflow-x-auto leading-relaxed whitespace-pre-wrap break-words">
         {code}
       </pre>
-      <button onClick={() => onCopy(id, code)}
-        className={cn("absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-[600] px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer",
+      <button type="button" onClick={() => onCopy(id, code)}
+        className={cn("absolute top-2.5 right-2.5 flex items-center gap-1 text-[11px] font-[600] px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer z-10",
           copied === id ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
         {copied === id ? <><Check className="h-[11px] w-[11px]" />Copied</> : <><Copy className="h-[11px] w-[11px]" />Copy</>}
       </button>
     </div>
   );
+}
+
+async function downloadSdkFile(url: string, filename: string) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Download failed");
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch {
+    window.open(url, "_blank");
+  }
 }
 
 function useBodyScrollLock(locked: boolean) {
@@ -339,26 +357,21 @@ function ConnectSiteModal({ children, onClose }: { children: ReactNode; onClose:
   useBodyScrollLock(true);
   return (
     <ModalPortal>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[150]"
-      >
-        <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
-        <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: 8 }}
-            transition={{ duration: 0.18 }}
+      <div className="fixed inset-0 z-[150] overflow-y-auto overscroll-contain">
+        <div
+          className="min-h-full flex items-start justify-center p-4 sm:p-8 bg-black/30"
+          onClick={onClose}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
             onClick={(e) => e.stopPropagation()}
-            className="pointer-events-auto w-full max-w-[560px]"
+            className="relative w-full max-w-[560px] my-4"
           >
             {children}
-          </motion.div>
+          </div>
         </div>
-      </motion.div>
+      </div>
     </ModalPortal>
   );
 }
@@ -367,17 +380,27 @@ function SetupStepCard({ step, title, icon: Icon, children }: {
   step: number; title: string; icon: ElementType; children: ReactNode;
 }) {
   return (
-    <div className="border border-[#E7E5E2] rounded-[12px] overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 bg-[#FAFAF9] border-b border-[#E7E5E2]">
+    <div className="border border-[#E7E5E2] rounded-[12px]">
+      <div className="flex items-center gap-3 px-4 py-3 bg-[#FAFAF9] border-b border-[#E7E5E2] rounded-t-[12px]">
         <span className="flex items-center justify-center h-6 w-6 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800] shrink-0">
           {step}
         </span>
         <Icon className="h-4 w-4 text-[#FF5A1F] shrink-0" />
         <span className="text-[14px] font-[700] text-[#111110]">{title}</span>
       </div>
-      <div className="p-4 flex flex-col gap-3">{children}</div>
+      <div className="p-4 flex flex-col gap-3 bg-white rounded-b-[12px]">{children}</div>
     </div>
   );
+}
+
+function downloadSdkFile(file: string, filename: string) {
+  const link = document.createElement("a");
+  link.href = file;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 // ── SDK Setup Panel ───────────────────────────────────────────────────────────
@@ -433,36 +456,26 @@ function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, 
 
   return (
     <ModalPortal>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[200]"
-      >
-        {/* Backdrop */}
+      {/* Scroll the overlay itself — avoids flex max-height scroll bugs */}
+      <div className="fixed inset-0 z-[200] overflow-y-auto overscroll-contain">
         <div
-          className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+          className="min-h-full flex items-start justify-center p-4 sm:p-8 bg-black/40"
           onClick={onClose}
-          aria-hidden
-        />
-
-        {/* Dialog */}
-        <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: 10 }}
-            transition={{ duration: 0.2 }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sdk-setup-title"
             onClick={(e) => e.stopPropagation()}
-            className="pointer-events-auto bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl w-full max-w-[680px] max-h-[min(90vh,820px)] flex flex-col overflow-hidden"
+            className="relative w-full max-w-[680px] my-4 bg-white rounded-[16px] border border-[#E7E5E2] shadow-2xl"
           >
 
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-[#E7E5E2] shrink-0">
+        <div className="px-6 pt-6 pb-4 border-b border-[#E7E5E2]">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-[18px] font-[800] text-[#111110] tracking-tight">
+                <h2 id="sdk-setup-title" className="text-[18px] font-[800] text-[#111110] tracking-tight">
                   Set up {fw.name}
                 </h2>
                 <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-[600] border", fw.badgeColor)}>
@@ -473,34 +486,29 @@ function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, 
                 Follow these 4 steps to connect <strong className="text-[#111110] font-[600]">{site.name}</strong>.
               </p>
             </div>
-            <button onClick={onClose} className="text-[#A3A099] hover:text-[#111110] p-1.5 rounded-[6px] hover:bg-[#F3F2F0] transition-colors shrink-0">
+            <button type="button" onClick={onClose} className="text-[#A3A099] hover:text-[#111110] p-1.5 rounded-[6px] hover:bg-[#F3F2F0] transition-colors shrink-0 cursor-pointer">
               <X className="h-[18px] w-[18px]" />
             </button>
           </div>
           <p className="text-[12px] text-[#475569] mt-3 leading-relaxed">{fw.setupSummary}</p>
-          <div className="flex gap-1.5 mt-4" aria-hidden>
-            {[1, 2, 3, 4].map((n) => (
-              <div key={n} className="flex-1 h-1 rounded-full bg-[#FF5A1F]/15">
-                <div className="h-full w-full rounded-full bg-[#FF5A1F]/50" />
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-[#A3A099] mt-1.5">4 steps · scroll down to complete each one</p>
         </div>
 
-        {/* Steps — min-h-0 lets flex child scroll correctly */}
-        <div className="p-6 flex flex-col gap-4 overflow-y-auto flex-1 min-h-0 overscroll-contain">
+        {/* Steps */}
+        <div className="p-6 flex flex-col gap-4">
 
           {/* Step 1 — Download */}
           <SetupStepCard step={1} title="Download the SDK file" icon={Download}>
-            <a href={fw.downloadFile} download={fw.downloadFilename}
-              className="inline-flex items-center gap-2 text-[12px] font-[700] text-white bg-[#111110] hover:bg-[#333] px-4 py-2.5 rounded-[8px] transition-colors w-fit">
+            <button
+              type="button"
+              onClick={() => downloadSdkFile(fw.downloadFile, fw.downloadFilename)}
+              className="inline-flex items-center gap-2 text-[12px] font-[700] text-white bg-[#111110] hover:bg-[#333] px-4 py-2.5 rounded-[8px] transition-colors w-fit cursor-pointer"
+            >
               <Download className="h-[13px] w-[13px]" />
               Download {fw.downloadFilename}
-            </a>
+            </button>
             <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[8px] p-3">
               <p className="text-[11px] font-[600] text-[#6F6B66] uppercase tracking-wide mb-2">Place it here</p>
-              <pre className="text-[12px] font-mono text-[#111110] leading-relaxed whitespace-pre">{fw.placementPath}</pre>
+              <pre className="text-[12px] font-mono text-[#111110] leading-relaxed whitespace-pre-wrap">{fw.placementPath}</pre>
             </div>
           </SetupStepCard>
 
@@ -518,7 +526,7 @@ function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, 
                   <p className="text-[12px] text-[#92400E] leading-relaxed">
                     Your full API key is only shown once at site creation. Generate a new key to copy it here.
                   </p>
-                  <button onClick={generateKey} disabled={generatingKey}
+                  <button type="button" onClick={generateKey} disabled={generatingKey}
                     className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-[600] text-[#92400E] hover:text-[#78350F] cursor-pointer disabled:opacity-60">
                     {generatingKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                     Generate new API key
@@ -561,7 +569,7 @@ function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, 
             </p>
 
             <div className="flex items-center gap-3 flex-wrap">
-              <button onClick={checkConnection} disabled={checkingConnection}
+              <button type="button" onClick={checkConnection} disabled={checkingConnection}
                 className="inline-flex items-center gap-2 text-[12px] font-[700] text-white bg-[#16A34A] hover:bg-[#15803D] px-4 py-2.5 rounded-[8px] transition-colors disabled:opacity-60 cursor-pointer">
                 {checkingConnection
                   ? <><Loader2 className="h-[13px] w-[13px] animate-spin" />Checking…</>
@@ -593,16 +601,16 @@ function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, 
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-[#E7E5E2] bg-[#FAFAF9] shrink-0 flex items-center justify-between gap-4">
+        <div className="px-6 py-4 border-t border-[#E7E5E2] bg-[#FAFAF9] rounded-b-[16px] flex items-center justify-between gap-4">
           <span className="text-[11px] text-[#A3A099]">Re-open this guide anytime via Setup Guide on your dashboard.</span>
-          <button onClick={onClose}
+          <button type="button" onClick={onClose}
             className="inline-flex items-center gap-1.5 px-5 py-2 text-[13px] font-[600] text-white bg-[#FF5A1F] hover:bg-[#E04E16] rounded-[8px] transition-colors cursor-pointer shrink-0">
             Done <ArrowRight className="h-[13px] w-[13px]" />
           </button>
         </div>
-          </motion.div>
+          </div>
         </div>
-      </motion.div>
+      </div>
     </ModalPortal>
   );
 }
