@@ -57,7 +57,6 @@ export interface FrameworkConfig {
   whereToAdd: string;
   importantNote?: string;
   codeSnippet: (apiKey: string, hostParam: string) => string;
-  testCurl: string;
 }
 
 export const SUPPORTED_FRAMEWORKS: FrameworkConfig[] = [
@@ -90,7 +89,6 @@ pf = patchflow.init(
 app.add_middleware(PatchFlowASGIMiddleware, patchflow=pf)
 
 # ... your normal routes remain unchanged ...`,
-    testCurl: "curl http://localhost:8000/api/crash",
   },
   {
     id: "express",
@@ -120,7 +118,6 @@ patchflow.init({
 app.use(patchflow.expressMiddleware());
 
 app.listen(4000);`,
-    testCurl: "curl http://localhost:4000/api/products/999",
   },
   {
     id: "django",
@@ -149,7 +146,6 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     # ... your existing standard Django middlewares ...
 ]`,
-    testCurl: "curl http://localhost:8000/api/items/999/",
   },
   {
     id: "springboot",
@@ -172,7 +168,6 @@ PATCHFLOW_API_KEY=${apiKey}
 
 // That's it! Any unhandled exception thrown in any @RestController
 // is automatically captured and reported to PatchFlow.`,
-    testCurl: "curl http://localhost:8080/api/orders/999",
   },
   {
     id: "flask",
@@ -200,7 +195,6 @@ patchflow.init(
 )
 
 # ... all your normal routes and blueprints remain unchanged ...`,
-    testCurl: "curl http://localhost:5000/api/users/999",
   },
 ];
 
@@ -451,35 +445,19 @@ function SdkSetupPanel({ site, apiKey, onClose }: { site: Site; apiKey: string; 
             </div>
           </div>
 
-          {/* ── STEP 4: Verification & Test ──────────────────────────────── */}
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-2">
-              <span className="flex items-center justify-center h-5 w-5 rounded-full bg-[#FF5A1F] text-white text-[11px] font-[800]">4</span>
-              <span className="text-[14px] font-[700] text-[#111110]">Verify & Trigger Test Incident</span>
+          {/* ── Automatic Verification ─────────────────────────────────── */}
+          <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-[12px] p-4 flex items-start gap-3">
+            <div className="h-8 w-8 rounded-full bg-[#DCFCE7] flex items-center justify-center shrink-0 mt-0.5">
+              <CheckCircle2 className="h-4 w-4 text-[#16A34A]" />
             </div>
-            <div className="ml-7 flex flex-col gap-2.5">
-              <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-[10px] p-[12px_14px] flex items-start gap-2.5">
-                <CheckCircle2 className="h-4 w-4 text-[#16A34A] shrink-0 mt-0.5" />
-                <p className="text-[12px] text-[#166534] leading-relaxed">
-                  <strong>Automatic Heartbeat:</strong> When your app boots with PatchFlow initialized, it automatically sends a background ping. This site&apos;s badge will turn <span className="font-[700] text-[#16A34A]">SDK Active</span> immediately!
-                </p>
-              </div>
-
-              <div>
-                <p className="text-[12px] text-[#6F6B66] mb-1.5">
-                  To test the autonomous fix pipeline, trigger this endpoint 3 times:
-                </p>
-                <div className="relative">
-                  <pre className="bg-[#111110] text-[#F8F8F2] text-[11px] font-mono p-[10px_12px] rounded-[6px] overflow-x-auto">
-                    {activeFw.testCurl}
-                  </pre>
-                  <button onClick={() => copy("curl", activeFw.testCurl)}
-                    className={cn("absolute top-2 right-2 flex items-center gap-1 text-[10px] font-[600] px-2 py-0.5 rounded-[4px] transition-colors cursor-pointer",
-                      copied === "curl" ? "bg-green-800 text-green-200" : "bg-white/10 text-white/70 hover:bg-white/20")}>
-                    {copied === "curl" ? <Check className="h-[10px] w-[10px]" /> : <Copy className="h-[10px] w-[10px]" />}
-                  </button>
-                </div>
-              </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[13px] font-[700] text-[#166534]">Automatic Verification</span>
+              <p className="text-[12px] text-[#166534]/90 leading-relaxed">
+                When your backend application starts up with PatchFlow initialized, it automatically sends a lightweight background heartbeat. This site&apos;s status on your dashboard will immediately update to <span className="font-[700] text-[#16A34A]">SDK Active</span>.
+              </p>
+              <p className="text-[11px] text-[#15803D] mt-0.5">
+                PatchFlow will now passively monitor your application for unhandled exceptions in real time, run root-cause analysis, and autonomously open GitHub Pull Requests.
+              </p>
             </div>
           </div>
 
