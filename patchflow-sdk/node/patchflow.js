@@ -31,6 +31,7 @@ const DEFAULT_HOST = 'https://patchflow-backend-xax6.onrender.com';
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
 let _instance = null;
+let _lastDispatchError = null;
 
 /**
  * Initialise the PatchFlow SDK.
@@ -84,7 +85,9 @@ async function _dispatchHttp(urlStr, headers, bodyStr, timeoutMs = 10000) {
     });
     if (timer) clearTimeout(timer);
     return res;
-  } catch (_) {
+  } catch (err) {
+    // Store last error for debug diagnostics
+    _lastDispatchError = err;
     return null;
   }
 }
@@ -103,10 +106,15 @@ class PatchFlow {
    * Send a heartbeat ping to confirm connection and mark the SDK as active.
    */
   async ping() {
-    if (!this.apiKey) return;
+    if (!this.apiKey) {
+      if (this.debug) console.warn('[PatchFlow] No API key set — skipping ping.');
+      return;
+    }
     try {
+      const url = `${this.host}/api/sdk/ping`;
+      if (this.debug) console.log(`[PatchFlow] Sending heartbeat to ${url}`);
       const res = await _dispatchHttp(
-        `${this.host}/api/sdk/ping`,
+        url,
         {
           'X-PatchFlow-Key': this.apiKey,
           'User-Agent': `patchflow-node/${SDK_VERSION}`,
@@ -114,12 +122,24 @@ class PatchFlow {
         null,
         5000
       );
+      if (!res) {
+        if (this.debug) {
+          console.error('[PatchFlow] Heartbeat FAILED — no response from server.');
+          if (_lastDispatchError) console.error('[PatchFlow] Cause:', _lastDispatchError.message || _lastDispatchError);
+        }
+        return null;
+      }
       if (this.debug) {
-        console.log('[PatchFlow] Heartbeat ping dispatched:', res?.status || 'ok');
+        if (res.status >= 200 && res.status < 300) {
+          console.log(`[PatchFlow] ✓ Heartbeat OK (${res.status}) — SDK is now active.`);
+        } else {
+          const body = await res.text().catch(() => '');
+          console.error(`[PatchFlow] ✗ Heartbeat rejected (${res.status}): ${body}`);
+        }
       }
       return res;
     } catch (e) {
-      if (this.debug) console.warn('[PatchFlow] Failed to send heartbeat ping:', e);
+      if (this.debug) console.error('[PatchFlow] Heartbeat exception:', e.message || e);
     }
   }
 
