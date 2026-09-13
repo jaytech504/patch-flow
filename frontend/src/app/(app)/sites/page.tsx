@@ -182,18 +182,22 @@ patchflow.init(
     description: "Drop-in @RestControllerAdvice — zero extra dependencies.",
     downloadFile: "/sdk/PatchFlowAdvice.java",
     downloadFilename: "PatchFlowAdvice.java",
-    placementPath: "src/main/java/com/yourpackage/\n└── PatchFlowAdvice.java  ← here",
+    placementPath: "your-project/\n├── pom.xml\n└── src/main/java/com/yourpackage/\n    ├── YourApplication.java\n    └── PatchFlowAdvice.java  ← same folder as your main app class",
     targetFile: "PatchFlowAdvice.java",
-    setupSummary: "Drop the file into your package, update the package declaration, and set env vars. Spring Boot auto-detects it.",
-    importantNote: "No Maven or Gradle dependencies needed. Uses Java 11+ HttpClient built into the JDK.",
+    setupSummary: "Place the file in the same package as your @SpringBootApplication class (e.g. src/main/java/com/example/demo/). Update the package declaration, set env vars, and Spring auto-detects it.",
+    importantNote: "No Maven or Gradle dependencies needed. Uses Java 11+ HttpClient built into the JDK. The file must be in a package that Spring component-scans (same as or under your main app class).",
     codeBlocks: (_apiKey, _apiHost) => [{
       label: "Update the package declaration to match your project",
       file: "PatchFlowAdvice.java (line 1)",
-      code: `// Change this line to your actual package:
+      code: `// Change this line to match your project's package:
 package com.yourcompany.yourapp;
 
 // The rest of the file stays as downloaded.
-// Spring Boot auto-registers @RestControllerAdvice — no config needed.`,
+// Spring Boot auto-registers @RestControllerAdvice — no config needed.
+
+// Set your API key as an environment variable before running:
+// PowerShell:  $env:PATCHFLOW_API_KEY="pf_live_..."
+// Bash/Mac:    export PATCHFLOW_API_KEY="pf_live_..."`,
     }],
   },
   {

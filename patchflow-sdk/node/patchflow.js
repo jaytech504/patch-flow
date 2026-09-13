@@ -120,7 +120,7 @@ class PatchFlow {
           'User-Agent': `patchflow-node/${SDK_VERSION}`,
         },
         null,
-        5000
+        15000
       );
       if (!res) {
         if (this.debug) {
