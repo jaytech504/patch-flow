@@ -40,8 +40,8 @@ export default function Home() {
             <div className="flex flex-col gap-6 max-w-2xl">
 
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground leading-[1.1]">
-                Find bugs before your users do. <br />
-                <span className="text-primary">Fix the ones they find too.</span>
+                Stop finding bugs. <br />
+                <span className="text-primary">Start fixing them.</span>
               </h1>
 
               <p className="text-lg md:text-xl text-text-secondary leading-relaxed font-medium">
