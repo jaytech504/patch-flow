@@ -35,25 +35,25 @@ export default function Home() {
 
       <main className="flex-1">
         {/* 1. Hero Section */}
-        <section className="mx-auto max-w-7xl px-6 pt-4 pb-14 md:pt-6 md:pb-20 lg:pt-8 lg:pb-24 animate-fade-in-up">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-center">
-            <div className="flex flex-col gap-6 max-w-2xl">
+        <section className="mx-auto max-w-7xl px-6 py-6 md:py-8 lg:py-10 min-h-[calc(100vh-4rem)] flex items-center animate-fade-in-up">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center w-full">
+            <div className="flex flex-col gap-4 sm:gap-5 max-w-2xl">
 
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-foreground leading-[1.1]">
+              <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] xl:text-[3.75rem] font-extrabold tracking-tight text-foreground leading-[1.12]">
                 Stop finding bugs. <br />
                 <span className="text-primary">Start fixing them.</span>
               </h1>
 
-              <p className="text-lg md:text-xl text-text-secondary leading-relaxed font-medium">
-                The dual-engine reliability platform for backend APIs and microservices. Proactively stress-test endpoints with 18+ chaos failure modes and monitor production crashes in real-time. PatchFlow autonomously writes, compiler-verifies, and opens GitHub Pull Requests in minutes.
+              <p className="text-sm sm:text-base text-text-secondary leading-relaxed font-normal max-w-xl">
+                Dual-engine reliability for backend APIs. Proactively stress-test endpoints with 18+ chaos failure modes and monitor production crashes in real-time with autonomous, compiler-verified GitHub PR fixes.
               </p>
 
-              <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+              <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 pt-1">
                 <Link
                   href="/login"
                   className={cn(
-                    buttonVariants({ size: "lg" }),
-                    "w-full sm:w-auto h-12 px-8 font-semibold shadow-sm hover:shadow-md transition-shadow flex items-center justify-center gap-2"
+                    buttonVariants({ size: "default" }),
+                    "w-full sm:w-auto h-11 px-7 font-semibold shadow-sm hover:shadow-md transition-shadow flex items-center justify-center gap-2"
                   )}
                 >
                   <span>Connect Your Repository</span>
@@ -62,25 +62,25 @@ export default function Home() {
                 <Link
                   href="#dual-engine"
                   className={cn(
-                    buttonVariants({ variant: "outline", size: "lg" }),
-                    "w-full sm:w-auto h-12 px-8 font-medium bg-card border-border-strong text-foreground hover:bg-muted transition-colors"
+                    buttonVariants({ variant: "outline", size: "default" }),
+                    "w-full sm:w-auto h-11 px-7 font-medium bg-card border-border-strong text-foreground hover:bg-muted transition-colors"
                   )}
                 >
                   How It Works
                 </Link>
               </div>
 
-              <div className="flex items-center gap-6 text-xs text-text-secondary font-mono pt-2">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-text-secondary font-mono pt-1">
                 <div className="flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-emerald-500" />
+                  <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                   <span>FastAPI, Django, Express & Spring Boot</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-emerald-500" />
+                  <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                   <span>Autonomous GitHub PRs</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-emerald-500" />
+                  <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                   <span>Zero-Config SDK</span>
                 </div>
               </div>
@@ -110,7 +110,8 @@ export default function Home() {
         </section>
 
         {/* 2. Dual Engine Section */}
-        <section id="dual-engine" className="mx-auto max-w-7xl px-6 py-28 md:py-36">
+        <section id="dual-engine" className="mx-auto max-w-7xl px-6 py-24 md:py-32 scroll-mt-16 relative">
+          <div id="how-it-works" className="absolute -top-16" />
           <div className="text-center max-w-3xl mx-auto mb-20">
             <Badge variant="outline" className="mb-4 text-primary border-primary/30 uppercase tracking-widest text-xs px-3 py-1">
               Dual-Engine Platform
