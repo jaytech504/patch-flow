@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Check, Zap, Sparkles, Shield, Flame, ArrowRight, HelpCircle } from "lucide-react";
+import { Check, ArrowRight } from "lucide-react";
+import { appleSprings } from "@/lib/springs";
 
 interface PlanFeature {
   title: string;
@@ -104,47 +106,66 @@ export default function PricingPage() {
   ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-sans">
+    <div className="flex min-h-screen flex-col bg-background font-sans selection:bg-[#FF5A1F]/15 selection:text-[#FF5A1F]">
       <Navbar variant="landing" />
 
       <main className="flex-1">
         {/* Header */}
-        <section className="mx-auto max-w-7xl px-6 pt-12 pb-16 md:pt-16 md:pb-24 text-center">
+        <section className="mx-auto max-w-7xl px-6 pt-14 pb-16 md:pt-20 md:pb-24 text-center">
           <Badge variant="outline" className="mb-4 text-primary border-primary/30 uppercase tracking-widest text-xs px-3 py-1">
             Simple, Transparent Pricing
           </Badge>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground mb-6">
+          <h1 className="apple-display text-foreground mb-5">
             Invest in reliability. <br />
             <span className="text-primary">Eliminate production firefighting.</span>
           </h1>
-          <p className="text-lg md:text-xl text-text-secondary font-medium max-w-2xl mx-auto mb-10">
+          <p className="apple-body text-text-secondary text-[17px] max-w-2xl mx-auto mb-10 leading-relaxed font-normal">
             Start free with real-time error alerts. Upgrade to unlock autonomous, compiler-verified GitHub Pull Requests.
           </p>
 
-          {/* Monthly / Annual Toggle */}
-          <div className="inline-flex items-center gap-3 p-1.5 rounded-full border border-border bg-card shadow-sm">
+          {/* Segmented Monthly / Annual Toggle with Spring Thumb */}
+          <div className="inline-flex items-center p-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.05] dark:border-white/[0.08] shadow-inner/10 relative">
             <button
               onClick={() => setBillingCycle("monthly")}
               className={cn(
-                "px-5 py-2 rounded-full text-sm font-semibold transition-all",
+                "relative z-10 px-5 py-2 rounded-full text-[13px] font-semibold transition-colors apple-press-subtle cursor-pointer",
                 billingCycle === "monthly"
-                  ? "bg-primary text-primary-foreground shadow"
+                  ? "text-white"
                   : "text-text-secondary hover:text-foreground"
               )}
             >
+              {billingCycle === "monthly" && (
+                <motion.div
+                  layoutId="billing-toggle-thumb"
+                  transition={appleSprings.snappy}
+                  className="absolute inset-0 rounded-full bg-[#FF5A1F] shadow-sm -z-1"
+                />
+              )}
               Monthly Billing
             </button>
             <button
               onClick={() => setBillingCycle("annual")}
               className={cn(
-                "px-5 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2",
+                "relative z-10 px-5 py-2 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-2 apple-press-subtle cursor-pointer",
                 billingCycle === "annual"
-                  ? "bg-primary text-primary-foreground shadow"
+                  ? "text-white"
                   : "text-text-secondary hover:text-foreground"
               )}
             >
+              {billingCycle === "annual" && (
+                <motion.div
+                  layoutId="billing-toggle-thumb"
+                  transition={appleSprings.snappy}
+                  className="absolute inset-0 rounded-full bg-[#FF5A1F] shadow-sm -z-1"
+                />
+              )}
               <span>Annual Billing</span>
-              <span className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs px-2 py-0.5 rounded-full font-bold uppercase">
+              <span className={cn(
+                "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide",
+                billingCycle === "annual"
+                  ? "bg-white/20 text-white"
+                  : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+              )}>
                 Save 20%
               </span>
             </button>
@@ -160,32 +181,32 @@ export default function PricingPage() {
                 <div
                   key={plan.id}
                   className={cn(
-                    "flex flex-col p-8 md:p-10 rounded-2xl bg-card border transition-all duration-300 relative",
+                    "flex flex-col p-8 md:p-10 rounded-3xl bg-card border transition-all duration-300 relative",
                     plan.popular
-                      ? "border-primary shadow-xl ring-1 ring-primary/30 lg:-translate-y-2"
-                      : "border-border shadow-sm hover:shadow-md"
+                      ? "border-[#FF5A1F]/50 shadow-[0_16px_40px_rgba(255,90,31,0.12)] lg:-translate-y-2 ring-1 ring-[#FF5A1F]/30"
+                      : "border-black/[0.06] dark:border-white/[0.08] shadow-[0_2px_8px_rgba(0,0,0,0.02),0_8px_24px_rgba(0,0,0,0.03)]"
                   )}
                 >
                   {plan.popular && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                      <span className="bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider px-3.5 py-1 rounded-full shadow-sm">
+                      <span className="bg-[#FF5A1F] text-white text-[11px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full shadow-sm">
                         {plan.badge}
                       </span>
                     </div>
                   )}
 
                   <div className="mb-6">
-                    <h3 className="text-2xl font-bold text-foreground mb-2">{plan.name}</h3>
-                    <p className="text-sm text-text-secondary font-medium min-h-[40px]">{plan.description}</p>
+                    <h3 className="apple-title-3 text-foreground mb-1.5">{plan.name}</h3>
+                    <p className="apple-body text-text-secondary text-[13px] min-h-[38px]">{plan.description}</p>
                   </div>
 
-                  <div className="mb-8 flex items-baseline gap-2">
-                    <span className="text-5xl font-extrabold text-foreground tracking-tight">{price}</span>
-                    <span className="text-sm font-semibold text-text-secondary">/ month</span>
+                  <div className="mb-6 flex items-baseline gap-2">
+                    <span className="apple-display text-foreground">{price}</span>
+                    <span className="text-[13px] font-semibold text-text-secondary">/ month</span>
                   </div>
 
                   {billingCycle === "annual" && plan.periodAnnual && (
-                    <div className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-semibold -mt-6 mb-6">
+                    <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold -mt-4 mb-6">
                       {plan.periodAnnual}
                     </div>
                   )}
@@ -197,20 +218,20 @@ export default function PricingPage() {
                         variant: plan.popular ? "default" : "outline",
                         size: "lg",
                       }),
-                      "w-full h-12 font-semibold mb-8 justify-center shadow-sm"
+                      "w-full h-11 font-semibold mb-8 justify-center shadow-xs apple-press text-[14px]"
                     )}
                   >
                     <span>{plan.buttonText}</span>
                     <ArrowRight className="h-4 w-4 ml-1.5" />
                   </Link>
 
-                  <div className="border-t border-border pt-6 mt-auto">
-                    <div className="text-xs font-bold uppercase tracking-wider text-text-secondary mb-4">
+                  <div className="border-t border-black/[0.05] dark:border-white/[0.07] pt-6 mt-auto">
+                    <div className="apple-caption text-text-secondary mb-4">
                       What's Included:
                     </div>
                     <ul className="space-y-3.5">
                       {plan.features.map((feat, idx) => (
-                        <li key={idx} className="flex items-start gap-3 text-sm">
+                        <li key={idx} className="flex items-start gap-3 text-[13px]">
                           {feat.included ? (
                             <Check className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
                           ) : (
@@ -220,13 +241,13 @@ export default function PricingPage() {
                             <span
                               className={cn(
                                 "font-medium",
-                                feat.included ? "text-foreground" : "text-text-secondary/60 line-through"
+                                feat.included ? "text-foreground" : "text-text-secondary/50 line-through"
                               )}
                             >
                               {feat.title}
                             </span>
                             {feat.footnote && (
-                              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                              <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
                                 {feat.footnote}
                               </span>
                             )}
@@ -242,37 +263,37 @@ export default function PricingPage() {
         </section>
 
         {/* FAQ Section */}
-        <section className="border-t border-border bg-muted/40 py-24 md:py-32">
+        <section className="border-t border-black/[0.05] dark:border-white/[0.07] bg-black/[0.015] dark:bg-white/[0.015] py-24 md:py-32">
           <div className="mx-auto max-w-4xl px-6">
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground text-center mb-16">
+            <h2 className="apple-title-2 text-foreground text-center mb-16">
               Frequently Asked Questions
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="p-6 bg-card border border-border rounded-xl">
-                <h4 className="font-bold text-foreground text-base mb-2">How does the Free tier work?</h4>
-                <p className="text-sm text-text-secondary leading-relaxed">
+              <div className="p-7 bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-sm">
+                <h4 className="apple-headline text-foreground mb-2">How does the Free tier work?</h4>
+                <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                   On the Free tier, you can connect 1 site and run 3 chaos scans/month. When production errors occur, you receive real-time dashboard logs and email alerts. Auto-patching and PR creation unlock when you upgrade to Pro ($14/mo).
                 </p>
               </div>
 
-              <div className="p-6 bg-card border border-border rounded-xl">
-                <h4 className="font-bold text-foreground text-base mb-2">What payment methods are supported?</h4>
-                <p className="text-sm text-text-secondary leading-relaxed">
+              <div className="p-7 bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-sm">
+                <h4 className="apple-headline text-foreground mb-2">What payment methods are supported?</h4>
+                <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                   We process payments securely via Lemon Squeezy (Merchant of Record). We accept Visa, Mastercard, American Express, Apple Pay, Google Pay, and PayPal worldwide with automatic sales tax handling.
                 </p>
               </div>
 
-              <div className="p-6 bg-card border border-border rounded-xl">
-                <h4 className="font-bold text-foreground text-base mb-2">What is Pre-Merge Build Verification?</h4>
-                <p className="text-sm text-text-secondary leading-relaxed">
+              <div className="p-7 bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-sm">
+                <h4 className="apple-headline text-foreground mb-2">What is Pre-Merge Build Verification?</h4>
+                <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                   Before opening a PR, ReviewAgent physically executes the TypeScript compiler (<code className="font-mono text-xs">tsc --noEmit</code>) or Node runtime checks directly on the cloned repo to guarantee the patch compiles without errors.
                 </p>
               </div>
 
-              <div className="p-6 bg-card border border-border rounded-xl">
-                <h4 className="font-bold text-foreground text-base mb-2">Can I cancel anytime?</h4>
-                <p className="text-sm text-text-secondary leading-relaxed">
+              <div className="p-7 bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-sm">
+                <h4 className="apple-headline text-foreground mb-2">Can I cancel anytime?</h4>
+                <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                   Yes, you can upgrade, downgrade, or cancel your subscription at any time with 1-click inside your Customer Billing Portal. You will retain access until the end of your billing cycle.
                 </p>
               </div>

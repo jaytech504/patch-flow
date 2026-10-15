@@ -268,14 +268,14 @@ export default function NewSessionPage() {
   };
 
   return (
-    <div className={cn("mx-auto px-6 py-12 w-full flex flex-col bg-white min-h-[calc(100vh-4rem)]", step === "form" ? "max-w-4xl" : "max-w-5xl")}>
+    <div className={cn("mx-auto px-6 py-12 w-full flex flex-col bg-background min-h-[calc(100vh-4rem)]", step === "form" ? "max-w-4xl" : "max-w-5xl")}>
       {step === "form" ? (
         <>
           {/* Back to Dashboard */}
           <div className="mb-6">
             <Link
               href="/dashboard"
-              className="text-sm font-semibold text-primary hover:underline flex items-center gap-1.5 w-fit"
+              className="text-[13px] font-semibold text-primary hover:text-[#E04E16] flex items-center gap-1.5 w-fit apple-press-subtle"
             >
               <ArrowLeft className="h-4 w-4" />
               <span>Back to Dashboard</span>
@@ -283,52 +283,52 @@ export default function NewSessionPage() {
           </div>
 
           <div className="mb-6">
-            <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Run New Test</h1>
-            <p className="text-sm text-zinc-500 mt-1">
+            <h1 className="apple-title-2 text-foreground">Run New Test</h1>
+            <p className="apple-body text-text-secondary text-[13px] mt-1">
               Configure endpoint failure injection scans against your backend API target.
             </p>
           </div>
 
           {/* Supported Backend Frameworks Banner */}
-          <div className="mb-6 p-4 rounded-xl border border-primary/20 bg-primary/5">
+          <div className="mb-6 p-4 rounded-2xl border border-primary/20 bg-primary/5 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
             <div className="flex items-center gap-2 mb-2">
               <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-xs font-semibold text-zinc-900 uppercase tracking-wider">
+              <p className="apple-caption text-foreground">
                 Supported Backend Frameworks
               </p>
             </div>
             <div className="flex flex-wrap gap-1.5 mb-2">
-              <Badge variant="outline" className="bg-white text-zinc-700 border-zinc-200 text-[11px] font-medium py-0.5">
+              <Badge variant="outline" className="bg-card text-foreground border-black/[0.06] dark:border-white/[0.08] text-[11px] font-medium py-0.5">
                 🚀 FastAPI (Python)
               </Badge>
-              <Badge variant="outline" className="bg-white text-zinc-700 border-zinc-200 text-[11px] font-medium py-0.5">
+              <Badge variant="outline" className="bg-card text-foreground border-black/[0.06] dark:border-white/[0.08] text-[11px] font-medium py-0.5">
                 🐍 Django & DRF (Python)
               </Badge>
-              <Badge variant="outline" className="bg-white text-zinc-700 border-zinc-200 text-[11px] font-medium py-0.5">
+              <Badge variant="outline" className="bg-card text-foreground border-black/[0.06] dark:border-white/[0.08] text-[11px] font-medium py-0.5">
                 ⚡ Express.js (Node.js)
               </Badge>
-              <Badge variant="outline" className="bg-white text-zinc-700 border-zinc-200 text-[11px] font-medium py-0.5">
+              <Badge variant="outline" className="bg-card text-foreground border-black/[0.06] dark:border-white/[0.08] text-[11px] font-medium py-0.5">
                 ☕ Spring Boot (Java)
               </Badge>
-              <Badge variant="outline" className="bg-white text-zinc-700 border-zinc-200 text-[11px] font-medium py-0.5">
+              <Badge variant="outline" className="bg-card text-foreground border-black/[0.06] dark:border-white/[0.08] text-[11px] font-medium py-0.5">
                 🌶️ Flask (Python)
               </Badge>
             </div>
-            <p className="text-[11px] text-zinc-500 leading-relaxed">
+            <p className="text-[11px] text-text-secondary leading-relaxed">
               Chaos testing & automated PR fixes are purpose-built for backend microservices and REST APIs. For frontend UI error tracking, use the <Link href="/sites" className="underline font-medium text-primary">PatchFlow SDK</Link>.
             </p>
           </div>
 
           <form onSubmit={handlePreview} className="flex flex-col gap-6">
             {error && (
-              <div className="p-3 text-xs font-semibold text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="p-3.5 text-xs font-semibold text-destructive bg-destructive/10 border border-destructive/20 rounded-xl">
                 {error}
               </div>
             )}
 
             {/* App Name */}
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-zinc-800" htmlFor="app-name">
+              <label className="apple-subhead text-foreground font-semibold" htmlFor="app-name">
                 App Name
               </label>
               <input
@@ -338,13 +338,13 @@ export default function NewSessionPage() {
                 placeholder="e.g. billing-gateway"
                 value={appName}
                 onChange={(e) => setAppName(e.target.value)}
-                className="w-full px-4 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-zinc-400"
+                className="w-full px-4 py-2.5 border border-black/[0.08] dark:border-white/[0.1] rounded-xl text-[13px] bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 placeholder:text-muted-foreground text-foreground transition-all shadow-2xs"
               />
             </div>
 
             {/* App URL */}
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-zinc-800" htmlFor="app-url">
+              <label className="apple-subhead text-foreground font-semibold" htmlFor="app-url">
                 App URL
               </label>
               <input
@@ -354,21 +354,21 @@ export default function NewSessionPage() {
                 placeholder="e.g. https://api.acme.com/v1"
                 value={appUrl}
                 onChange={(e) => setAppUrl(e.target.value)}
-                className="w-full px-4 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-zinc-400"
+                className="w-full px-4 py-2.5 border border-black/[0.08] dark:border-white/[0.1] rounded-xl text-[13px] bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 placeholder:text-muted-foreground text-foreground transition-all shadow-2xs"
               />
             </div>
 
             {/* API Provision Tabs */}
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-zinc-800">
+              <label className="apple-subhead text-foreground font-semibold">
                 How to provide your API
               </label>
               <Tabs defaultValue="openapi" onValueChange={setApiType} className="w-full">
-                <TabsList className="grid w-full grid-cols-4 bg-zinc-50 border border-zinc-200 p-1 rounded-lg">
-                  <TabsTrigger value="openapi" className="text-xs py-1.5 font-medium rounded-md">OpenAPI URL</TabsTrigger>
-                  <TabsTrigger value="upload" className="text-xs py-1.5 font-medium rounded-md">Upload file</TabsTrigger>
-                  <TabsTrigger value="postman" className="text-xs py-1.5 font-medium rounded-md">Postman</TabsTrigger>
-                  <TabsTrigger value="manual" className="text-xs py-1.5 font-medium rounded-md">Manual</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-4 bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.07] p-1 rounded-xl">
+                  <TabsTrigger value="openapi" className="text-xs py-1.5 font-medium rounded-[8px]">OpenAPI URL</TabsTrigger>
+                  <TabsTrigger value="upload" className="text-xs py-1.5 font-medium rounded-[8px]">Upload file</TabsTrigger>
+                  <TabsTrigger value="postman" className="text-xs py-1.5 font-medium rounded-[8px]">Postman</TabsTrigger>
+                  <TabsTrigger value="manual" className="text-xs py-1.5 font-medium rounded-[8px]">Manual</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="openapi" className="mt-3">
@@ -377,22 +377,22 @@ export default function NewSessionPage() {
                     placeholder="https://api.acme.com/openapi.json"
                     value={openapiUrl}
                     onChange={(e) => setOpenapiUrl(e.target.value)}
-                    className="w-full px-4 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-zinc-400"
+                    className="w-full px-4 py-2.5 border border-black/[0.08] dark:border-white/[0.1] rounded-xl text-[13px] bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 placeholder:text-muted-foreground text-foreground transition-all shadow-2xs"
                   />
                 </TabsContent>
 
                 <TabsContent value="upload" className="mt-3">
                   {specFile ? (
-                    <div className="border border-zinc-200 rounded-lg p-4 flex items-center justify-between bg-zinc-50">
+                    <div className="border border-black/[0.06] dark:border-white/[0.08] rounded-xl p-4 flex items-center justify-between bg-muted/40">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="p-2 bg-primary/10 rounded-lg text-primary shrink-0">
                           <FileText className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-zinc-900 truncate">
+                          <p className="text-[13px] font-bold text-foreground truncate">
                             {specFile.name}
                           </p>
-                          <p className="text-xs text-zinc-500">
+                          <p className="text-[11px] text-text-secondary">
                             {(specFile.size / 1024).toFixed(1)} KB
                           </p>
                         </div>
@@ -425,17 +425,17 @@ export default function NewSessionPage() {
                         }
                       }}
                       className={cn(
-                        "relative border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 min-h-[140px]",
+                        "relative border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 min-h-[140px]",
                         isDragOverSpec 
-                          ? "border-primary bg-primary/5 scale-[0.99]" 
-                          : "border-zinc-200 bg-zinc-50/50 hover:border-zinc-300"
+                          ? "border-primary bg-primary/5 scale-[0.985]" 
+                          : "border-black/[0.1] dark:border-white/[0.1] bg-muted/30 hover:border-black/[0.15] dark:hover:border-white/[0.15]"
                       )}
                     >
-                      <Upload className={cn("h-6 w-6 mb-2 transition-colors", isDragOverSpec ? "text-primary" : "text-zinc-400")} />
-                      <span className="text-xs font-semibold text-zinc-700">
+                      <Upload className={cn("h-6 w-6 mb-2 transition-colors", isDragOverSpec ? "text-primary" : "text-muted-foreground")} />
+                      <span className="text-[12px] font-semibold text-foreground">
                         Drag & drop your OpenAPI JSON/YAML
                       </span>
-                      <span className="text-[10px] text-zinc-400 mt-1">or click to browse local files</span>
+                      <span className="text-[10px] text-muted-foreground mt-1">or click to browse local files</span>
                       <input
                         type="file"
                         accept=".json,.yaml,.yml"
@@ -450,16 +450,16 @@ export default function NewSessionPage() {
 
                 <TabsContent value="postman" className="mt-3">
                   {collectionFile ? (
-                    <div className="border border-zinc-200 rounded-lg p-4 flex items-center justify-between bg-zinc-50">
+                    <div className="border border-black/[0.06] dark:border-white/[0.08] rounded-xl p-4 flex items-center justify-between bg-muted/40">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="p-2 bg-primary/10 rounded-lg text-primary shrink-0">
                           <FileText className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-zinc-900 truncate">
+                          <p className="text-[13px] font-bold text-foreground truncate">
                             {collectionFile.name}
                           </p>
-                          <p className="text-xs text-zinc-500">
+                          <p className="text-[11px] text-text-secondary">
                             {(collectionFile.size / 1024).toFixed(1)} KB
                           </p>
                         </div>
@@ -492,17 +492,17 @@ export default function NewSessionPage() {
                         }
                       }}
                       className={cn(
-                        "relative border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 min-h-[140px]",
+                        "relative border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 min-h-[140px]",
                         isDragOverCollection 
-                          ? "border-primary bg-primary/5 scale-[0.99]" 
-                          : "border-zinc-200 bg-zinc-50/50 hover:border-zinc-300"
+                          ? "border-primary bg-primary/5 scale-[0.985]" 
+                          : "border-black/[0.1] dark:border-white/[0.1] bg-muted/30 hover:border-black/[0.15] dark:hover:border-white/[0.15]"
                       )}
                     >
-                      <FileText className={cn("h-6 w-6 mb-2 transition-colors", isDragOverCollection ? "text-primary" : "text-zinc-400")} />
-                      <span className="text-xs font-semibold text-zinc-700">
+                      <FileText className={cn("h-6 w-6 mb-2 transition-colors", isDragOverCollection ? "text-primary" : "text-muted-foreground")} />
+                      <span className="text-[12px] font-semibold text-foreground">
                         Upload Postman Collection JSON
                       </span>
-                      <span className="text-[10px] text-zinc-400 mt-1">v2.1 collection format supported</span>
+                      <span className="text-[10px] text-muted-foreground mt-1">v2.1 collection format supported</span>
                       <input
                         type="file"
                         accept=".json"
@@ -520,7 +520,7 @@ export default function NewSessionPage() {
                     <select
                       value={newMethod}
                       onChange={(e) => setNewMethod(e.target.value)}
-                      className="px-3 py-2 border border-zinc-200 rounded-lg text-sm bg-white focus:outline-none"
+                      className="px-3 py-2.5 border border-black/[0.08] dark:border-white/[0.1] rounded-xl text-[13px] bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
                     >
                       <option>GET</option>
                       <option>POST</option>
@@ -532,21 +532,21 @@ export default function NewSessionPage() {
                       placeholder="e.g. /api/v1/users or /orders"
                       value={newPath}
                       onChange={(e) => setNewPath(e.target.value)}
-                      className="flex-1 px-4 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:text-zinc-400 font-mono"
+                      className="flex-1 px-4 py-2.5 border border-black/[0.08] dark:border-white/[0.1] rounded-xl text-[13px] bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 placeholder:text-muted-foreground font-mono text-foreground transition-all shadow-2xs"
                     />
                     <Button type="button" onClick={addManualEndpoint} variant="outline" size="sm">
                       <Plus className="h-4 w-4 mr-1" /> Add
                     </Button>
                   </div>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Enter the backend API path to target. Automated PRs will patch the corresponding controller or route handler.
                   </p>
 
                   {/* Added Endpoints List */}
                   {manualEndpoints.length > 0 && (
-                    <div className="border border-zinc-200 rounded-lg divide-y divide-zinc-100 max-h-48 overflow-y-auto">
+                    <div className="border border-black/[0.06] dark:border-white/[0.08] rounded-xl divide-y divide-black/[0.04] dark:divide-white/[0.05] max-h-48 overflow-y-auto bg-card">
                       {manualEndpoints.map((ep, idx) => (
-                        <div key={idx} className="p-3 flex items-center justify-between text-xs">
+                        <div key={idx} className="p-3 flex items-center justify-between text-[12px]">
                           <div className="flex items-center gap-2">
                             <span className={cn(
                               "font-bold px-1.5 py-0.5 rounded text-[10px]",
@@ -556,12 +556,12 @@ export default function NewSessionPage() {
                             )}>
                               {ep.method}
                             </span>
-                            <span className="font-mono text-zinc-700">{ep.path}</span>
+                            <span className="font-mono text-foreground">{ep.path}</span>
                           </div>
                           <button
                             type="button"
                             onClick={() => removeManualEndpoint(idx)}
-                            className="text-zinc-400 hover:text-red-500 transition-colors"
+                            className="text-muted-foreground hover:text-destructive transition-colors apple-press-icon"
                           >
                             <Trash className="h-4 w-4" />
                           </button>
@@ -575,15 +575,15 @@ export default function NewSessionPage() {
 
             {/* GitHub Repo Selector */}
             <div className="flex flex-col gap-2" ref={dropdownRef}>
-              <label className="text-sm font-semibold text-zinc-800">
-                GitHub Repo <span className="text-xs font-normal text-zinc-400">(Optional)</span>
+              <label className="apple-subhead text-foreground font-semibold">
+                GitHub Repo <span className="text-[11px] font-normal text-muted-foreground">(Optional)</span>
               </label>
 
               <div className="relative">
                 {reposLoading ? (
-                  <div className="w-full flex items-center justify-between px-4 py-2 border border-zinc-200 rounded-lg bg-zinc-50/50 text-zinc-400 text-sm">
+                  <div className="w-full flex items-center justify-between px-4 py-2.5 border border-black/[0.06] dark:border-white/[0.08] rounded-xl bg-muted/40 text-muted-foreground text-[13px]">
                     <span className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
                       Loading repositories...
                     </span>
                   </div>
@@ -591,9 +591,9 @@ export default function NewSessionPage() {
                   <div>
                     <div
                       onClick={() => setDropdownOpen(!dropdownOpen)}
-                      className="w-full px-4 py-2 border border-zinc-200 rounded-lg text-sm cursor-pointer flex justify-between items-center hover:border-zinc-300 transition-colors bg-white select-none"
+                      className="w-full px-4 py-2.5 border border-black/[0.08] dark:border-white/[0.1] rounded-xl text-[13px] cursor-pointer flex justify-between items-center hover:border-black/[0.12] dark:hover:border-white/[0.14] transition-colors bg-card select-none shadow-2xs"
                     >
-                      <span className={cn(selectedRepo ? "text-zinc-900 font-medium" : "text-zinc-400")}>
+                      <span className={cn(selectedRepo ? "text-foreground font-medium" : "text-muted-foreground")}>
                         {selectedRepo ? selectedRepo.full_name : "Select a repository to push fixes to"}
                       </span>
                       {selectedRepo && (
@@ -602,7 +602,7 @@ export default function NewSessionPage() {
                             e.stopPropagation();
                             setSelectedRepo(null);
                           }}
-                          className="text-xs text-zinc-400 hover:text-zinc-600 px-1.5 py-0.5 rounded hover:bg-zinc-100 transition-colors"
+                          className="text-[11px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded-md hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors"
                         >
                           Clear
                         </span>
@@ -610,21 +610,21 @@ export default function NewSessionPage() {
                     </div>
 
                     {dropdownOpen && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-zinc-200 rounded-lg shadow-md max-h-60 overflow-hidden flex flex-col">
-                        <div className="p-2 border-b border-zinc-100 flex items-center gap-2 bg-zinc-50/50">
-                          <Search className="h-4 w-4 text-zinc-400 shrink-0" />
+                      <div className="absolute z-10 w-full mt-1.5 bg-card border border-black/[0.08] dark:border-white/[0.1] rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.1)] max-h-60 overflow-hidden flex flex-col backdrop-blur-xl">
+                        <div className="p-2 border-b border-black/[0.05] dark:border-white/[0.07] flex items-center gap-2 bg-muted/30">
+                          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
                           <input
                             type="text"
                             placeholder="Search repos..."
                             value={repoSearch}
                             onChange={(e) => setRepoSearch(e.target.value)}
-                            className="w-full bg-transparent border-none focus:outline-none text-xs text-zinc-850"
+                            className="w-full bg-transparent border-none focus:outline-none text-[12px] text-foreground"
                           />
                         </div>
 
-                        <div className="overflow-y-auto max-h-48 divide-y divide-zinc-50">
+                        <div className="overflow-y-auto max-h-48 divide-y divide-black/[0.03] dark:divide-white/[0.04]">
                           {filteredRepos.length === 0 ? (
-                            <div className="p-3 text-xs text-zinc-400 text-center">
+                            <div className="p-3 text-[12px] text-muted-foreground text-center">
                               No repositories found.
                             </div>
                           ) : (
@@ -639,7 +639,7 @@ export default function NewSessionPage() {
                                     setRepoSearch("");
                                   }}
                                   className={cn(
-                                    "p-3 text-xs cursor-pointer flex items-center justify-between hover:bg-zinc-50 transition-colors",
+                                    "p-3 text-[12px] cursor-pointer flex items-center justify-between hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors",
                                     isSelected && "bg-primary/5 text-primary font-semibold"
                                   )}
                                 >
@@ -655,17 +655,17 @@ export default function NewSessionPage() {
                   </div>
                 )}
               </div>
-              <span className="text-[10px] text-zinc-400">
+              <span className="text-[10px] text-muted-foreground">
                 Skip repository connection if you do not want automated Pull Requests.
               </span>
             </div>
 
             {/* Submit */}
-            <div className="mt-4 pt-6 border-t border-zinc-100 flex justify-end">
+            <div className="mt-4 pt-6 border-t border-black/[0.05] dark:border-white/[0.07] flex justify-end">
               <Button
                 type="submit"
                 disabled={isSubmitting || !appName || !appUrl}
-                className="px-8 h-11 text-sm font-semibold flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white border-0"
+                className="px-8 h-11 text-[14px] font-semibold flex items-center gap-2 bg-primary hover:bg-[#E04E16] text-white border-0 shadow-[0_2px_10px_rgba(255,90,31,0.3)] apple-press rounded-xl"
               >
                 {isSubmitting ? (
                   <>
@@ -769,7 +769,7 @@ export default function NewSessionPage() {
                 <button
                   type="button"
                   onClick={() => setStep("form")}
-                  className="text-sm font-semibold text-zinc-500 hover:text-zinc-800 flex items-center gap-1.5 w-fit bg-transparent border-0 cursor-pointer"
+                  className="text-[13px] font-semibold text-text-secondary hover:text-foreground flex items-center gap-1.5 w-fit bg-transparent border-0 cursor-pointer apple-press-subtle"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   <span>Back to Settings</span>
@@ -777,23 +777,23 @@ export default function NewSessionPage() {
               </div>
 
               <div className="mb-8">
-                <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Select Endpoints to Test</h1>
-                <p className="text-sm text-zinc-500 mt-1">
+                <h1 className="apple-title-2 text-foreground">Select Endpoints to Test</h1>
+                <p className="apple-body text-text-secondary text-[13px] mt-1">
                   {totalEndpoints} endpoints found. Review and select what to chaos test.
                 </p>
               </div>
 
               {error && (
-                <div className="mb-6 p-3 text-xs font-semibold text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
+                <div className="mb-6 p-3.5 text-xs font-semibold text-destructive bg-destructive/10 border border-destructive/20 rounded-xl">
                   {error}
                 </div>
               )}
 
               {groups.length === 0 ? (
-                <div className="border border-zinc-200 rounded-xl p-12 text-center bg-zinc-50/50">
-                  <Info className="h-8 w-8 text-zinc-400 mx-auto mb-3" />
-                  <h3 className="text-sm font-bold text-zinc-950">No endpoints found</h3>
-                  <p className="text-xs text-zinc-500 mt-1 mb-4">Go back and check your API source.</p>
+                <div className="border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-12 text-center bg-muted/30">
+                  <Info className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                  <h3 className="apple-headline text-foreground">No endpoints found</h3>
+                  <p className="text-[12px] text-text-secondary mt-1 mb-4">Go back and check your API source.</p>
                   <Button onClick={() => setStep("form")} variant="outline" size="sm">
                     Go Back
                   </Button>
@@ -805,8 +805,8 @@ export default function NewSessionPage() {
                     <div className="flex items-start gap-3 p-[12px_16px] bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl">
                       <Lightbulb className="h-4 w-4 text-[#2563EB] shrink-0 mt-0.5" />
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-[13px] font-semibold text-[#1D4ED8]">Running without a repository</span>
-                        <span className="text-[12px] text-[#3B82F6] leading-relaxed">
+                        <span className="text-[13px] font-semibold text-blue-700 dark:text-blue-300">Running without a repository</span>
+                        <span className="text-[12px] text-blue-600 dark:text-blue-400 leading-relaxed">
                           No GitHub repo was selected. PatchFlow will scan your endpoints and generate <strong>recommendations</strong> showing exactly what to fix and how — but no code will be committed and no pull requests will be opened. Connect a repo on the previous step to get automated PRs.
                         </span>
                       </div>
@@ -814,31 +814,31 @@ export default function NewSessionPage() {
                   )}
 
                   {/* Bulk Actions Bar */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-200 rounded-xl">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.06] dark:border-white/[0.08] rounded-xl">
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={handleSelectAllRecommended}
-                        className="px-3 py-1.5 text-xs font-semibold bg-white border border-zinc-200 hover:border-zinc-350 hover:bg-zinc-50 text-zinc-650 hover:text-zinc-900 rounded-lg transition-all cursor-pointer"
+                        className="px-3 py-1.5 text-[12px] font-semibold bg-card border border-black/[0.08] dark:border-white/[0.1] hover:bg-black/[0.03] dark:hover:bg-white/[0.04] text-text-secondary hover:text-foreground rounded-[8px] transition-all cursor-pointer apple-press-subtle"
                       >
                         Select All Recommended
                       </button>
                       <button
                         type="button"
                         onClick={handleSelectAll}
-                        className="px-3 py-1.5 text-xs font-semibold bg-white border border-zinc-200 hover:border-zinc-350 hover:bg-zinc-50 text-zinc-650 hover:text-zinc-900 rounded-lg transition-all cursor-pointer"
+                        className="px-3 py-1.5 text-[12px] font-semibold bg-card border border-black/[0.08] dark:border-white/[0.1] hover:bg-black/[0.03] dark:hover:bg-white/[0.04] text-text-secondary hover:text-foreground rounded-[8px] transition-all cursor-pointer apple-press-subtle"
                       >
                         Select All
                       </button>
                       <button
                         type="button"
                         onClick={handleDeselectAll}
-                        className="px-3 py-1.5 text-xs font-semibold bg-white border border-zinc-200 hover:border-zinc-350 hover:bg-zinc-50 text-zinc-650 hover:text-zinc-900 rounded-lg transition-all cursor-pointer"
+                        className="px-3 py-1.5 text-[12px] font-semibold bg-card border border-black/[0.08] dark:border-white/[0.1] hover:bg-black/[0.03] dark:hover:bg-white/[0.04] text-text-secondary hover:text-foreground rounded-[8px] transition-all cursor-pointer apple-press-subtle"
                       >
                         Deselect All
                       </button>
                     </div>
-                    <span className="text-xs font-semibold text-zinc-500 pr-1 select-none">
+                    <span className="text-[12px] font-semibold text-text-secondary pr-1 select-none">
                       {selectedCount} of {totalEndpoints} selected
                     </span>
                   </div>
@@ -855,28 +855,28 @@ export default function NewSessionPage() {
                       const isEntireGroupHighRisk = endpoints.every((ep: any) => !ep.recommended);
 
                       return (
-                        <div key={tag} className="border border-zinc-200 rounded-xl overflow-hidden shadow-sm bg-white">
+                        <div key={tag} className="border border-black/[0.06] dark:border-white/[0.08] rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.02),0_4px_12px_rgba(0,0,0,0.02)] bg-card">
                           {/* Group Header */}
                           <div
                             onClick={() => toggleCollapsedTag(tag)}
-                            className="px-4 py-3 bg-zinc-50/50 hover:bg-zinc-50 border-b border-zinc-200 flex items-center justify-between cursor-pointer select-none transition-colors"
+                            className="px-4 py-3 bg-black/[0.015] dark:bg-white/[0.015] hover:bg-black/[0.03] dark:hover:bg-white/[0.03] border-b border-black/[0.05] dark:border-white/[0.07] flex items-center justify-between cursor-pointer select-none transition-colors"
                           >
                             <div className="flex items-center gap-2">
                               {isCollapsed ? (
-                                <ChevronRight className="h-4 w-4 text-zinc-400" />
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
                               ) : (
-                                <ChevronDown className="h-4 w-4 text-zinc-400" />
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
                               )}
-                              <span className="text-sm font-bold text-zinc-900">{tag}</span>
+                              <span className="apple-headline text-foreground">{tag}</span>
                             </div>
-                            <span className="text-xs text-zinc-500 font-medium select-none">
+                            <span className="text-[12px] text-text-secondary font-medium select-none">
                               {groupSelectedCount} of {groupTotalCount} selected
                             </span>
                           </div>
 
                           {/* Group Content */}
                           {!isCollapsed && (
-                            <div className="flex flex-col divide-y divide-zinc-100">
+                            <div className="flex flex-col divide-y divide-black/[0.04] dark:divide-white/[0.05]">
                               {isEntireGroupHighRisk && (
                                 <div className="px-4 py-2 bg-amber-50/60 border-b border-amber-100 flex items-center gap-2 text-xs text-amber-800 select-none">
                                   <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
@@ -907,7 +907,7 @@ export default function NewSessionPage() {
                                     methodClass = "bg-red-50 text-red-700 border border-red-200/50";
                                     break;
                                   default:
-                                    methodClass = "bg-zinc-50 text-zinc-700 border border-zinc-200/50";
+                                    methodClass = "bg-muted text-foreground border border-black/[0.06]";
                                 }
 
                                 return (
@@ -918,7 +918,7 @@ export default function NewSessionPage() {
                                     onClick={() => toggleTempId(ep.temp_id)}
                                     className={cn(
                                       "flex flex-col cursor-pointer transition-colors duration-150 select-none",
-                                      isDangerous ? "bg-red-50/10 hover:bg-red-50/20" : "hover:bg-zinc-50/50"
+                                      isDangerous ? "bg-red-50/10 hover:bg-red-50/20 dark:bg-red-500/5 dark:hover:bg-red-500/10" : "hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
                                     )}
                                   >
                                     <div className="flex items-center gap-3 px-4 py-3 min-w-0">
@@ -927,7 +927,7 @@ export default function NewSessionPage() {
                                           type="checkbox"
                                           checked={isChecked}
                                           onChange={() => {}}
-                                          className="h-4 w-4 accent-red-600 rounded border-zinc-300 focus:ring-red-500 cursor-pointer"
+                                          className="h-4 w-4 accent-primary rounded border-black/[0.15] dark:border-white/[0.2] focus:ring-primary cursor-pointer"
                                         />
                                       </div>
 
@@ -935,11 +935,11 @@ export default function NewSessionPage() {
                                         {ep.method}
                                       </span>
 
-                                      <span className="font-mono text-[13px] text-zinc-700 font-medium truncate flex-1">
+                                      <span className="font-mono text-[13px] text-foreground font-medium truncate flex-1">
                                         {ep.path}
                                       </span>
 
-                                      <span className="text-[13px] text-zinc-500 truncate max-w-[200px] text-right hidden sm:inline">
+                                      <span className="text-[12px] text-text-secondary truncate max-w-[200px] text-right hidden sm:inline">
                                         {ep.description}
                                       </span>
                                     </div>
@@ -974,18 +974,18 @@ export default function NewSessionPage() {
               )}
 
               {/* Sticky Footer Bar */}
-              <div className="fixed bottom-0 left-0 right-0 border-t border-zinc-200 bg-white/95 backdrop-blur-sm py-4 px-6 z-20 flex justify-center shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
+              <div className="fixed bottom-0 left-0 right-0 border-t border-black/[0.06] dark:border-white/[0.08] bg-card/95 backdrop-blur-xl saturate-[180%] py-4 px-6 z-20 flex justify-center shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
                 <div className="max-w-4xl w-full flex items-center justify-between gap-4">
                   <button
                     type="button"
                     onClick={() => setStep("form")}
-                    className="px-4 py-2 border border-zinc-200 text-zinc-700 font-semibold rounded-lg text-sm hover:bg-zinc-50 transition-colors cursor-pointer"
+                    className="px-4 py-2.5 border border-black/[0.08] dark:border-white/[0.1] text-foreground font-semibold rounded-xl text-[13px] hover:bg-black/[0.03] dark:hover:bg-white/[0.04] transition-colors cursor-pointer apple-press"
                   >
                     Back
                   </button>
                   
-                  <span className="text-xs sm:text-sm font-semibold text-zinc-800 select-none">
-                    {selectedCount} endpoints selected {selectedCount >= 10 && <span className="text-xs text-amber-600 font-medium ml-1">(max 10)</span>}
+                  <span className="text-[12px] sm:text-[13px] font-semibold text-foreground select-none">
+                    {selectedCount} endpoints selected {selectedCount >= 10 && <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium ml-1">(max 10)</span>}
                   </span>
 
                   <button
@@ -993,10 +993,10 @@ export default function NewSessionPage() {
                     disabled={isSubmitting || selectedCount === 0}
                     onClick={handleStartSession}
                     className={cn(
-                      "px-8 h-10 text-sm font-semibold rounded-lg text-white transition-all flex items-center gap-2",
+                      "px-8 h-11 text-[14px] font-semibold rounded-xl text-white transition-all flex items-center gap-2",
                       selectedCount === 0 
-                        ? "bg-zinc-200 text-zinc-400 cursor-not-allowed"
-                        : "bg-red-600 hover:bg-red-700 shadow-sm shadow-red-600/10 cursor-pointer"
+                        ? "bg-muted text-muted-foreground cursor-not-allowed"
+                        : "bg-primary hover:bg-[#E04E16] shadow-[0_2px_10px_rgba(255,90,31,0.3)] cursor-pointer apple-press"
                     )}
                   >
                     {isSubmitting ? (

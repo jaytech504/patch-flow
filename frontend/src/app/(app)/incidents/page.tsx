@@ -5,13 +5,13 @@ import Link from "next/link";
 import {
   AlertTriangle, GitPullRequest, Search,
   XCircle, Clock, Loader2, ExternalLink, RefreshCw,
-  Radio, CheckCircle2, ChevronRight, ChevronDown, Filter,
+  Radio, CheckCircle2, ChevronDown,
   Zap, ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { API_BASE_URL } from "@/lib/api-config";
 import { authFetch } from "@/lib/auth-fetch";
+import { appleSprings } from "@/lib/springs";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,15 +42,15 @@ interface Incident {
 function statusMeta(status: string) {
   switch (status) {
     case "pr_opened":
-      return { label: "PR Opened", icon: GitPullRequest, cls: "bg-[#F3E8FF] text-[#7E22CE] border-[#E9D5FF]" };
+      return { label: "PR Opened", icon: GitPullRequest, cls: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20" };
     case "processing":
-      return { label: "Patching", icon: Clock, cls: "bg-[#FFF7ED] text-[#C2410C] border-[#FFEDD5]" };
+      return { label: "Patching", icon: Clock, cls: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20" };
     case "skipped":
-      return { label: "Skipped", icon: XCircle, cls: "bg-[#F3F2F0] text-[#6F6B66] border-[#E7E5E2]" };
+      return { label: "Skipped", icon: XCircle, cls: "bg-black/[0.04] dark:bg-white/[0.06] text-muted-foreground border-black/[0.06]" };
     case "failed":
-      return { label: "Failed", icon: XCircle, cls: "bg-[#FEF2F2] text-[#DC2626] border-[#FEE2E2]" };
+      return { label: "Failed", icon: XCircle, cls: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20" };
     default:
-      return { label: "Received", icon: Clock, cls: "bg-[#EFF6FF] text-[#2563EB] border-[#DBEAFE]" };
+      return { label: "Received", icon: Clock, cls: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" };
   }
 }
 
@@ -149,38 +149,41 @@ export default function IncidentsPage() {
   const failed = incidents.filter((i) => i.status === "failed").length;
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-10 w-full relative">
-      {/* Toast Notification */}
+    <div className="mx-auto max-w-5xl px-6 py-8 w-full relative">
+      {/* Toast Notification with Apple Physics */}
       <AnimatePresence>
         {newPrToast && (
           <motion.div
             initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="fixed top-6 right-6 z-50 bg-[#111110] text-white px-4 py-3 rounded-[12px] shadow-xl flex items-center gap-3 border border-[#333]"
+            transition={appleSprings.sheet}
+            className="fixed top-6 right-6 z-50 bg-[#161615]/95 dark:bg-white/95 text-white dark:text-black px-4.5 py-3.5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.25)] flex items-center gap-3.5 border border-white/10 dark:border-black/10 backdrop-blur-xl"
           >
-            <GitPullRequest className="h-5 w-5 text-[#A855F7] shrink-0" />
+            <div className="h-8 w-8 rounded-xl bg-purple-500/20 flex items-center justify-center shrink-0">
+              <GitPullRequest className="h-4.5 w-4.5 text-purple-400 dark:text-purple-600" />
+            </div>
             <div>
-              <p className="text-[13px] font-[700] text-white">Automated PR Created!</p>
-              <p className="text-[12px] text-[#A3A099] truncate max-w-xs">{newPrToast}</p>
+              <p className="text-[13px] font-bold">Automated PR Created!</p>
+              <p className="text-[12px] opacity-75 truncate max-w-xs">{newPrToast}</p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-[#E7E5E2] mb-8 gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-black/[0.05] dark:border-white/[0.07] mb-7 gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-[28px] font-[800] text-[#111110] tracking-tight">Production Incidents</h1>
+            <h1 className="apple-title-2 text-foreground">Production Incidents</h1>
             {liveMode && (
-              <span className="flex items-center gap-1.5 bg-[#F0FDF4] border border-[#DCFCE7] text-[#16A34A] text-[11px] font-[700] px-2.5 py-0.5 rounded-full">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#16A34A] animate-pulse" />
+              <span className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 LIVE
               </span>
             )}
           </div>
-          <p className="text-[14px] text-[#6F6B66] mt-1">
+          <p className="apple-body text-text-secondary text-[13px] mt-1">
             Real-time errors intercepted by PatchFlow SDK with automated code patches & PRs.
           </p>
         </div>
@@ -189,8 +192,10 @@ export default function IncidentsPage() {
           <button
             onClick={() => setLiveMode((p) => !p)}
             className={cn(
-              "px-3 py-2 text-[12px] font-[600] border rounded-[8px] transition-colors flex items-center gap-1.5",
-              liveMode ? "bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]" : "bg-white text-[#6F6B66] border-[#E7E5E2]"
+              "px-3 py-1.5 text-[12px] font-semibold border rounded-[10px] transition-colors flex items-center gap-1.5 apple-press cursor-pointer shadow-2xs",
+              liveMode
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                : "bg-card text-muted-foreground border-black/[0.08] dark:border-white/[0.1]"
             )}
             title={liveMode ? "Auto-refresh is active" : "Auto-refresh paused"}
           >
@@ -200,25 +205,25 @@ export default function IncidentsPage() {
 
           <button
             onClick={() => fetchIncidents(false)}
-            className="flex items-center gap-1.5 px-3 py-2 text-[13px] font-[600] text-[#6F6B66] bg-white border border-[#E7E5E2] rounded-[8px] hover:bg-[#F3F2F0] hover:text-[#111110] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold text-foreground bg-card border border-black/[0.08] dark:border-white/[0.1] rounded-[10px] hover:bg-black/[0.03] transition-colors apple-press cursor-pointer shadow-2xs"
           >
-            <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin text-[#FF5A1F]")} />
+            <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin text-primary")} />
             <span>Refresh</span>
           </button>
         </div>
       </div>
 
       {/* Stats KPI Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 mb-7">
         {[
-          { label: "Total Incidents", value: total, color: "text-[#111110]", bg: "bg-white" },
-          { label: "PRs Opened", value: prOpened, color: "text-[#7E22CE]", bg: "bg-[#FAF5FF]" },
-          { label: "Patching Now", value: inProgress, color: "text-[#C2410C]", bg: inProgress > 0 ? "bg-[#FFF7ED]" : "bg-white" },
-          { label: "Skipped / Filtered", value: skipped + failed, color: "text-[#6F6B66]", bg: "bg-white" },
+          { label: "Total Incidents", value: total, color: "text-foreground", bg: "bg-card" },
+          { label: "PRs Opened", value: prOpened, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/[0.03]" },
+          { label: "Patching Now", value: inProgress, color: "text-[#FF5A1F]", bg: inProgress > 0 ? "bg-orange-500/[0.04]" : "bg-card" },
+          { label: "Skipped / Filtered", value: skipped + failed, color: "text-text-secondary", bg: "bg-card" },
         ].map(({ label, value, color, bg }) => (
-          <div key={label} className={cn("border border-[#E7E5E2] rounded-[14px] p-4", bg)}>
-            <p className="text-[11px] font-[600] text-[#A3A099] uppercase tracking-[0.04em] mb-1">{label}</p>
-            <p className={cn("text-[26px] font-[800] leading-none", color)}>{value}</p>
+          <div key={label} className={cn("border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-4.5 shadow-[0_1px_3px_rgba(0,0,0,0.02),0_4px_12px_rgba(0,0,0,0.02)]", bg)}>
+            <p className="apple-caption text-text-secondary mb-1.5">{label}</p>
+            <p className={cn("text-[26px] font-extrabold leading-none tracking-tight", color)}>{value}</p>
           </div>
         ))}
       </div>
@@ -226,12 +231,12 @@ export default function IncidentsPage() {
       {/* Filter & Search Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
         <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#A3A099]" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by error type, file, or repository..."
-            className="w-full pl-9 pr-4 py-2 text-[13px] bg-white border border-[#E7E5E2] rounded-[10px] focus:outline-none focus:border-[#FF5A1F] transition-colors text-[#111110]"
+            className="w-full pl-9 pr-4 py-2 text-[13px] bg-card border border-black/[0.08] dark:border-white/[0.1] rounded-xl focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all text-foreground shadow-2xs"
           />
         </div>
 
@@ -247,10 +252,10 @@ export default function IncidentsPage() {
               key={tab.id}
               onClick={() => setStatusFilter(tab.id)}
               className={cn(
-                "px-3 py-1.5 text-[12px] font-[600] rounded-[8px] transition-colors whitespace-nowrap",
+                "px-3 py-1.5 text-[12px] font-semibold rounded-[8px] transition-colors whitespace-nowrap apple-press-subtle cursor-pointer",
                 statusFilter === tab.id
-                  ? "bg-[#111110] text-white"
-                  : "bg-white border border-[#E7E5E2] text-[#6F6B66] hover:bg-[#F3F2F0]"
+                  ? "bg-foreground text-background shadow-xs"
+                  : "bg-card border border-black/[0.06] dark:border-white/[0.08] text-muted-foreground hover:text-foreground hover:bg-black/[0.02]"
               )}
             >
               {tab.label}
@@ -263,21 +268,21 @@ export default function IncidentsPage() {
       {loading ? (
         <div className="flex flex-col gap-3 py-8">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white border border-[#E7E5E2] rounded-[14px] p-5">
-              <div className="h-4 w-48 bg-[#F3F2F0] animate-pulse rounded mb-2" />
-              <div className="h-3 w-64 bg-[#F3F2F0] animate-pulse rounded" />
+            <div key={i} className="bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-5">
+              <div className="h-4 w-48 bg-black/[0.05] dark:bg-white/[0.05] animate-pulse rounded mb-2" />
+              <div className="h-3 w-64 bg-black/[0.05] dark:bg-white/[0.05] animate-pulse rounded" />
             </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white border border-[#E7E5E2] rounded-[16px] p-12 text-center">
-          <div className="h-10 w-10 rounded-full bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center mx-auto mb-3">
-            <CheckCircle2 className="h-5 w-5 text-[#16A34A]" />
+        <div className="bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-12 text-center shadow-xs">
+          <div className="h-10 w-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
           </div>
-          <p className="text-[16px] font-[700] text-[#111110]">
+          <p className="apple-title-3 text-foreground">
             {searchQuery || statusFilter !== "all" ? "No matching incidents found" : "All Systems Operational"}
           </p>
-          <p className="text-[13px] text-[#6F6B66] mt-1.5 max-w-md mx-auto leading-relaxed">
+          <p className="apple-body text-text-secondary text-[13px] mt-1.5 max-w-md mx-auto leading-relaxed">
             {searchQuery || statusFilter !== "all"
               ? "Try adjusting your search query or status filter."
               : "PatchFlow is actively listening for production errors in real time. When an issue occurs in your app, it will be captured here and an automated fix PR will be created."}
@@ -286,7 +291,7 @@ export default function IncidentsPage() {
             <div className="flex items-center justify-center gap-3 mt-5">
               <Link
                 href="/sites"
-                className="inline-flex items-center gap-1.5 text-[12px] font-[600] text-[#6F6B66] hover:text-[#111110] bg-[#F3F2F0] hover:bg-[#E7E5E2] px-3.5 py-2 rounded-[8px] transition-colors"
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-foreground bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] px-3.5 py-2 rounded-[10px] transition-colors apple-press"
               >
                 View Monitored Sites
               </Link>
@@ -305,34 +310,34 @@ export default function IncidentsPage() {
                 key={inc.id}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.02, duration: 0.2 }}
-                className="bg-white border border-[#E7E5E2] rounded-[14px] overflow-hidden hover:border-[#D4D1CC] transition-colors shadow-2xs"
+                transition={{ delay: i * 0.02, ...appleSprings.default }}
+                className="bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl overflow-hidden hover:shadow-md transition-shadow shadow-2xs"
               >
                 {/* Main Row */}
                 <div
                   onClick={() => setExpanded(isOpen ? null : inc.id)}
-                  className="flex items-start gap-4 p-[16px_20px] cursor-pointer select-none"
+                  className="flex items-start gap-4 p-4.5 cursor-pointer select-none apple-press-subtle"
                 >
-                  <div className={cn("shrink-0 mt-0.5 p-2 rounded-[8px] border", sm.cls)}>
-                    <StatusIcon className="h-[15px] w-[15px]" />
+                  <div className={cn("shrink-0 mt-0.5 p-2 rounded-xl border", sm.cls)}>
+                    <StatusIcon className="h-4 w-4" />
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3">
-                      <p className="text-[15px] font-[700] text-[#111110] leading-snug truncate">
+                      <p className="text-[15px] font-bold text-foreground leading-snug truncate">
                         {inc.error_title || inc.error_type || "Unknown error"}
                       </p>
-                      <span className="text-[12px] text-[#A3A099] shrink-0">{timeAgo(inc.created_at)}</span>
+                      <span className="text-[12px] text-muted-foreground shrink-0">{timeAgo(inc.created_at)}</span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[12px] text-[#6F6B66]">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[12px] text-text-secondary">
                       {inc.error_type && (
-                        <span className="font-mono bg-[#F8FAFC] border border-[#E2E8F0] px-1.5 py-0.5 rounded text-[#334155] font-[500]">
+                        <span className="font-mono bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.07] px-2 py-0.5 rounded-md font-medium text-foreground/80">
                           {inc.error_type}
                         </span>
                       )}
                       {inc.environment && (
-                        <span className="bg-[#F3F2F0] px-[6px] py-[1px] rounded-[4px] font-[500] uppercase text-[10px]">
+                        <span className="bg-black/[0.04] dark:bg-white/[0.06] px-2 py-0.5 rounded-md font-bold uppercase text-[10px] tracking-wide">
                           {inc.environment}
                         </span>
                       )}
@@ -340,7 +345,7 @@ export default function IncidentsPage() {
                     </div>
 
                     {inc.stack_file && (
-                      <p className="mt-1 text-[11px] font-mono text-[#A3A099] truncate">
+                      <p className="mt-1.5 text-[11px] font-mono text-muted-foreground truncate">
                         {inc.stack_file}:{inc.stack_lineno || "?"}
                         {inc.stack_function ? ` in ${inc.stack_function}()` : ""}
                       </p>
@@ -348,90 +353,103 @@ export default function IncidentsPage() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={cn("text-[11px] font-[700] uppercase px-[9px] py-[3px] rounded-full border", sm.cls)}>
+                    <span className={cn("text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full border", sm.cls)}>
                       {sm.label}
                     </span>
-                    <ChevronDown
-                      className={cn("h-4 w-4 text-[#A3A099] transition-transform duration-200", isOpen && "rotate-180")}
-                    />
+                    <motion.div
+                      animate={{ rotate: isOpen ? 180 : 0 }}
+                      transition={appleSprings.snappy}
+                    >
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </motion.div>
                   </div>
                 </div>
 
-                {/* Expanded Detail Panel */}
-                {isOpen && (
-                  <div className="px-[20px] pb-[20px] border-t border-[#F3F2F0] pt-[16px] flex flex-col gap-3.5 bg-[#FAFAF9]/50">
-                    {inc.pr_url && (
-                      <div className="flex items-center justify-between p-[12px_16px] bg-[#F3E8FF]/60 border border-[#E9D5FF] rounded-[10px]">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <GitPullRequest className="h-[16px] w-[16px] text-[#7E22CE] shrink-0" />
-                          <div className="truncate">
-                            <p className="text-[13px] font-[700] text-[#7E22CE]">Draft PR #{inc.pr_number} Opened</p>
-                            {inc.fix_summary && <p className="text-[12px] text-[#6F6B66] truncate">{inc.fix_summary}</p>}
+                {/* Expanded Detail Panel with Apple Springs */}
+                <AnimatePresence>
+                  {isOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={appleSprings.default}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-5 pb-5 border-t border-black/[0.05] dark:border-white/[0.07] pt-4 flex flex-col gap-3.5 bg-black/[0.015] dark:bg-white/[0.015]">
+                        {inc.pr_url && (
+                          <div className="flex items-center justify-between p-3.5 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <GitPullRequest className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                              <div className="truncate">
+                                <p className="text-[13px] font-bold text-purple-700 dark:text-purple-300">Draft PR #{inc.pr_number} Opened</p>
+                                {inc.fix_summary && <p className="text-[12px] text-text-secondary truncate">{inc.fix_summary}</p>}
+                              </div>
+                            </div>
+                            <a
+                              href={inc.pr_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="bg-purple-600 hover:bg-purple-700 text-white text-[12px] font-semibold px-3 py-1.5 rounded-[8px] flex items-center gap-1.5 transition-colors shrink-0 ml-3 apple-press shadow-xs"
+                            >
+                              <span>Review on GitHub</span>
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </a>
                           </div>
-                        </div>
-                        <a
-                          href={inc.pr_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="bg-[#7E22CE] hover:bg-[#6B21A8] text-white text-[12px] font-[600] px-3 py-1.5 rounded-[8px] flex items-center gap-1.5 transition-colors shrink-0 ml-3"
-                        >
-                          <span>Review on GitHub</span>
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      </div>
-                    )}
-
-                    {inc.skip_reason && (
-                      <div className={cn(
-                        "flex items-start justify-between gap-3 p-[12px_16px] rounded-[10px] border",
-                        inc.skip_reason.includes("Free tier") || inc.skip_reason.includes("Upgrade")
-                          ? "bg-[#FEF3C7]/60 border-[#FCD34D] text-[#92400E]"
-                          : "bg-white border-[#E7E5E2] text-[#111110]"
-                      )}>
-                        <div className="flex items-start gap-2.5">
-                          {inc.skip_reason.includes("Free tier") || inc.skip_reason.includes("Upgrade") ? (
-                            <Zap className="h-[16px] w-[16px] text-[#D97706] shrink-0 mt-[1px]" />
-                          ) : (
-                            <XCircle className="h-[15px] w-[15px] text-[#6F6B66] shrink-0 mt-[1px]" />
-                          )}
-                          <div>
-                            <p className="text-[12px] font-[700]">
-                              {inc.skip_reason.includes("Free tier") ? "Auto-Patching Locked (Free Plan)" : "Auto-Patching Skipped"}
-                            </p>
-                            <p className="text-[12px] text-[#6F6B66] mt-0.5">{inc.skip_reason}</p>
-                          </div>
-                        </div>
-
-                        {(inc.skip_reason.includes("Free tier") || inc.skip_reason.includes("Upgrade")) && (
-                          <Link
-                            href="/settings/billing"
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-[#EA580C] hover:bg-[#C2410C] text-white text-[11px] font-[700] px-3 py-1.5 rounded-[6px] shrink-0 flex items-center gap-1 transition-colors"
-                          >
-                            <span>Upgrade to Pro ($14/mo)</span>
-                            <ArrowRight className="h-3 w-3" />
-                          </Link>
                         )}
-                      </div>
-                    )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[12px] bg-white border border-[#E7E5E2] rounded-[10px] p-3">
-                      <div>
-                        <span className="text-[#A3A099] block text-[11px] uppercase">Culprit Endpoint</span>
-                        <span className="font-mono text-[#111110] font-[500] truncate block">{inc.culprit || "handler"}</span>
+                        {inc.skip_reason && (
+                          <div className={cn(
+                            "flex items-start justify-between gap-3 p-3.5 rounded-xl border",
+                            inc.skip_reason.includes("Free tier") || inc.skip_reason.includes("Upgrade")
+                              ? "bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300"
+                              : "bg-card border-black/[0.06] dark:border-white/[0.08] text-foreground"
+                          )}>
+                            <div className="flex items-start gap-2.5">
+                              {inc.skip_reason.includes("Free tier") || inc.skip_reason.includes("Upgrade") ? (
+                                <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                              ) : (
+                                <XCircle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                              )}
+                              <div>
+                                <p className="text-[12px] font-bold">
+                                  {inc.skip_reason.includes("Free tier") ? "Auto-Patching Locked (Free Plan)" : "Auto-Patching Skipped"}
+                                </p>
+                                <p className="text-[12px] opacity-80 mt-0.5">{inc.skip_reason}</p>
+                              </div>
+                            </div>
+
+                            {(inc.skip_reason.includes("Free tier") || inc.skip_reason.includes("Upgrade")) && (
+                              <Link
+                                href="/settings/billing"
+                                onClick={(e) => e.stopPropagation()}
+                                className="bg-primary hover:bg-[#E04E16] text-white text-[11px] font-bold px-3 py-1.5 rounded-[8px] shrink-0 flex items-center gap-1 transition-colors apple-press shadow-2xs"
+                              >
+                                <span>Upgrade to Pro ($14/mo)</span>
+                                <ArrowRight className="h-3 w-3" />
+                              </Link>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[12px] bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-xl p-3.5 shadow-2xs">
+                          <div>
+                            <span className="apple-caption text-muted-foreground block text-[10px] mb-0.5">Culprit Endpoint</span>
+                            <span className="font-mono text-foreground font-semibold truncate block">{inc.culprit || "handler"}</span>
+                          </div>
+                          <div>
+                            <span className="apple-caption text-muted-foreground block text-[10px] mb-0.5">GitHub Repo</span>
+                            <span className="font-mono text-foreground font-semibold truncate block">{inc.github_repo || "None"}</span>
+                          </div>
+                          <div>
+                            <span className="apple-caption text-muted-foreground block text-[10px] mb-0.5">Last Processed</span>
+                            <span className="text-foreground font-semibold">{timeAgo(inc.processed_at)}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-[#A3A099] block text-[11px] uppercase">GitHub Repo</span>
-                        <span className="font-mono text-[#111110] font-[500] truncate block">{inc.github_repo || "None"}</span>
-                      </div>
-                      <div>
-                        <span className="text-[#A3A099] block text-[11px] uppercase">Last Processed</span>
-                        <span className="text-[#111110] font-[500]">{timeAgo(inc.processed_at)}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             );
           })}

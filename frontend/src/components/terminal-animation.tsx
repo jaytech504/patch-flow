@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { appleSprings } from "@/lib/springs";
 
 const commands = [
   { text: "[PatchFlow] Chaos scanning billing-api (FastAPI / Python)...", delay: 800, type: "system" },
@@ -31,7 +32,7 @@ export function TerminalAnimation() {
         timeouts.push(timeout);
       });
 
-      // Restart animation 3 seconds after the last command
+      // Restart animation 3.5 seconds after the last command
       const resetTimeout = setTimeout(() => {
         if (isActive) runAnimation();
       }, 10800 + 3500);
@@ -47,34 +48,40 @@ export function TerminalAnimation() {
   }, []);
 
   return (
-    <div className="w-full max-w-2xl mx-auto rounded-xl overflow-hidden border border-border-strong bg-[#111110] shadow-2xl">
-      <div className="flex items-center px-4 py-3 border-b border-white/10 bg-[#1A1A1A]">
+    <div className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border border-black/10 dark:border-white/10 bg-[#111110]/95 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] dark:shadow-[0_25px_70px_rgba(0,0,0,0.7)]">
+      {/* macOS-style window header */}
+      <div className="flex items-center px-4 py-3 border-b border-white/[0.08] bg-[#1A1A18]/80 backdrop-blur-md">
         <div className="flex gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#ED6A5E]"></div>
-          <div className="w-3 h-3 rounded-full bg-[#F4BF4F]"></div>
-          <div className="w-3 h-3 rounded-full bg-[#61C554]"></div>
+          <div className="w-3 h-3 rounded-full bg-[#FF5F56] border border-[#E0443E]/50 shadow-2xs"></div>
+          <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-[#DEA123]/50 shadow-2xs"></div>
+          <div className="w-3 h-3 rounded-full bg-[#27C93F] border border-[#1AAB29]/50 shadow-2xs"></div>
         </div>
-        <div className="mx-auto text-xs font-mono text-[#A3A099]">patchflow-cli</div>
+        <div className="mx-auto text-[11px] font-mono text-[#8C8881] font-medium tracking-wide">
+          patchflow-cli — zsh
+        </div>
+        <div className="w-12" />
       </div>
-      <div className="p-5 font-mono text-sm sm:text-base h-[280px] overflow-y-auto flex flex-col gap-2">
+
+      {/* Terminal terminal body */}
+      <div className="p-5 font-mono text-[13px] sm:text-[14px] leading-relaxed h-[290px] overflow-y-auto flex flex-col gap-2">
         {commands.slice(0, visibleLines).map((cmd, i) => (
           <motion.div
             key={i}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.2 }}
-            className="flex"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={appleSprings.default}
+            className="flex items-start"
           >
-            {!cmd.type && <span className="text-[#A3A099] mr-3">❯</span>}
+            {!cmd.type && <span className="text-[#8C8881] mr-2.5 select-none font-bold">❯</span>}
             <span
               className={
                 cmd.type === "error"
-                  ? "text-[#DC2626]"
+                  ? "text-[#EF4444] font-medium"
                   : cmd.type === "success"
-                  ? "text-[#16A34A]"
+                  ? "text-[#22C55E] font-medium"
                   : cmd.type === "system"
-                  ? "text-[#6F6B66]"
-                  : "text-[#FAFAF9]"
+                  ? "text-[#9C9891]"
+                  : "text-[#F5F5F4]"
               }
             >
               {cmd.text}
@@ -85,7 +92,7 @@ export function TerminalAnimation() {
           initial={{ opacity: 0 }}
           animate={{ opacity: [0, 1, 0] }}
           transition={{ repeat: Infinity, duration: 0.8 }}
-          className="w-2 h-5 bg-[#FF5A1F] mt-1 inline-block"
+          className="w-2 h-4.5 bg-[#FF5A1F] mt-1 inline-block rounded-xs shadow-[0_0_8px_rgba(255,90,31,0.6)]"
         />
       </div>
     </div>
