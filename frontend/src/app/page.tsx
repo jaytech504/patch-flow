@@ -31,6 +31,25 @@ import { TerminalAnimation } from "@/components/terminal-animation";
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-background font-sans selection:bg-[#FF5A1F]/15 selection:text-[#FF5A1F]">
+      <a
+        href="https://www.sideprojectors.com/project/98065/patchflow"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Patchflow is for sale at @SideProjectors"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          style={{
+            position: "fixed",
+            zIndex: 1000,
+            top: "-5px",
+            right: "20px",
+            border: 0,
+          }}
+          src="https://www.sideprojectors.com/img/badges/badge_2_red.png"
+          alt="Patchflow is sale at @SideProjectors"
+        />
+      </a>
       <Navbar variant="landing" />
 
       <main className="flex-1">
