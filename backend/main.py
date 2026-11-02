@@ -28,9 +28,26 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+import os
+
+# ── Allowed CORS origins ───────────────────────────────────────────────────────
+# Always includes the configured FRONTEND_URL plus any extra origins from
+# the CORS_ORIGINS env var (comma-separated). In development localhost is
+# added automatically so you never need to touch this file.
+_frontend_url = settings.frontend_url.rstrip("/")
+_extra_origins_raw = os.environ.get("CORS_ORIGINS", "")
+_extra_origins = [o.strip().rstrip("/") for o in _extra_origins_raw.split(",") if o.strip()]
+
+ALLOWED_ORIGINS: list[str] = list({
+    _frontend_url,
+    "http://localhost:3000",
+    "https://localhost:3000",
+    *_extra_origins,
+})
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url, "http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
