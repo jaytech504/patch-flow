@@ -5,6 +5,7 @@ Handles GitHub OAuth login flow and user-related endpoints.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
 
@@ -30,11 +31,14 @@ router = APIRouter()
 @router.get("/github/login")
 async def github_login():
     """
-    Returns the GitHub OAuth authorization URL.
-    The frontend redirects the user to this URL.
+    Redirect the browser directly to the GitHub OAuth authorization page.
+
+    When the frontend does window.location.href = API_BASE_URL + "/api/auth/github/login"
+    the browser follows this 302 straight to GitHub — no CORS preflight, no
+    JSON to parse, no extra round-trip.
     """
     url = get_github_login_url()
-    return {"url": url}
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.get("/github/callback")
