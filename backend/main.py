@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,46 +12,53 @@ from backend.api import sdk as sdk_api
 
 settings = get_settings()
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Starting Chaos Agent...")
-    await init_db()
-    logger.info("Database ready.")
-    yield
-    logger.info("Chaos Agent stopped.")
-
-
-app = FastAPI(
-    title="Chaos Agent",
-    description="Autonomous API failure injection and error handling code generator",
-    version="1.0.0",
-    lifespan=lifespan,
-)
-
-import os
-
 # ── Allowed CORS origins ───────────────────────────────────────────────────────
-# Always includes the configured FRONTEND_URL plus any extra origins from
-# the CORS_ORIGINS env var (comma-separated). In development localhost is
-# added automatically so you never need to touch this file.
+# Primary origin: FRONTEND_URL env var (must be https://patchflow.cloud in prod).
+# Extra origins: comma-separated CORS_ORIGINS env var for staging/preview URLs.
+# Localhost variants are always allowed so local dev works without env changes.
 _frontend_url = settings.frontend_url.rstrip("/")
-_extra_origins_raw = os.environ.get("CORS_ORIGINS", "")
-_extra_origins = [o.strip().rstrip("/") for o in _extra_origins_raw.split(",") if o.strip()]
+_extra_origins = [
+    o.strip().rstrip("/")
+    for o in os.environ.get("CORS_ORIGINS", "").split(",")
+    if o.strip()
+]
 
 ALLOWED_ORIGINS: list[str] = list({
     _frontend_url,
+    # Always allow both www and non-www of the production domain
+    "https://patchflow.cloud",
+    "https://www.patchflow.cloud",
+    # Local development
     "http://localhost:3000",
     "https://localhost:3000",
     *_extra_origins,
 })
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting PatchFlow API...")
+    logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
+    await init_db()
+    logger.info("Database ready.")
+    yield
+    logger.info("PatchFlow API stopped.")
+
+
+app = FastAPI(
+    title="PatchFlow API",
+    description="Autonomous API failure injection and self-healing platform",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
@@ -76,6 +84,7 @@ async def websocket_session(ws: WebSocket, session_id: str):
 
 from sqlalchemy import text
 from backend.db.session import AsyncSessionLocal
+
 
 @app.api_route("/health", methods=["GET", "HEAD", "POST"])
 @app.api_route("/api/health", methods=["GET", "HEAD", "POST"])

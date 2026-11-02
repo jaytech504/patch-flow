@@ -26,7 +26,7 @@
 'use strict';
 
 const SDK_VERSION = '0.1.0';
-const DEFAULT_HOST = 'https://patchflow-backend-xax6.onrender.com';
+const DEFAULT_HOST = 'https://api.patchflow.cloud';
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
 

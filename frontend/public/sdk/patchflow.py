@@ -62,7 +62,7 @@ except ImportError:
     _HTTP = "urllib"
 
 __version__ = "0.1.0"
-_DEFAULT_HOST = "https://patchflow-backend-xax6.onrender.com"
+_DEFAULT_HOST = "https://api.patchflow.cloud"
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ def init(
     Parameters
     ----------
     api_key:     Your site API key from the PatchFlow dashboard (pf_live_...)
-    host:        PatchFlow API host (defaults to https://api.patchflow.dev)
+    host:        PatchFlow API host (defaults to https://api.patchflow.cloud)
     environment: Environment name (defaults to PATCHFLOW_ENV or APP_ENV env vars, or 'production')
     app:         Flask application instance — pass this for Flask projects
     debug:       Print SDK debug logs to stdout

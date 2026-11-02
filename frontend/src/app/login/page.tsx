@@ -20,27 +20,23 @@ function LoginContent() {
     }
   }, []);
 
-  const handleGitHubLogin = async () => {
+  const handleGitHubLogin = () => {
     setLoading(true);
     setError(null);
-    // Track the click before the redirect so the event fires reliably.
     trackEvent("github_connect_click");
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/github/login`);
-      if (!response.ok) {
-        throw new Error("Failed to get login URL from backend");
-      }
-      const data = await response.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error("Backend did not return redirect URL");
-      }
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "An unexpected error occurred");
-      setLoading(false);
-    }
+
+    /**
+     * FIX: use a full-page navigation instead of fetch().
+     *
+     * The backend /api/auth/github/login endpoint just returns a GitHub
+     * authorize URL. Calling it with fetch() triggers a cross-origin
+     * preflight that can fail in production. A direct navigation avoids
+     * CORS entirely and is the correct OAuth pattern.
+     *
+     * The backend receives a same-origin-equivalent GET and redirects the
+     * browser straight to GitHub.
+     */
+    window.location.href = `${API_BASE_URL}/api/auth/github/login`;
   };
 
   return (
