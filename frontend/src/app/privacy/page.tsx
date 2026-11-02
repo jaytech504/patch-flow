@@ -184,7 +184,7 @@ export default function PrivacyPolicyPage() {
       </ul>
       <p>
         To request access to or deletion of your data, email{" "}
-        <a href="mailto:privacy@patchflow.dev">privacy@patchflow.dev</a> from the
+        <a href="mailto:privacy@patchflow.cloud">privacy@patchflow.cloud</a> from the
         address on your account and we will action your request, typically within
         30 days. You can also delete your account from Settings.
       </p>
@@ -206,9 +206,9 @@ export default function PrivacyPolicyPage() {
       <h2 id="contact">14. Contact</h2>
       <p>
         Questions about this policy or your data? Email{" "}
-        <a href="mailto:privacy@patchflow.dev">privacy@patchflow.dev</a>. For
+        <a href="mailto:privacy@patchflow.cloud">privacy@patchflow.cloud</a>. For
         general support, contact{" "}
-        <a href="mailto:support@patchflow.dev">support@patchflow.dev</a>.
+        <a href="mailto:support@patchflow.cloud">support@patchflow.cloud</a>.
       </p>
     </LegalPage>
   );

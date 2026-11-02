@@ -110,7 +110,7 @@ export function renderShareImage({
               {badge}
             </span>
           </div>
-          <span style={{ fontSize: 24, color: "#6F6B66" }}>patchflow.dev</span>
+          <span style={{ fontSize: 24, color: "#6F6B66" }}>patchflow.cloud</span>
         </div>
       </div>
     ),

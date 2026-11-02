@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/api-config";
 import { authFetch } from "@/lib/auth-fetch";
+import { trackEvent } from "@/lib/analytics";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -494,7 +495,10 @@ function SdkSetupPanel({ site, apiKey: initialApiKey, onClose, onRefreshStatus, 
           <SetupStepCard step={1} title="Download the SDK file" icon={Download}>
             <button
               type="button"
-              onClick={() => downloadSdkFile(fw.downloadFile, fw.downloadFilename)}
+              onClick={() => {
+                trackEvent("sdk_install_started", { framework: fw.id });
+                downloadSdkFile(fw.downloadFile, fw.downloadFilename);
+              }}
               className="inline-flex items-center gap-2 text-[12px] font-[700] text-white bg-[#111110] hover:bg-[#333] px-4 py-2.5 rounded-[8px] transition-colors w-fit cursor-pointer"
             >
               <Download className="h-[13px] w-[13px]" />
@@ -676,8 +680,10 @@ export default function SitesPage() {
       const saved: Site = await r.json();
       setShowForm(false);
       await loadSites();
-      // Open setup after connect form unmounts so overlays don't stack
+      // Open setup after connect form unmounts so overlays don't stack.
+      // Also track first repo connection here (only fires on new site, not edit).
       if (!editSite && saved.api_key) {
+        trackEvent("repo_connected");
         requestAnimationFrame(() => {
           setSdkSite({ site: saved, apiKey: saved.api_key! });
         });

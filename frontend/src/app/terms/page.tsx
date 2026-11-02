@@ -156,7 +156,7 @@ export default function TermsPage() {
       <h2 id="contact">16. Contact</h2>
       <p>
         Questions about these Terms? Email{" "}
-        <a href="mailto:support@patchflow.dev">support@patchflow.dev</a>.
+        <a href="mailto:support@patchflow.cloud">support@patchflow.cloud</a>.
       </p>
     </LegalPage>
   );

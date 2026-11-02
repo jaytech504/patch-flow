@@ -5,6 +5,7 @@ import { Activity, ArrowLeft } from "lucide-react";
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { API_BASE_URL } from "@/lib/api-config";
+import { trackEvent } from "@/lib/analytics";
 
 function LoginContent() {
   const [loading, setLoading] = useState(false);
@@ -22,6 +23,8 @@ function LoginContent() {
   const handleGitHubLogin = async () => {
     setLoading(true);
     setError(null);
+    // Track the click before the redirect so the event fires reliably.
+    trackEvent("github_connect_click");
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/github/login`);
       if (!response.ok) {

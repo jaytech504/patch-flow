@@ -72,7 +72,7 @@ const LANDING_FAQS: FaqItem[] = [
   {
     question: "How do I disconnect and delete my data?",
     answer:
-      "Revoke PatchFlow's access in your GitHub settings, or delete your account from the Settings page. You can also email privacy@patchflow.dev to request data deletion, and we will remove your data according to our retention schedule.",
+      "Revoke PatchFlow's access in your GitHub settings, or delete your account from the Settings page. You can also email privacy@patchflow.cloud to request data deletion, and we will remove your data according to our retention schedule.",
     link: { href: "/privacy#your-rights", label: "Your deletion rights" },
   },
 ];
