@@ -7,7 +7,7 @@ export default function Footer() {
   return (
     <footer className="w-full border-t border-black/[0.06] dark:border-white/[0.08] bg-[#FAFAF9] dark:bg-[#0D0D0C]">
       <div className="mx-auto max-w-7xl px-6 py-14">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Column 1: Brand */}
           <div className="flex flex-col gap-3.5">
             <div className="flex items-center gap-2.5 font-bold text-foreground apple-press group w-fit">
@@ -97,10 +97,33 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href="#"
+                  href="/docs"
                   className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block"
                 >
                   Documentation
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Column 4: Legal */}
+          <div className="flex flex-col gap-3">
+            <h4 className="apple-caption text-foreground/80">Legal</h4>
+            <ul className="flex flex-col gap-2.5">
+              <li>
+                <Link
+                  href="/privacy"
+                  className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block"
+                >
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/terms"
+                  className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block"
+                >
+                  Terms of Service
                 </Link>
               </li>
             </ul>
