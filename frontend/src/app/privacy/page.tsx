@@ -1,10 +1,12 @@
-import type { Metadata } from "next";
-import LegalPage, { legalMetadata } from "@/components/legal-page";
+import { pageMetadata } from "@/lib/seo";
+import LegalPage from "@/components/legal-page";
 
-export const metadata: Metadata = legalMetadata(
-  "Privacy Policy — PatchFlow",
-  "How PatchFlow collects, uses, and stores GitHub, repository, and SDK error data — and how to request deletion."
-);
+export const metadata = pageMetadata({
+  title: "Privacy Policy",
+  description:
+    "How PatchFlow collects, uses, and stores GitHub, repository, and SDK error data — and how to request deletion.",
+  path: "/privacy",
+});
 
 export default function PrivacyPolicyPage() {
   return (

@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 
@@ -39,12 +38,4 @@ export default function LegalPage({
       <Footer />
     </div>
   );
-}
-
-/**
- * Helper to build per-page Metadata for a legal page with a unique title
- * and description. Canonical/OG are layered on in the SEO section.
- */
-export function legalMetadata(title: string, description: string): Metadata {
-  return { title, description };
 }

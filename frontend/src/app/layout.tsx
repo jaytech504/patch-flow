@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import CookieConsent from "@/components/cookie-consent";
+import { SITE_URL } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "PatchFlow — API Reliability Testing & Auto-Fix",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "PatchFlow — API Reliability Testing & Auto-Fix",
+    template: "%s — PatchFlow",
+  },
   description:
-    "PatchFlow analyzes your APIs, performs reliability testing, identifies failures, traces root causes, and generates GitHub pull requests with production-ready fixes.",
+    "PatchFlow stress-tests APIs with chaos failure modes, monitors production crashes, and opens compiler-verified GitHub PRs with production-ready fixes.",
 };
 
 export default function RootLayout({

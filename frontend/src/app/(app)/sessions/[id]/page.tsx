@@ -587,6 +587,32 @@ export default function LiveSessionPage() {
                 <div className="h-3 w-3 rounded-full bg-yellow-500" />
                 <div className="h-3 w-3 rounded-full bg-green-500" />
                 <span className="text-xs text-zinc-500 font-mono ml-4">agent-workspace-logs.sh</span>
+
+                {/* Live stream connection status (graceful, non-noisy) */}
+                <div className="ml-auto flex items-center gap-1.5" title="Live stream connection status">
+                  <span
+                    className={cn(
+                      "h-2 w-2 rounded-full transition-colors",
+                      runFinished
+                        ? "bg-emerald-500"
+                        : wsConnected
+                          ? "bg-emerald-500"
+                          : "bg-amber-500 animate-pulse"
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span
+                    role="status"
+                    aria-live="polite"
+                    className="text-[10px] font-mono text-zinc-500"
+                  >
+                    {runFinished
+                      ? "complete"
+                      : wsConnected
+                        ? "live"
+                        : "reconnecting\u2026"}
+                  </span>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-2.5 font-mono text-[11px] leading-relaxed text-zinc-300">

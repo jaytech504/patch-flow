@@ -1,10 +1,12 @@
-import type { Metadata } from "next";
-import LegalPage, { legalMetadata } from "@/components/legal-page";
+import { pageMetadata } from "@/lib/seo";
+import LegalPage from "@/components/legal-page";
 
-export const metadata: Metadata = legalMetadata(
-  "Terms of Service — PatchFlow",
-  "PatchFlow's terms of service, including acceptable use, auto-generated fixes, warranty disclaimers, and liability limits."
-);
+export const metadata = pageMetadata({
+  title: "Terms of Service",
+  description:
+    "PatchFlow's terms of service, including acceptable use, auto-generated fixes, warranty disclaimers, and liability limits.",
+  path: "/terms",
+});
 
 export default function TermsPage() {
   return (

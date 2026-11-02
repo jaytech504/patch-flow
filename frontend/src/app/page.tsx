@@ -27,6 +27,55 @@ import {
   Check,
 } from "lucide-react";
 import { TerminalAnimation } from "@/components/terminal-animation";
+import { FaqSection, type FaqItem } from "@/components/faq-section";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
+
+const LANDING_FAQS: FaqItem[] = [
+  {
+    question: "What GitHub repository permissions does PatchFlow need?",
+    answer:
+      "PatchFlow requests three GitHub scopes: repo (read and write access to your repositories, used to analyze your code and open Pull Requests), read:user (your GitHub profile), and user:email (your email address). You can revoke access at any time from your GitHub settings.",
+    link: { href: "/privacy#data-we-collect", label: "See the Privacy Policy" },
+  },
+  {
+    question: "Is my code stored or used to train models?",
+    answer:
+      "PatchFlow reads your repository to analyze failures and creates a temporary clone to generate and verify a fix, which is removed after the run completes. We do not keep a permanent copy of your code, and we never use it to train AI models.",
+    link: { href: "/privacy#repository-access", label: "Read more" },
+  },
+  {
+    question: "How does the PatchFlow SDK work?",
+    answer:
+      "Install the lightweight SDK (Node.js or Python) in your app. It captures unhandled errors, extracts the relevant stack frames, and reports them to PatchFlow. It only sends the error type, message, stack frames, endpoint, and status code — never request bodies, headers, cookies, or your end users' personal data. It is designed to fail silently, so it can never break your application.",
+    link: { href: "/docs", label: "View SDK docs" },
+  },
+  {
+    question: "What does the 3-occurrence threshold mean?",
+    answer:
+      "To avoid fixing one-off glitches, PatchFlow waits until the same error occurs at the same location 3 or more times before triggering the fix pipeline. This filters out noise and focuses on real, recurring failures. The threshold is configurable per account.",
+  },
+  {
+    question: "Can I review pull requests before they're merged?",
+    answer:
+      "Yes — always. Every fix is opened as a Draft Pull Request and nothing is ever merged automatically. You review, test, and merge on your own terms. PatchFlow runs pre-merge build checks where possible, but you remain in full control of what lands in your repository.",
+  },
+  {
+    question: "Is there a free tier, and how is pricing structured?",
+    answer:
+      "Yes. The Hobby plan is free forever: 1 monitored site, real-time error logs, email alerts, and 3 chaos scans per month. Auto-patching with compiler-verified GitHub PRs unlocks on the Pro plan at $14/month. See the Pricing page for a full comparison of plans.",
+    link: { href: "/pricing", label: "See pricing" },
+  },
+  {
+    question: "How do I disconnect and delete my data?",
+    answer:
+      "Revoke PatchFlow's access in your GitHub settings, or delete your account from the Settings page. You can also email privacy@patchflow.dev to request data deletion, and we will remove your data according to our retention schedule.",
+    link: { href: "/privacy#your-rights", label: "Your deletion rights" },
+  },
+];
 
 export default function Home() {
   return (
@@ -35,7 +84,6 @@ export default function Home() {
         href="https://www.sideprojectors.com/project/98065/patchflow"
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="Patchflow is for sale at @SideProjectors"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -47,7 +95,7 @@ export default function Home() {
             border: 0,
           }}
           src="https://www.sideprojectors.com/img/badges/badge_2_red.png"
-          alt="Patchflow is sale at @SideProjectors"
+          alt="PatchFlow is for sale on SideProjectors"
         />
       </a>
       <Navbar variant="landing" />
@@ -81,7 +129,7 @@ export default function Home() {
                     "w-full sm:w-auto h-12 px-8 font-semibold shadow-[0_2px_12px_rgba(255,90,31,0.3)] flex items-center justify-center gap-2 apple-press text-[15px]"
                   )}
                 >
-                  <span>Connect Your Repository</span>
+                  <span>Connect GitHub</span>
                   <ArrowRight className="h-4.5 w-4.5" />
                 </Link>
                 <Link
@@ -430,7 +478,15 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 6. CTA Section */}
+        {/* 6. FAQ Section */}
+        <FaqSection
+          title="Frequently asked questions"
+          subtitle="Everything you need to know about connecting a repo, the SDK, and how fixes get generated."
+          badge="FAQ"
+          items={LANDING_FAQS}
+        />
+
+        {/* 7. CTA Section */}
         <section className="border-t border-black/[0.05] dark:border-white/[0.07] bg-gradient-to-b from-card to-background py-24 md:py-32 text-center">
           <div className="mx-auto max-w-3xl px-6 flex flex-col items-center gap-7">
             <Badge variant="outline" className="text-primary border-primary/30 uppercase tracking-widest text-xs px-3 py-1">
