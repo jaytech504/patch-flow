@@ -5,13 +5,15 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Activity, LogOut, ChevronDown, LayoutDashboard,
-  AlertTriangle, Globe, Play, Menu, X, CreditCard
+  AlertTriangle, Globe, Play, Menu, CreditCard
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { isTokenValid } from "@/lib/auth-fetch";
 import { appleSprings } from "@/lib/springs";
+import { useServerReady } from "@/lib/use-server-ready";
+import ServerWakingBanner from "@/components/server-waking-banner";
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [user,          setUser]          = useState<{ github_username: string; github_avatar_url: string | null } | null>(null);
   const [userMenuOpen,  setUserMenuOpen]  = useState(false);
   const [sidebarOpen,   setSidebarOpen]   = useState(false);   // mobile drawer
+
+  const serverState = useServerReady();
 
   useEffect(() => {
     const token = localStorage.getItem("patchflow_token");
@@ -233,6 +237,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Scrollable page body */}
         <main className="flex-1 overflow-y-auto overscroll-contain">
+          <ServerWakingBanner state={serverState} />
           {children}
         </main>
       </div>

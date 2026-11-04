@@ -27,7 +27,7 @@ public class PatchFlowAdvice {
 
     private static final String HOST = System.getenv("PATCHFLOW_HOST") != null 
         ? System.getenv("PATCHFLOW_HOST") 
-        : "https://patchflow-backend-xax6.onrender.com";
+        : "https://api.patchflow.cloud";
 
     private static final HttpClient client = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(5))

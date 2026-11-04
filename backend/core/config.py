@@ -35,9 +35,11 @@ class Settings(BaseSettings):
     lemon_squeezy_team_monthly_variant_id: str = ""
     lemon_squeezy_team_annual_variant_id: str = ""
 
-    # Email Service (Resend or SMTP)
+    # Email Service (Resend)
+    # EMAIL_FROM can be "PatchFlow <onboarding@resend.dev>" while testing,
+    # or a verified domain sender once you add a domain in Resend.
     resend_api_key: str = ""
-    email_from: str = "PatchFlow Alerts <alerts@patchflow.dev>"
+    email_from: str = "PatchFlow Alerts <onboarding@resend.dev>"
 
     class Config:
         env_file = ".env"

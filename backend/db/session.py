@@ -1,3 +1,4 @@
+import os
 import asyncpg
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
@@ -26,14 +27,21 @@ def _normalize_db_url(url: str) -> str:
 
 _db_url = _normalize_db_url(settings.database_url)
 
+# ── Connection pool ───────────────────────────────────────────────────────────
+# Aiven Hobbyist plan allows 25 concurrent connections.
+# Default: pool_size=4 + max_overflow=4 = 8 max per worker process.
+# Tune via DB_POOL_SIZE and DB_POOL_MAX_OVERFLOW env vars if on a larger plan.
+_pool_size     = int(os.environ.get("DB_POOL_SIZE",        "4"))
+_max_overflow  = int(os.environ.get("DB_POOL_MAX_OVERFLOW", "4"))
+
 engine = create_async_engine(
     _db_url,
     echo=False,
-    pool_size=5,
-    max_overflow=5,
+    pool_size=_pool_size,
+    max_overflow=_max_overflow,
     pool_timeout=30,
-    pool_recycle=300,
-    pool_pre_ping=True,
+    pool_recycle=300,   # recycle connections after 5 min to avoid stale SSL
+    pool_pre_ping=True, # verify connection before use (catches dropped SSL)
 )
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

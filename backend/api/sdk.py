@@ -25,11 +25,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.redactor import redact_dict, redact_string, redact_stack_frame
 from backend.db.models import MonitoredSite, SiteApiKey, SdkError, Incident, IncidentStatus
 from backend.db.session import AsyncSessionLocal, get_db
+from backend.core.security_guards import InMemoryRateLimiter, rate_limit
 
 router = APIRouter()
 
 # How many times the same fingerprint must appear before triggering the pipeline
 _MIN_OCCURRENCES = 3
+
+# SDK ingest: generous but protects against abuse — keyed by API key suffix
+_sdk_ingest_limiter = InMemoryRateLimiter(requests_per_minute=60, burst_limit=80)
 
 
 # ── Payload schema ────────────────────────────────────────────────────────────
@@ -98,7 +102,7 @@ def _compute_fingerprint(site_id: str, error_type: str, stack_file: str, stack_l
 
 # ── Ingestion endpoint ────────────────────────────────────────────────────────
 
-@router.post("/errors")
+@router.post("/errors", dependencies=[Depends(rate_limit(_sdk_ingest_limiter))])
 async def ingest_error(
     payload: SdkErrorPayload,
     background_tasks: BackgroundTasks,

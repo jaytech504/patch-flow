@@ -73,7 +73,7 @@ const LANDING_FAQS: FaqItem[] = [
   {
     question: "How do I disconnect and delete my data?",
     answer:
-      "Revoke PatchFlow's access in your GitHub settings, or delete your account from the Settings page. You can also email privacy@patchflow.cloud to request data deletion, and we will remove your data according to our retention schedule.",
+      "Revoke PatchFlow's access in your GitHub settings, or delete your account from the Settings page. You can also email support.patchflow@gmail.com to request data deletion, and we will remove your data according to our retention schedule.",
     link: { href: "/privacy#your-rights", label: "Your deletion rights" },
   },
 ];
@@ -135,13 +135,13 @@ export default function Home() {
                   <ArrowRight className="h-4.5 w-4.5" />
                 </Link>
                 <Link
-                  href="#dual-engine"
+                  href="/demo"
                   className={cn(
                     buttonVariants({ variant: "outline", size: "lg" }),
                     "w-full sm:w-auto h-12 px-8 font-medium text-foreground hover:bg-black/[0.03] dark:hover:bg-white/[0.05] apple-press text-[15px]"
                   )}
                 >
-                  How It Works
+                  Try the demo
                 </Link>
               </div>
 

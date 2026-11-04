@@ -4,7 +4,7 @@ Auth API routes.
 Handles GitHub OAuth login flow and user-related endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from loguru import logger
@@ -22,13 +22,14 @@ from backend.auth.dependencies import (
     upsert_user,
     get_current_user,
 )
+from backend.core.security_guards import auth_limiter, rate_limit
 
 router = APIRouter()
 
 
 # ── OAuth flow ────────────────────────────────────────────────────────────────
 
-@router.get("/github/login")
+@router.get("/github/login", dependencies=[Depends(rate_limit(auth_limiter))])
 async def github_login():
     """
     Redirect the browser directly to the GitHub OAuth authorization page.
@@ -41,8 +42,8 @@ async def github_login():
     return RedirectResponse(url=url, status_code=302)
 
 
-@router.get("/github/callback")
-@router.post("/github/callback")
+@router.get("/github/callback", dependencies=[Depends(rate_limit(auth_limiter))])
+@router.post("/github/callback", dependencies=[Depends(rate_limit(auth_limiter))])
 async def github_callback(
     code: str = Query(..., description="OAuth code from GitHub redirect"),
     db: AsyncSession = Depends(get_db),

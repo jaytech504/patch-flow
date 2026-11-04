@@ -223,6 +223,16 @@ export default function LiveSessionPage() {
       socket.onopen = () => {
         reconnectAttemptsRef.current = 0;
         setWsConnected(true);
+        // Send a keep-alive ping every 25s so Render's proxy (and any
+        // intermediate load balancer) doesn't close the idle connection.
+        const pingInterval = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "ping" }));
+          } else {
+            clearInterval(pingInterval);
+          }
+        }, 25_000);
+        (socket as any)._pingInterval = pingInterval;
       };
 
       socket.onmessage = (event) => {
@@ -292,6 +302,7 @@ export default function LiveSessionPage() {
       socket.onerror = () => socket.close();
 
       socket.onclose = () => {
+        clearInterval((socket as any)._pingInterval);
         setWsConnected(false);
         if (disposed) return;
         const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current++, 15000);

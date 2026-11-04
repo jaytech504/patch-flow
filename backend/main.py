@@ -77,7 +77,17 @@ async def websocket_session(ws: WebSocket, session_id: str):
     await ws_manager.connect(ws, session_id)
     try:
         while True:
-            await ws.receive_text()
+            data = await ws.receive_text()
+            # Handle keep-alive pings sent by the client every 25s.
+            # Any other message type is silently ignored — the WS is
+            # server-push only; clients don't send real data.
+            try:
+                import json as _json
+                msg = _json.loads(data)
+                if msg.get("type") == "ping":
+                    await ws.send_text(_json.dumps({"type": "pong"}))
+            except Exception:
+                pass
     except WebSocketDisconnect:
         ws_manager.disconnect(ws, session_id)
 
