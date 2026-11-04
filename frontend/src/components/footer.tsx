@@ -71,28 +71,28 @@ export default function Footer() {
             <ul className="flex flex-col gap-2.5">
               <li>
                 <a
-                  href="https://github.com"
+                  href="https://github.com/patchflow"
                   target="_blank"
                   rel="noreferrer"
                   className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block"
                 >
-                  GitHub Repository
+                  GitHub
                 </a>
               </li>
               <li>
                 <Link
-                  href="/login"
+                  href="/docs"
                   className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block"
                 >
-                  Python & Node SDKs
+                  Python &amp; Node SDKs
                 </Link>
               </li>
               <li>
                 <Link
-                  href="/pricing"
+                  href="/docs#security"
                   className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block"
                 >
-                  Security & Architecture
+                  Security &amp; Architecture
                 </Link>
               </li>
               <li>

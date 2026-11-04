@@ -164,9 +164,9 @@ export default function BillingSettingsPage() {
           <button
             onClick={() => setSuccessMessage(null)}
             className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-500/20 transition-colors apple-press-subtle"
-            title="Dismiss"
+            aria-label="Dismiss success message"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       )}
@@ -354,7 +354,7 @@ export default function BillingSettingsPage() {
             )}
           >
             <div className="flex items-center justify-between mb-4">
-              <h4 className="apple-headline text-foreground">Hobby</h4>
+              <h3 className="apple-headline text-foreground">Hobby</h3>
               {currentTier === "free" && (
                 <Badge variant="outline" className="text-xs">Current Plan</Badge>
               )}
@@ -383,7 +383,7 @@ export default function BillingSettingsPage() {
             )}
           >
             <div className="flex items-center justify-between mb-4">
-              <h4 className="apple-headline text-foreground">Developer Pro</h4>
+              <h3 className="apple-headline text-foreground">Developer Pro</h3>
               <Badge className="bg-primary text-primary-foreground text-[10px] uppercase font-bold">
                 {currentTier === "pro" ? "Current Plan" : "Recommended"}
               </Badge>
@@ -422,7 +422,7 @@ export default function BillingSettingsPage() {
             )}
           >
             <div className="flex items-center justify-between mb-4">
-              <h4 className="apple-headline text-foreground">Team & Business</h4>
+              <h3 className="apple-headline text-foreground">Team & Business</h3>
               {currentTier === "team" && (
                 <Badge variant="default" className="text-[10px]">Current Plan</Badge>
               )}

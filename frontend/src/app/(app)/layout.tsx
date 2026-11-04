@@ -192,6 +192,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               transition={appleSprings.default}
               className="fixed inset-0 z-40 bg-black/35 backdrop-blur-sm lg:hidden"
               onClick={() => setSidebarOpen(false)}
+              aria-label="Close navigation menu"
+              role="button"
+              tabIndex={-1}
             />
             <motion.div
               initial={{ x: "-100%" }}

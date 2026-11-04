@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
 import { buttonVariants } from "@/components/ui/button";
@@ -85,17 +86,18 @@ export default function Home() {
         target="_blank"
         rel="noopener noreferrer"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
+          src="https://www.sideprojectors.com/img/badges/badge_2_red.png"
+          alt="PatchFlow is for sale on SideProjectors"
+          width={120}
+          height={40}
+          priority={false}
           style={{
             position: "fixed",
             zIndex: 1000,
             top: "-5px",
             right: "20px",
-            border: 0,
           }}
-          src="https://www.sideprojectors.com/img/badges/badge_2_red.png"
-          alt="PatchFlow is for sale on SideProjectors"
         />
       </a>
       <Navbar variant="landing" />
@@ -308,7 +310,7 @@ export default function Home() {
                 <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold font-mono mb-5 shadow-xs">
                   01
                 </div>
-                <h4 className="apple-headline text-foreground mb-2">Discovery & Failure Injection</h4>
+                <h3 className="apple-headline text-foreground mb-2">Discovery & Failure Injection</h3>
                 <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                   Discovers backend endpoints from OpenAPI or collections and injects aggressive synthetic failure modes into the API.
                 </p>
@@ -319,7 +321,7 @@ export default function Home() {
                 <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold font-mono mb-5 shadow-xs">
                   02
                 </div>
-                <h4 className="apple-headline text-foreground mb-2">FixAgent (Gemma AI)</h4>
+                <h3 className="apple-headline text-foreground mb-2">FixAgent (Gemma AI)</h3>
                 <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                   FixAgent clones the repo, programmatically locates the route handler, and generates a framework-tailored resilience patch.
                 </p>
@@ -330,7 +332,7 @@ export default function Home() {
                 <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold font-mono mb-5 shadow-xs">
                   03
                 </div>
-                <h4 className="apple-headline text-foreground mb-2">Review & Build Verification</h4>
+                <h3 className="apple-headline text-foreground mb-2">Review & Build Verification</h3>
                 <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                   ReviewAgent performs senior code review, verifies AST brackets, and runs compile checks before pushing changes.
                 </p>
@@ -341,7 +343,7 @@ export default function Home() {
                 <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold font-mono mb-5 shadow-xs">
                   04
                 </div>
-                <h4 className="apple-headline text-foreground mb-2">GitHubAgent Draft PR</h4>
+                <h3 className="apple-headline text-foreground mb-2">GitHubAgent Draft PR</h3>
                 <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                   Opens a Pull Request with a consolidated branch, detailed failure mode descriptions, and verified diffs ready to merge.
                 </p>

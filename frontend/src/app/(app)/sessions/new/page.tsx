@@ -372,11 +372,14 @@ export default function NewSessionPage() {
                 </TabsList>
 
                 <TabsContent value="openapi" className="mt-3">
+                  <label htmlFor="openapi-url" className="sr-only">OpenAPI spec URL</label>
                   <input
+                    id="openapi-url"
                     type="url"
                     placeholder="https://api.acme.com/openapi.json"
                     value={openapiUrl}
                     onChange={(e) => setOpenapiUrl(e.target.value)}
+                    aria-describedby="openapi-hint"
                     className="w-full px-4 py-2.5 border border-black/[0.08] dark:border-white/[0.1] rounded-xl text-[13px] bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 placeholder:text-muted-foreground text-foreground transition-all shadow-2xs"
                   />
                 </TabsContent>
@@ -517,7 +520,9 @@ export default function NewSessionPage() {
 
                 <TabsContent value="manual" className="mt-3 flex flex-col gap-4">
                   <div className="flex gap-2">
+                    <label htmlFor="manual-method" className="sr-only">HTTP method</label>
                     <select
+                      id="manual-method"
                       value={newMethod}
                       onChange={(e) => setNewMethod(e.target.value)}
                       className="px-3 py-2.5 border border-black/[0.08] dark:border-white/[0.1] rounded-xl text-[13px] bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
@@ -527,7 +532,9 @@ export default function NewSessionPage() {
                       <option>PUT</option>
                       <option>DELETE</option>
                     </select>
+                    <label htmlFor="manual-path" className="sr-only">Endpoint path</label>
                     <input
+                      id="manual-path"
                       type="text"
                       placeholder="e.g. /api/v1/users or /orders"
                       value={newPath}
@@ -561,9 +568,10 @@ export default function NewSessionPage() {
                           <button
                             type="button"
                             onClick={() => removeManualEndpoint(idx)}
+                            aria-label={`Remove ${ep.method} ${ep.path}`}
                             className="text-muted-foreground hover:text-destructive transition-colors apple-press-icon"
                           >
-                            <Trash className="h-4 w-4" />
+                            <Trash className="h-4 w-4" aria-hidden="true" />
                           </button>
                         </div>
                       ))}
@@ -612,12 +620,13 @@ export default function NewSessionPage() {
                     {dropdownOpen && (
                       <div className="absolute z-10 w-full mt-1.5 bg-card border border-black/[0.08] dark:border-white/[0.1] rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.1)] max-h-60 overflow-hidden flex flex-col backdrop-blur-xl">
                         <div className="p-2 border-b border-black/[0.05] dark:border-white/[0.07] flex items-center gap-2 bg-muted/30">
-                          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <Search className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
                           <input
                             type="text"
                             placeholder="Search repos..."
                             value={repoSearch}
                             onChange={(e) => setRepoSearch(e.target.value)}
+                            aria-label="Search GitHub repositories"
                             className="w-full bg-transparent border-none focus:outline-none text-[12px] text-foreground"
                           />
                         </div>

@@ -197,7 +197,8 @@ export default function IncidentsPage() {
                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                 : "bg-card text-muted-foreground border-black/[0.08] dark:border-white/[0.1]"
             )}
-            title={liveMode ? "Auto-refresh is active" : "Auto-refresh paused"}
+            aria-label={liveMode ? "Pause auto-refresh" : "Resume auto-refresh"}
+            aria-pressed={liveMode}
           >
             <Radio className={cn("h-3.5 w-3.5", liveMode && "animate-pulse")} />
             <span>{liveMode ? "Live Sync" : "Sync Paused"}</span>
@@ -231,8 +232,12 @@ export default function IncidentsPage() {
       {/* Filter & Search Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
         <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <label htmlFor="incident-search" className="sr-only">
+            Search incidents by error type, file, or repository
+          </label>
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <input
+            id="incident-search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by error type, file, or repository..."
@@ -299,7 +304,12 @@ export default function IncidentsPage() {
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div
+          className="flex flex-col gap-3"
+          aria-live="polite"
+          aria-label="Incidents list"
+          aria-relevant="additions"
+        >
           {filtered.map((inc, i) => {
             const sm = statusMeta(inc.status);
             const StatusIcon = sm.icon;

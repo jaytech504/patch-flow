@@ -195,7 +195,7 @@ export default function PricingContent() {
                 )}
 
                 <div className="mb-6">
-                  <h3 className="apple-title-3 text-foreground mb-1.5">{plan.name}</h3>
+                  <h2 className="apple-title-3 text-foreground mb-1.5">{plan.name}</h2>
                   <p className="apple-body text-text-secondary text-[13px] min-h-[38px]">{plan.description}</p>
                 </div>
 
@@ -270,28 +270,28 @@ export default function PricingContent() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="p-7 bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-sm">
-              <h4 className="apple-headline text-foreground mb-2">How does the Free tier work?</h4>
+              <h3 className="apple-headline text-foreground mb-2">How does the Free tier work?</h3>
               <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                 On the Free tier, you can connect 1 site and run 3 chaos scans/month. When production errors occur, you receive real-time dashboard logs and email alerts. Auto-patching and PR creation unlock when you upgrade to Pro ($14/mo).
               </p>
             </div>
 
             <div className="p-7 bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-sm">
-              <h4 className="apple-headline text-foreground mb-2">What payment methods are supported?</h4>
+              <h3 className="apple-headline text-foreground mb-2">What payment methods are supported?</h3>
               <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                 We process payments securely via Lemon Squeezy (Merchant of Record). We accept Visa, Mastercard, American Express, Apple Pay, Google Pay, and PayPal worldwide with automatic sales tax handling.
               </p>
             </div>
 
             <div className="p-7 bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-sm">
-              <h4 className="apple-headline text-foreground mb-2">What is Pre-Merge Build Verification?</h4>
+              <h3 className="apple-headline text-foreground mb-2">What is Pre-Merge Build Verification?</h3>
               <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                 Before opening a PR, ReviewAgent physically executes the TypeScript compiler (<code className="font-mono text-xs">tsc --noEmit</code>) or Node runtime checks directly on the cloned repo to guarantee the patch compiles without errors.
               </p>
             </div>
 
             <div className="p-7 bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-sm">
-              <h4 className="apple-headline text-foreground mb-2">Can I cancel anytime?</h4>
+              <h3 className="apple-headline text-foreground mb-2">Can I cancel anytime?</h3>
               <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                 Yes, you can upgrade, downgrade, or cancel your subscription at any time with 1-click inside your Customer Billing Portal. You will retain access until the end of your billing cycle.
               </p>
