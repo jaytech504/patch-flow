@@ -35,22 +35,15 @@ const nextConfig: NextConfig = {
             value: "max-age=31536000; includeSubDomains",
           },
           // Content Security Policy
-          // Note: adjust script-src if you add additional third-party scripts
           {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              // Next.js requires 'unsafe-inline' and 'unsafe-eval' in dev;
-              // in production only inline styles for Tailwind, plus Plausible
               "script-src 'self' 'unsafe-inline' https://plausible.io",
               "style-src 'self' 'unsafe-inline'",
-              // Images: self + GitHub avatars + SideProjectors badge + data URIs
               "img-src 'self' data: https://avatars.githubusercontent.com https://www.sideprojectors.com",
-              // Fonts from self only (system fonts, no external font CDN)
               "font-src 'self'",
-              // API calls go to the backend subdomain
               `connect-src 'self' https://api.patchflow.cloud wss://api.patchflow.cloud https://plausible.io`,
-              // Frames: none
               "frame-src 'none'",
               "frame-ancestors 'self'",
             ].join("; "),
@@ -60,17 +53,9 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // ── Redirects: HTTP → HTTPS is handled by Render, but keep www → apex here
-  async redirects() {
-    return [
-      {
-        source: "/(.*)",
-        has: [{ type: "host", value: "www.patchflow.cloud" }],
-        destination: "https://patchflow.cloud/:path*",
-        permanent: true,
-      },
-    ];
-  },
+  // NOTE: No redirects block here. Render handles www ↔ apex routing
+  // at the CDN level. Adding a Next.js redirect on top causes an infinite
+  // redirect loop (Render apex→www, Next.js www→apex, repeat).
 };
 
 export default nextConfig;
