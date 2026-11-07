@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -183,12 +184,14 @@ async def list_sessions(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    # Only list user-initiated Chaos Testing sessions for the authenticated user
-    incident_subquery = select(Incident.id)
+    # Use NOT EXISTS rather than NOT IN with an unconstrained subquery.
+    # The previous query loaded every Incident row just to exclude their IDs.
+    from sqlalchemy import not_, exists
+    incident_exists = select(Incident.id).where(Incident.id == ChaosSession.id).correlate(ChaosSession)
     query = (
         select(ChaosSession)
         .where(ChaosSession.user_id == user.id)
-        .where(ChaosSession.id.not_in(incident_subquery))
+        .where(not_(exists(incident_exists)))
         .order_by(desc(ChaosSession.created_at))
         .limit(50)
     )
@@ -221,17 +224,12 @@ async def get_session(
     if not session or (session.user_id and session.user_id != user.id):
         raise HTTPException(status_code=404, detail="Session not found")
 
-    endpoints_result = await db.execute(
-        select(Endpoint).where(Endpoint.session_id == session_id)
-    )
-    failures_result = await db.execute(
-        select(FailureResult).where(FailureResult.session_id == session_id)
-    )
-    prs_result = await db.execute(
-        select(PullRequest).where(PullRequest.session_id == session_id)
-    )
-    steps_result = await db.execute(
-        select(AgentStep).where(AgentStep.session_id == session_id).order_by(AgentStep.created_at.asc())
+    # Fire all 4 child queries in parallel — one round-trip each, all concurrent
+    endpoints_result, failures_result, prs_result, steps_result = await asyncio.gather(
+        db.execute(select(Endpoint).where(Endpoint.session_id == session_id)),
+        db.execute(select(FailureResult).where(FailureResult.session_id == session_id)),
+        db.execute(select(PullRequest).where(PullRequest.session_id == session_id)),
+        db.execute(select(AgentStep).where(AgentStep.session_id == session_id).order_by(AgentStep.created_at.asc())),
     )
 
     endpoints = endpoints_result.scalars().all()

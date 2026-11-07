@@ -19,7 +19,8 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.dependencies import get_current_user
@@ -117,17 +118,15 @@ async def list_sites(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Single query — joinedload fetches api_keys in one IN-clause round-trip
     result = await db.execute(
         select(MonitoredSite)
+        .options(joinedload(MonitoredSite.api_keys))
         .where(MonitoredSite.user_id == current_user.id)
         .order_by(MonitoredSite.created_at.desc())
     )
-    sites = result.scalars().all()
-    out = []
-    for site in sites:
-        keys = await _get_site_keys(site.id, db)
-        out.append(_site_to_dict(site, keys))
-    return {"sites": out}
+    sites = result.unique().scalars().all()
+    return {"sites": [_site_to_dict(site, list(site.api_keys)) for site in sites]}
 
 
 from backend.core.billing_guards import can_create_site

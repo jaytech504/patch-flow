@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import {
   Plus, CheckCircle2, XCircle, Activity, AlertTriangle,
   GitPullRequest, Gauge, Globe, Clock, ShieldCheck, ArrowRight,
@@ -10,10 +11,10 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { API_BASE_URL } from "@/lib/api-config";
 import { authFetch } from "@/lib/auth-fetch";
 import { appleSprings } from "@/lib/springs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { authFetcher, SWR_CONFIG } from "@/lib/swr-fetcher";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -89,62 +90,42 @@ function getIncidentStatusMeta(status: string) {
 }
 
 export default function DashboardPage() {
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [sites, setSites] = useState<MonitoredSite[]>([]);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "sessions" | "incidents" | "sites">("overview");
   const [retryingSessionId, setRetryingSessionId] = useState<string | null>(null);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [retryErrorSessionId, setRetryErrorSessionId] = useState<string | null>(null);
   const router = useRouter();
 
-  const loadData = async () => {
-    setLoading(true);
+  // ── SWR: 3 parallel fetches, stale-while-revalidate ─────────────────────
+  const { data: sessionsRaw, isLoading: sessLoading, mutate: mutateSessions } =
+    useSWR<any[]>("/api/sessions", authFetcher, SWR_CONFIG.dashboard);
 
-    try {
-      const [sessRes, sitesRes, incRes] = await Promise.allSettled([
-        authFetch("/api/sessions"),
-        authFetch("/api/sites"),
-        authFetch("/api/incidents"),
-      ]);
+  const { data: sitesRaw, isLoading: sitesLoading } =
+    useSWR<{ sites: MonitoredSite[] }>("/api/sites", authFetcher, SWR_CONFIG.dashboard);
 
-      if (sessRes.status === "fulfilled" && sessRes.value.ok) {
-        const data = await sessRes.value.json();
-        setSessions(
-          data.map((s: any) => ({
-            id: s.id,
-            appName: s.target_name || "My API",
-            appUrl: s.target_url || "",
-            status: s.status,
-            endpointsTested: s.endpoints_found || 0,
-            failuresFound: s.failures_injected || 0,
-            fixesGenerated: s.fixes_generated || 0,
-            date: s.created_at ? new Date(s.created_at).toLocaleDateString() : "unknown",
-            createdAtRaw: s.created_at,
-          }))
-        );
-      }
+  const { data: incidentsRaw, isLoading: incLoading } =
+    useSWR<{ incidents: Incident[] }>("/api/incidents", authFetcher, SWR_CONFIG.dashboard);
 
-      if (sitesRes.status === "fulfilled" && sitesRes.value.ok) {
-        const data = await sitesRes.value.json();
-        setSites(data.sites || []);
-      }
+  const loading = sessLoading || sitesLoading || incLoading;
 
-      if (incRes.status === "fulfilled" && incRes.value.ok) {
-        const data = await incRes.value.json();
-        setIncidents(data.incidents || []);
-      }
-    } catch (err) {
-      console.warn("Could not fetch dashboard data:", err);
-    } finally {
-      setLoading(false);
-    }
+  const sessions: Session[] = useMemo(() => (sessionsRaw ?? []).map((s: any) => ({
+    id: s.id,
+    appName: s.target_name || "My API",
+    appUrl: s.target_url || "",
+    status: s.status,
+    endpointsTested: s.endpoints_found || 0,
+    failuresFound: s.failures_injected || 0,
+    fixesGenerated: s.fixes_generated || 0,
+    date: s.created_at ? new Date(s.created_at).toLocaleDateString() : "unknown",
+    createdAtRaw: s.created_at,
+  })), [sessionsRaw]);
+
+  const sites: MonitoredSite[] = sitesRaw?.sites ?? [];
+  const incidents: Incident[] = incidentsRaw?.incidents ?? [];
+
+  const loadData = () => {
+    mutateSessions();
   };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   // ── Aggregated Stats ────────────────────────────────────────────────────────
   const stats = useMemo(() => {

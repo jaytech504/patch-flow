@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import {
   AlertTriangle, GitPullRequest, Search,
   XCircle, Clock, Loader2, ExternalLink, RefreshCw,
@@ -10,9 +11,9 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { authFetch } from "@/lib/auth-fetch";
 import { appleSprings } from "@/lib/springs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { authFetcher, SWR_CONFIG } from "@/lib/swr-fetcher";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,9 +71,6 @@ function timeAgo(iso: string | null | undefined) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function IncidentsPage() {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -80,52 +78,38 @@ export default function IncidentsPage() {
   const previousPrCountRef = useRef<number | null>(null);
   const [newPrToast, setNewPrToast] = useState<string | null>(null);
 
-  const fetchIncidents = async (silent = false) => {
-    if (!silent) setIsRefreshing(true);
-    try {
-      const r = await authFetch("/api/incidents");
-      if (r.ok) {
-        const data = await r.json();
-        const incoming: Incident[] = data.incidents ?? [];
-
-        // Check if new PRs were opened to show live toast
-        const prCount = incoming.filter((i) => i.status === "pr_opened").length;
+  // ── SWR: auto-polls every 10s when liveMode is on; 4s if any are processing
+  const { data, isLoading, isValidating, mutate } = useSWR<{ incidents: Incident[] }>(
+    "/api/incidents",
+    authFetcher,
+    {
+      ...SWR_CONFIG.dashboard,
+      refreshInterval: (latestData) => {
+        if (!liveMode) return 0;
+        const hasProcessing = (latestData?.incidents ?? []).some(
+          (i) => i.status === "processing" || i.status === "received"
+        );
+        return hasProcessing ? 4_000 : 10_000;
+      },
+      onSuccess: (incoming) => {
+        const incomingIncidents = incoming.incidents ?? [];
+        const prCount = incomingIncidents.filter((i) => i.status === "pr_opened").length;
         if (previousPrCountRef.current !== null && prCount > previousPrCountRef.current) {
-          const latestPr = incoming.find((i) => i.status === "pr_opened");
+          const latestPr = incomingIncidents.find((i) => i.status === "pr_opened");
           if (latestPr) {
             setNewPrToast(`New Draft PR opened: ${latestPr.error_title}`);
             setTimeout(() => setNewPrToast(null), 5000);
           }
         }
         previousPrCountRef.current = prCount;
-        setIncidents(incoming);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
+      },
     }
-  };
+  );
 
-  // Initial load
-  useEffect(() => {
-    fetchIncidents();
-  }, []);
-
-  // Live polling interval: every 4s if items are in processing, 10s otherwise
-  useEffect(() => {
-    if (!liveMode) return;
-
-    const hasProcessing = incidents.some((i) => i.status === "processing" || i.status === "received");
-    const intervalMs = hasProcessing ? 4000 : 10000;
-
-    const interval = setInterval(() => {
-      fetchIncidents(true);
-    }, intervalMs);
-
-    return () => clearInterval(interval);
-  }, [liveMode, incidents]);
+  const incidents: Incident[] = data?.incidents ?? [];
+  const loading = isLoading;
+  const isRefreshing = isValidating && !isLoading;
+  const fetchIncidents = (_silent?: boolean) => mutate();
 
   // Filtered list
   const filtered = useMemo(() => {

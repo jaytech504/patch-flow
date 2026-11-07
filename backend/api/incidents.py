@@ -46,17 +46,11 @@ async def list_incidents(
     current_user: User = Depends(get_current_user),
 ):
     """List all incidents across all of the user's monitored sites."""
-    sites_result = await db.execute(
-        select(MonitoredSite.id).where(MonitoredSite.user_id == current_user.id)
-    )
-    site_ids = [row[0] for row in sites_result.fetchall()]
-
-    if not site_ids:
-        return {"incidents": []}
-
+    # Single query via JOIN — eliminates the two-query waterfall
     result = await db.execute(
         select(Incident)
-        .where(Incident.site_id.in_(site_ids))
+        .join(MonitoredSite, Incident.site_id == MonitoredSite.id)
+        .where(MonitoredSite.user_id == current_user.id)
         .order_by(Incident.created_at.desc())
         .limit(100)
     )

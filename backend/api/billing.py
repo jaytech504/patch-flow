@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from loguru import logger
 import httpx
 
@@ -75,11 +75,11 @@ async def get_user_subscription(
     ensure_monthly_usage_reset(user)
     await db.commit()
 
-    # Count user's current monitored sites
-    sites_res = await db.execute(
-        select(MonitoredSite).where(MonitoredSite.user_id == user.id)
+    # COUNT(*) — never load full ORM objects just to count rows
+    sites_count_res = await db.execute(
+        select(func.count()).select_from(MonitoredSite).where(MonitoredSite.user_id == user.id)
     )
-    sites_count = len(sites_res.scalars().all())
+    sites_count = sites_count_res.scalar_one()
 
     tier = (user.subscription_tier or "free").lower()
     limits = get_tier_limits(tier)

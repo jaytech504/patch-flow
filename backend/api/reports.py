@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import asyncio
 
 from backend.db.session import get_db
 from backend.db.models import Report, FailureResult, Endpoint, ChaosSession, User
@@ -75,18 +76,16 @@ async def get_report(
     if not session or (session.user_id and session.user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Report not found")
 
-    # Load all endpoints for the session to map endpoint_id → path
-    endpoints_result = await db.execute(
-        select(Endpoint).where(Endpoint.session_id == report.session_id)
+    # Parallel: endpoints + fixed_failures
+    endpoints_result, failures_result = await asyncio.gather(
+        db.execute(select(Endpoint).where(Endpoint.session_id == report.session_id)),
+        db.execute(
+            select(FailureResult)
+            .where(FailureResult.session_id == report.session_id)
+            .where(FailureResult.fix_generated == True)  # noqa: E712
+        ),
     )
     endpoints_map = {ep.id: ep for ep in endpoints_result.scalars().all()}
-
-    # Get all failure results that had fixes generated
-    failures_result = await db.execute(
-        select(FailureResult)
-        .where(FailureResult.session_id == report.session_id)
-        .where(FailureResult.fix_generated == True)  # noqa: E712
-    )
     fixed_failures = failures_result.scalars().all()
 
     # Build a lookup of (failure_mode, endpoint_id) → code_before

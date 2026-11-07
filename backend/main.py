@@ -6,6 +6,7 @@ from loguru import logger
 
 from backend.core.config import get_settings
 from backend.core.websocket_manager import ws_manager
+from backend.core.timing_middleware import TimingMiddleware
 from backend.db.session import init_db
 from backend.api import sessions, reports, github, auth, discovery, sites, incidents, billing
 from backend.api import sdk as sdk_api
@@ -58,8 +59,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID"],
+    expose_headers=["X-Request-ID", "X-Response-Time"],
 )
+
+# Timing middleware — must be added AFTER CORS so it wraps the full request
+app.add_middleware(TimingMiddleware)
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(discovery.router, prefix="/api/discovery", tags=["discovery"])

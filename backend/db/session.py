@@ -113,6 +113,48 @@ async def init_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_incident_fixes_used INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_chaos_scans_used INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS usage_reset_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+
+            # ── Performance indexes ────────────────────────────────────────────
+            # These cover every filtered/sorted/joined column that was missing an
+            # index. Each CREATE INDEX is wrapped in IF NOT EXISTS so re-deploying
+            # is safe.  The CONCURRENTLY keyword is NOT used because asyncpg does
+            # not allow it inside a transaction — Aiven/PostgreSQL will build them
+            # non-concurrently on startup which is fine for the data volumes here.
+
+            # chaos_sessions: user dashboard list (user_id filter + created_at sort)
+            "CREATE INDEX IF NOT EXISTS ix_chaos_sessions_user_id ON chaos_sessions(user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_chaos_sessions_created_at ON chaos_sessions(created_at DESC)",
+
+            # monitored_sites: loaded on every authenticated page
+            "CREATE INDEX IF NOT EXISTS ix_monitored_sites_user_id ON monitored_sites(user_id)",
+
+            # site_api_keys: looked up on every SDK ingest request
+            "CREATE INDEX IF NOT EXISTS ix_site_api_keys_site_id ON site_api_keys(site_id)",
+            "CREATE INDEX IF NOT EXISTS ix_site_api_keys_key_hash ON site_api_keys(key_hash)",
+
+            # sentry_incidents: incident list page (site_id IN + created_at sort + status filter)
+            "CREATE INDEX IF NOT EXISTS ix_sentry_incidents_site_id ON sentry_incidents(site_id)",
+            "CREATE INDEX IF NOT EXISTS ix_sentry_incidents_created_at ON sentry_incidents(created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS ix_sentry_incidents_status ON sentry_incidents(status)",
+            "CREATE INDEX IF NOT EXISTS ix_sentry_incidents_dedup_key ON sentry_incidents(dedup_key)",
+
+            # agent_steps: session detail page (session_id + created_at sort)
+            "CREATE INDEX IF NOT EXISTS ix_agent_steps_session_id ON agent_steps(session_id)",
+            "CREATE INDEX IF NOT EXISTS ix_agent_steps_created_at ON agent_steps(created_at ASC)",
+
+            # failure_results: session detail + report page
+            "CREATE INDEX IF NOT EXISTS ix_failure_results_session_id ON failure_results(session_id)",
+            "CREATE INDEX IF NOT EXISTS ix_failure_results_fix_generated ON failure_results(session_id, fix_generated)",
+
+            # endpoints: session detail page
+            "CREATE INDEX IF NOT EXISTS ix_endpoints_session_id ON endpoints(session_id)",
+
+            # reports: looked up by session_id
+            "CREATE INDEX IF NOT EXISTS ix_reports_session_id ON reports(session_id)",
+
+            # sdk_errors: dedup + pipeline threshold check
+            "CREATE INDEX IF NOT EXISTS ix_sdk_errors_site_id ON sdk_errors(site_id)",
+            "CREATE INDEX IF NOT EXISTS ix_sdk_errors_fingerprint_processed ON sdk_errors(fingerprint, processed)",
         ]
         for sql in migrations:
             try:

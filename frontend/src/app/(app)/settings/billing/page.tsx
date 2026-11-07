@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import useSWR from "swr";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/api-config";
 import { authFetch } from "@/lib/auth-fetch";
+import { authFetcher, SWR_CONFIG } from "@/lib/swr-fetcher";
 import {
   CreditCard,
   Zap,
@@ -23,7 +26,6 @@ import {
   Activity,
   X,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
 
 interface SubscriptionData {
   tier: string;
@@ -48,38 +50,30 @@ interface SubscriptionData {
 }
 
 export default function BillingSettingsPage() {
-  const [subData, setSubData] = useState<SubscriptionData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
-  useEffect(() => {
-    fetchSubscription();
-    if (searchParams.get("checkout") === "success") {
-      setSuccessMessage("Thank you! Your subscription is now active.");
-      // Clean query parameter from the URL so page refreshes don't re-trigger banner
-      if (typeof window !== "undefined") {
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
+  // ── SWR: stale-while-revalidate, no auto-refresh (billing rarely changes) ──
+  const { data: subData, isLoading: loading } = useSWR<SubscriptionData>(
+    "/api/billing/subscription",
+    authFetcher,
+    {
+      ...SWR_CONFIG.billing,
+      onSuccess: () => {
+        // Handle post-checkout redirect banner once on mount
+        if (searchParams.get("checkout") === "success") {
+          setSuccessMessage("Thank you! Your subscription is now active.");
+          if (typeof window !== "undefined") {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        }
+      },
     }
-  }, [searchParams]);
+  );
 
-  const fetchSubscription = async () => {
-    try {
-      setLoading(true);
-      const res = await authFetch("/api/billing/subscription");
-      if (res.ok) {
-        const data = await res.json();
-        setSubData(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch subscription:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchSubscription = async () => { /* kept for compat — SWR handles refetching */ };
 
   const handleUpgrade = async (tier: "pro" | "team") => {
     try {
