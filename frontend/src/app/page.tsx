@@ -303,7 +303,7 @@ export default function Home() {
                 <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold font-mono mb-5 shadow-xs">
                   02
                 </div>
-                <h3 className="apple-headline text-foreground mb-2">FixAgent (Gemma AI)</h3>
+                <h3 className="apple-headline text-foreground mb-2">FixAgent (AI)</h3>
                 <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                   FixAgent clones the repo, programmatically locates the route handler, and generates a framework-tailored resilience patch.
                 </p>
@@ -422,7 +422,7 @@ export default function Home() {
 
             <div className="flex flex-col p-8 bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.05)] transition-all duration-200">
               <Sparkles className="h-6 w-6 text-primary mb-5" />
-              <h3 className="apple-title-3 text-foreground mb-2">Gemma AI Fix Generation</h3>
+              <h3 className="apple-title-3 text-foreground mb-2">AI Fix Generation</h3>
               <p className="apple-body text-text-secondary text-[13px] leading-relaxed">
                 Specialized code models analyze the exact stack trace, parse surrounding AST context, and write production-grade error handling.
               </p>

@@ -25,7 +25,7 @@ export default function PrivacyPolicyPage() {
         <li>We read your repository code to analyze failures and write fixes, and open Pull Requests on your behalf.</li>
         <li>Our SDK collects error types, messages, and stack frames from your app — never request bodies, headers, cookies, or your end users&apos; PII.</li>
         <li>All incoming error text is run through automated PII redaction before it is stored.</li>
-        <li>To generate fixes, error context and relevant code snippets are sent to our AI model provider (Google Gemma).</li>
+        <li>To generate fixes, error context and relevant code snippets are sent to our AI model provider.</li>
         <li>Error logs are retained for your plan&apos;s window (7, 30, or 90 days) and then deleted.</li>
         <li>You can request deletion of your data at any time.</li>
       </ul>
@@ -108,7 +108,7 @@ export default function PrivacyPolicyPage() {
       <p>
         To generate proposed fixes, we send the failing error context (error
         type, message, stack frame, and surrounding code snippets) to our AI
-        model provider, Google&apos;s Gemma API. The code snippets transmitted
+        model provider. The code snippets transmitted
         are limited to what is needed to produce a fix for the specific failure.
         Processing by our AI provider is governed by their privacy terms.
       </p>
@@ -139,7 +139,7 @@ export default function PrivacyPolicyPage() {
       <ul>
         <li><strong>Render</strong> — application and web hosting (region configurable per account).</li>
         <li><strong>Aiven</strong> — managed PostgreSQL database where your account, site, and error data are stored (region configurable).</li>
-        <li><strong>Google (Gemma / Generative Language API)</strong> — AI inference used to generate proposed fixes from error context and code snippets.</li>
+        <li><strong>Google (AI)</strong> — AI inference used to generate proposed fixes from error context and code snippets.</li>
         <li><strong>GitHub</strong> — OAuth authentication and repository access, including Pull Request creation.</li>
         <li><strong>Lemon Squeezy</strong> — payment processing as Merchant of Record.</li>
         <li><strong>Resend</strong> — transactional email delivery for incident alerts.</li>

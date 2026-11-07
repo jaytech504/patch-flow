@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Gemma_AI-Powered-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Gemma AI Powered"/>
+  <img src="https://img.shields.io/badge/AI-Powered-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="AI Powered"/>
   <img src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge" alt="MIT License"/>
   <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.11+"/>
   <img src="https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js 16"/>
@@ -12,7 +12,7 @@
 > **Stop finding bugs. Start fixing them.**  
 > PatchFlow is a dual-engine reliability platform for modern backend APIs. It proactively stress-tests your endpoints with 18+ chaos failure modes before deployment and monitors production crashes in real-time — autonomously writing compiler-verified resilience patches and opening GitHub Pull Requests in seconds.
 
-Powered by **Gemma AI** (via Google AI Studio) with real-time WebSocket streaming, AST syntax verification, and strict security guardrails.
+Powered by **AI** with real-time WebSocket streaming, AST syntax verification, and strict security guardrails.
 
 🔗 **Live App**: [https://patchflow-frontend-n23j.onrender.com](https://patchflow-frontend-n23j.onrender.com)  
 📦 **Repository**: [https://github.com/jaytech504/patch-flow](https://github.com/jaytech504/patch-flow)
@@ -44,7 +44,7 @@ PatchFlow protects your software lifecycle at both stages: **pre-deployment test
                                    │                                     │
                                    ▼                                     ▼
                       ┌─────────────────────────┐           ┌─────────────────────────┐
-                      │  Analyst Agent (Gemma)  │           │ Ingestion & PII Redact  │
+                      │  Analyst Agent (AI)     │           │ Ingestion & PII Redact  │
                       │  0–100 Risk Score       │           │ Dedup & Occurrence Cap  │
                       └────────────┬────────────┘           └────────────┬────────────┘
                                    │                                     │
@@ -52,7 +52,7 @@ PatchFlow protects your software lifecycle at both stages: **pre-deployment test
                                                       │
                                                       ▼
                                        ┌─────────────────────────────┐
-                                       │   FixAgent (Gemma AI)       │
+                                       │   FixAgent (AI)             │
                                        │   AST Route & Patch Locator │
                                        └──────────────┬──────────────┘
                                                       │
@@ -274,7 +274,7 @@ npm install patchflow-agent
 
 ## 🤖 The Autonomous Agent Pipeline
 
-PatchFlow uses a cooperative multi-agent architecture powered by **Gemma AI**:
+PatchFlow uses a cooperative multi-agent architecture powered by **AI**:
 
 | Agent | Responsibility |
 |:---|:---|
@@ -324,7 +324,7 @@ Available preset scenarios: `fastapi`, `nextjs`, `express`, `django`, `hono`.
 - **Python 3.11+**
 - **Node.js 20+**
 - **PostgreSQL 14+**
-- [Google AI Studio API Key](https://aistudio.google.com/apikey) (for Gemma AI)
+- [Google AI Studio API Key](https://aistudio.google.com/apikey)
 - [GitHub OAuth Application](https://github.com/settings/developers) (Callback URL: `http://localhost:3000/auth/callback`)
 
 ### 1. Clone the Repository
@@ -337,8 +337,8 @@ cd patch-flow
 Create a `.env` file in the root directory:
 
 ```env
-# Gemma AI (Google AI Studio)
-GEMMA_API_KEY=your_gemma_api_key_here
+# AI Model (Google AI Studio)
+GEMMA_API_KEY=your_api_key_here
 GEMMA_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 GEMMA_MODEL=gemma-4-26b-a4b-it
 GEMMA_THINKING_LEVEL=minimal
@@ -410,7 +410,7 @@ Test coverage includes:
 ```
 patch-flow/
 ├── backend/
-│   ├── agents/                  # Multi-agent orchestrator & Gemma agents
+│   ├── agents/                  # Multi-agent orchestrator & AI agents
 │   │   ├── discovery_agent.py   # Endpoint & route detection
 │   │   ├── chaos_agent.py       # Chaos test execution engine
 │   │   ├── analyst_agent.py     # Risk scoring & severity classification
@@ -465,7 +465,7 @@ patch-flow/
 
 | Layer | Technologies |
 |:---|:---|
-| **AI Model** | Google Gemma (`gemma-4-26b-a4b-it`) via Google AI Studio |
+| **AI Model** | AI (via Google AI Studio) |
 | **Backend API** | FastAPI 0.111 · Python 3.11+ · Uvicorn · asyncio |
 | **Database & ORM** | PostgreSQL 14+ · asyncpg · SQLAlchemy 2.0 |
 | **Real-time Protocol** | WebSockets (live agent action streaming) |

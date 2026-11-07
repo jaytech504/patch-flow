@@ -105,7 +105,7 @@ export default function TermsPage() {
 
       <h2 id="third-parties">10. Third-party services</h2>
       <p>
-        PatchFlow integrates with GitHub, Google (Gemma), Render, Aiven, Lemon
+        PatchFlow integrates with GitHub, Google (AI), Render, Aiven, Lemon
         Squeezy, and Resend. Your use of those services is also subject to their
         respective terms and policies. We are not responsible for their practices.
       </p>

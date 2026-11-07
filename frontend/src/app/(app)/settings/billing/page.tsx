@@ -403,7 +403,7 @@ export default function BillingSettingsPage() {
               <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-500" /> 100 Auto-Patches / mo</li>
               <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-500" /> Pre-Merge Build Verification (tsc)</li>
               <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-500" /> 30 Chaos Scans / mo</li>
-              <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-500" /> Priority Gemma AI Fast-Lane</li>
+              <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-500" /> Priority AI Fast-Lane</li>
             </ul>
             <Button
               onClick={() => handleUpgrade("pro")}

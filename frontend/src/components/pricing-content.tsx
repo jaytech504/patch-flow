@@ -79,7 +79,7 @@ export default function PricingContent() {
         { title: "30 Chaos Scans / month", included: true },
         { title: "All 18 Chaos Failure Modes", included: true },
         { title: "30-Day Log Retention", included: true },
-        { title: "Priority Gemma AI Fast-Lane", included: true },
+        { title: "Priority AI Fast-Lane", included: true },
       ],
     },
     {
