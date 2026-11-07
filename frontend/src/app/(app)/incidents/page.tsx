@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { authFetch } from "@/lib/auth-fetch";
 import { appleSprings } from "@/lib/springs";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -216,17 +217,26 @@ export default function IncidentsPage() {
 
       {/* Stats KPI Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 mb-7">
-        {[
-          { label: "Total Incidents", value: total, color: "text-foreground", bg: "bg-card" },
-          { label: "PRs Opened", value: prOpened, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/[0.03]" },
-          { label: "Patching Now", value: inProgress, color: "text-[#FF5A1F]", bg: inProgress > 0 ? "bg-orange-500/[0.04]" : "bg-card" },
-          { label: "Skipped / Filtered", value: skipped + failed, color: "text-text-secondary", bg: "bg-card" },
-        ].map(({ label, value, color, bg }) => (
-          <div key={label} className={cn("border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-4.5 shadow-[0_1px_3px_rgba(0,0,0,0.02),0_4px_12px_rgba(0,0,0,0.02)]", bg)}>
-            <p className="apple-caption text-text-secondary mb-1.5">{label}</p>
-            <p className={cn("text-[26px] font-extrabold leading-none tracking-tight", color)}>{value}</p>
-          </div>
-        ))}
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-4.5 bg-card flex flex-col gap-2.5">
+              <Skeleton className="h-3 w-24 rounded" />
+              <Skeleton className="h-7 w-12 rounded-lg" />
+            </div>
+          ))
+        ) : (
+          [
+            { label: "Total Incidents", value: total, color: "text-foreground", bg: "bg-card" },
+            { label: "PRs Opened", value: prOpened, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/[0.03]" },
+            { label: "Patching Now", value: inProgress, color: "text-[#FF5A1F]", bg: inProgress > 0 ? "bg-orange-500/[0.04]" : "bg-card" },
+            { label: "Skipped / Filtered", value: skipped + failed, color: "text-text-secondary", bg: "bg-card" },
+          ].map(({ label, value, color, bg }) => (
+            <div key={label} className={cn("border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-4.5 shadow-[0_1px_3px_rgba(0,0,0,0.02),0_4px_12px_rgba(0,0,0,0.02)]", bg)}>
+              <p className="apple-caption text-text-secondary mb-1.5">{label}</p>
+              <p className={cn("text-[26px] font-extrabold leading-none tracking-tight", color)}>{value}</p>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Filter & Search Bar */}
@@ -271,11 +281,30 @@ export default function IncidentsPage() {
 
       {/* Incident List */}
       {loading ? (
-        <div className="flex flex-col gap-3 py-8">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-5">
-              <div className="h-4 w-48 bg-black/[0.05] dark:bg-white/[0.05] animate-pulse rounded mb-2" />
-              <div className="h-3 w-64 bg-black/[0.05] dark:bg-white/[0.05] animate-pulse rounded" />
+        <div className="flex flex-col gap-3 py-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-4.5 flex items-start gap-4">
+              {/* Status icon placeholder */}
+              <Skeleton className="h-9 w-9 rounded-xl shrink-0 mt-0.5" />
+              <div className="flex-1 flex flex-col gap-2.5 min-w-0">
+                {/* Title + timestamp row */}
+                <div className="flex items-center justify-between gap-3">
+                  <Skeleton className="h-4 w-56 rounded" />
+                  <Skeleton className="h-3 w-14 rounded shrink-0" />
+                </div>
+                {/* Type badge + env badge row */}
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-24 rounded-md" />
+                  <Skeleton className="h-5 w-16 rounded-md" />
+                </div>
+                {/* Stack file line */}
+                <Skeleton className="h-3 w-44 rounded" />
+              </div>
+              {/* Status badge + chevron */}
+              <div className="flex items-center gap-2 shrink-0">
+                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="h-4 w-4 rounded" />
+              </div>
             </div>
           ))}
         </div>

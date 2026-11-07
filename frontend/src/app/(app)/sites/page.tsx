@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/api-config";
 import { authFetch } from "@/lib/auth-fetch";
 import { trackEvent } from "@/lib/analytics";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -916,7 +917,33 @@ export default function SitesPage() {
 
       {/* Sites list */}
       {loading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 text-[#FF5A1F] animate-spin" /></div>
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="bg-white border border-[#E7E5E2] rounded-[14px] p-[18px_20px] flex flex-col gap-3">
+              {/* Name + badges row */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Skeleton className="h-5 w-36 rounded-lg" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                  <Skeleton className="h-4 w-20 rounded" />
+                </div>
+                {/* Action buttons */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <Skeleton className="h-7 w-7 rounded-[6px]" />
+                  <Skeleton className="h-7 w-7 rounded-[6px]" />
+                </div>
+              </div>
+              {/* Meta row */}
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-3 w-40 rounded" />
+                <Skeleton className="h-3 w-28 rounded" />
+                <Skeleton className="h-5 w-16 rounded" />
+              </div>
+              {/* API key row */}
+              <Skeleton className="h-3 w-48 rounded" />
+            </div>
+          ))}
+        </div>
       ) : sites.length === 0 ? (
         <div className="bg-white border border-[#E7E5E2] rounded-[14px] p-12 text-center">
           <Globe className="h-8 w-8 text-[#D4D1CC] mx-auto mb-3" />

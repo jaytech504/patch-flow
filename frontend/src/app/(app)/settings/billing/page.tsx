@@ -23,6 +23,7 @@ import {
   Activity,
   X,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface SubscriptionData {
   tier: string;
@@ -135,8 +136,73 @@ export default function BillingSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+      <div className="space-y-10 max-w-6xl mx-auto py-4">
+        {/* Header skeleton */}
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-7 w-52 rounded-xl" />
+          <Skeleton className="h-4 w-80 rounded" />
+        </div>
+
+        {/* Current plan card skeleton */}
+        <div className="p-6 md:p-8 rounded-2xl bg-card border border-black/[0.06] dark:border-white/[0.08]">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-black/[0.05] dark:border-white/[0.06]">
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-12 w-12 rounded-2xl" />
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-6 w-36 rounded-lg" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+                <Skeleton className="h-3.5 w-56 rounded" />
+              </div>
+            </div>
+            <Skeleton className="h-10 w-44 rounded-xl" />
+          </div>
+          {/* Usage meters skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-6">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.06] dark:border-white/[0.08] flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-3 w-28 rounded" />
+                  <Skeleton className="h-3 w-14 rounded" />
+                </div>
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Plans section skeleton */}
+        <div className="flex flex-col gap-6">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-6 w-36 rounded-lg" />
+              <Skeleton className="h-3.5 w-72 rounded" />
+            </div>
+            <Skeleton className="h-9 w-40 rounded-xl" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex flex-col p-6 rounded-2xl border border-black/[0.06] dark:border-white/[0.08] bg-card gap-4">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-5 w-28 rounded" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-9 w-20 rounded-lg" />
+                <Skeleton className="h-3.5 w-48 rounded" />
+                <div className="flex flex-col gap-2.5 flex-1">
+                  {(["w-3/5","w-4/5","w-2/3","w-3/4","w-1/2"] as const).map((w, j) => (
+                    <div key={j} className="flex items-center gap-2">
+                      <Skeleton className="h-3.5 w-3.5 rounded shrink-0" />
+                      <Skeleton className={`h-3.5 rounded ${w}`} />
+                    </div>
+                  ))}
+                </div>
+                <Skeleton className="h-10 w-full rounded-xl mt-2" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
