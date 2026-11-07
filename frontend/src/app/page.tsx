@@ -81,25 +81,7 @@ const LANDING_FAQS: FaqItem[] = [
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-background font-sans selection:bg-[#FF5A1F]/15 selection:text-[#FF5A1F]">
-      <a
-        href="https://www.sideprojectors.com/project/98065/patchflow"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        <Image
-          src="https://www.sideprojectors.com/img/badges/badge_2_red.png"
-          alt="PatchFlow is for sale on SideProjectors"
-          width={120}
-          height={40}
-          priority={false}
-          style={{
-            position: "fixed",
-            zIndex: 1000,
-            top: "-5px",
-            right: "20px",
-          }}
-        />
-      </a>
+      
       <Navbar variant="landing" />
 
       <main className="flex-1">
