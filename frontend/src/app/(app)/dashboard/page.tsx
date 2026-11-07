@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/api-config";
 import { authFetch } from "@/lib/auth-fetch";
 import { appleSprings } from "@/lib/springs";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -273,7 +274,28 @@ export default function DashboardPage() {
 
       {/* ── Top Metric Cards ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Card 1: Monitored Sites */}
+        {loading ? (
+          // ── Skeleton metric cards ─────────────────────────────────────────
+          Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] flex flex-col justify-between gap-3"
+            >
+              {/* Icon + badge row */}
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+              {/* Number + label */}
+              <div className="flex flex-col gap-2">
+                <Skeleton className="h-8 w-16 rounded-lg" />
+                <Skeleton className="h-3.5 w-28 rounded" />
+              </div>
+            </div>
+          ))
+        ) : (
+          // ── Real metric cards ─────────────────────────────────────────────
+          <>
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -296,7 +318,6 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* Card 2: Incident PRs */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -319,7 +340,6 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* Card 3: Chaos Tests & Fixes */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -342,7 +362,6 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* Card 4: Global Resilience Score */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -364,53 +383,123 @@ export default function DashboardPage() {
             <span className="text-[13px] text-text-secondary font-medium">Resilience Index</span>
           </div>
         </motion.div>
+          </>
+        )}
       </div>
 
       {/* ── Segmented Navigation Tabs ───────────────────────────────────────── */}
       <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.04] dark:border-white/[0.06] mb-6 w-fit">
-        {[
-          { id: "overview", label: "Unified View", icon: Layers },
-          { id: "incidents", label: `Incidents (${incidents.length})`, icon: AlertTriangle },
-          { id: "sessions", label: `Chaos Scans (${sessions.length})`, icon: Activity },
-          { id: "sites", label: `Sites (${sites.length})`, icon: Globe },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={cn(
-                "relative flex items-center gap-2 px-3.5 py-1.5 rounded-[8px] text-[13px] font-semibold transition-colors apple-press-subtle cursor-pointer",
-                active
-                  ? "text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {active && (
-                <motion.div
-                  layoutId="active-dashboard-tab"
-                  transition={appleSprings.snappy}
-                  className="absolute inset-0 rounded-[8px] bg-white dark:bg-[#1E1E1C] shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_1px_rgba(0,0,0,0.04)] -z-1"
-                />
-              )}
-              <Icon className="h-3.5 w-3.5" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+        {loading ? (
+          // Skeleton tabs
+          Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-28 rounded-[8px]" />
+          ))
+        ) : (
+          [
+            { id: "overview", label: "Unified View", icon: Layers },
+            { id: "incidents", label: `Incidents (${incidents.length})`, icon: AlertTriangle },
+            { id: "sessions", label: `Chaos Scans (${sessions.length})`, icon: Activity },
+            { id: "sites", label: `Sites (${sites.length})`, icon: Globe },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={cn(
+                  "relative flex items-center gap-2 px-3.5 py-1.5 rounded-[8px] text-[13px] font-semibold transition-colors apple-press-subtle cursor-pointer",
+                  active
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {active && (
+                  <motion.div
+                    layoutId="active-dashboard-tab"
+                    transition={appleSprings.snappy}
+                    className="absolute inset-0 rounded-[8px] bg-white dark:bg-[#1E1E1C] shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_1px_rgba(0,0,0,0.04)] -z-1"
+                  />
+                )}
+                <Icon className="h-3.5 w-3.5" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })
+        )}
       </div>
 
       {/* ── Tab Panels ──────────────────────────────────────────────────────── */}
       {loading ? (
-        <div className="flex flex-col gap-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-6">
-              <div className="h-5 w-48 bg-black/[0.05] dark:bg-white/[0.05] animate-pulse rounded-md mb-3" />
-              <div className="h-4 w-72 bg-black/[0.05] dark:bg-white/[0.05] animate-pulse rounded-md mb-4" />
-              <div className="h-8 w-full bg-black/[0.05] dark:bg-white/[0.05] animate-pulse rounded-md" />
+        // ── Skeleton tab content — mirrors the real overview layout ──────────
+        <div className="flex flex-col gap-8">
+          {/* Sites section skeleton */}
+          <div className="flex flex-col gap-3.5">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-40 rounded-lg" />
+              <Skeleton className="h-4 w-20 rounded" />
             </div>
-          ))}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-4.5 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-28 rounded" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-3 w-36 rounded" />
+                  <div className="flex items-center justify-between pt-1 border-t border-black/[0.04] dark:border-white/[0.04]">
+                    <Skeleton className="h-3 w-12 rounded" />
+                    <Skeleton className="h-3 w-16 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Incidents section skeleton */}
+          <div className="flex flex-col gap-3.5">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-52 rounded-lg" />
+              <Skeleton className="h-4 w-24 rounded" />
+            </div>
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-4.5 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex-1 flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-48 rounded" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </div>
+                  <Skeleton className="h-3 w-56 rounded" />
+                </div>
+                <Skeleton className="h-8 w-24 rounded-lg" />
+              </div>
+            ))}
+          </div>
+
+          {/* Chaos sessions section skeleton */}
+          <div className="flex flex-col gap-3.5">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-36 rounded-lg" />
+              <Skeleton className="h-4 w-16 rounded" />
+            </div>
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="bg-card border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-4.5 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-32 rounded" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-3 w-20 rounded" />
+                </div>
+                <Skeleton className="h-3 w-40 rounded" />
+                <div className="flex items-center gap-6">
+                  <Skeleton className="h-3 w-16 rounded" />
+                  <Skeleton className="h-3 w-16 rounded" />
+                  <Skeleton className="h-3 w-16 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
         <div>
