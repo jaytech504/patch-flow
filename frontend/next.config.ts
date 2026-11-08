@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
           // Permissions: restrict camera/mic/geolocation
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            value: "geolocation=()",
           },
           // HSTS: 1 year, include subdomains (only active over HTTPS; ignored locally)
           {
