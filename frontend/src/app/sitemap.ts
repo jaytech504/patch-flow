@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/seo";
 
+export const revalidate = 86400; // Cache and revalidate once every 24 hours
+
 /**
  * sitemap.xml — public, indexable routes only.
  *
