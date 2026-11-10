@@ -1,0 +1,80 @@
+# PatchFlow — Autonomous API Reliability & Self-Healing Platform
+# https://patchflow.cloud
+#
+# This file helps AI assistants, answer engines, and LLM-powered search
+# understand PatchFlow's purpose, key pages, and documentation.
+
+## What PatchFlow does
+
+PatchFlow is an autonomous dual-engine API reliability platform for backend developers:
+
+**Engine 1 — Chaos Testing (Proactive):**
+Stress-tests backend APIs before deployment by auto-discovering endpoints from
+OpenAPI specs, Postman collections, or repository source code, then injecting
+18+ synthetic failure modes (network latency, database disconnects, malformed
+payloads, 503 responses, etc.). Generates a 0–100 reliability score and opens
+compiler-verified GitHub Draft Pull Requests with resilience fixes.
+
+**Engine 2 — Production Incident Auto-Patching (Reactive):**
+A lightweight SDK (Node.js and Python) captures unhandled production exceptions.
+When the same error occurs at the same location 3 or more times, PatchFlow
+triggers an AI-powered fix pipeline: it clones the repository, locates the
+route handler, generates an AST-compliant error-handling patch, verifies it
+compiles cleanly, and opens a Draft Pull Request for developer review.
+
+Supported frameworks: FastAPI, Django/DRF, Express.js, Spring Boot, Flask.
+
+## Key facts
+
+- Founded: 2026
+- Website: https://patchflow.cloud
+- Status: Live (hosted on Render, PostgreSQL on Aiven)
+- Auth: GitHub OAuth only
+- Pricing: Free (Hobby), $14/mo (Developer Pro), $42/mo (Team & Business)
+- SDK languages: JavaScript/TypeScript (Node.js, Next.js, Edge), Python
+- Fix pipeline: AI model → AST patch → build verification → GitHub Draft PR
+- Pull requests are ALWAYS drafts — nothing merges automatically
+- Blocklist: auth, billing, payment, credential, and migration files are
+  never auto-patched
+
+## Important pages
+
+Homepage: https://patchflow.cloud
+SDK Documentation: https://patchflow.cloud/docs
+Live Demo (no login): https://patchflow.cloud/demo
+Pricing: https://patchflow.cloud/pricing
+Privacy Policy: https://patchflow.cloud/privacy
+Terms of Service: https://patchflow.cloud/terms
+Developer Console (login required): https://patchflow.cloud/login
+
+## SDK quick start
+
+**Node.js:**
+```js
+// patchflow.js — download from https://patchflow.cloud/sdk/patchflow.js
+const patchflow = require('./patchflow');
+patchflow.init({ apiKey: process.env.PATCHFLOW_API_KEY });
+// Express: app.use(patchflow.expressMiddleware()); after all routes
+```
+
+**Python (FastAPI):**
+```python
+# patchflow.py — download from https://patchflow.cloud/sdk/patchflow.py
+import patchflow
+patchflow.init(api_key=os.environ["PATCHFLOW_API_KEY"])
+```
+
+API ingest endpoint: https://api.patchflow.cloud/api/sdk/errors
+SDK documentation: https://patchflow.cloud/docs
+
+## What the SDK sends
+
+- Error type and message (truncated, PII-redacted server-side)
+- Stack frames (file, line, function — no request bodies, no cookies, no headers)
+- Endpoint path, HTTP method, status code
+- Framework name and environment tag
+
+## Contact
+
+Support: support.patchflow@gmail.com
+GitHub: https://github.com/jaytech504/patch-flow

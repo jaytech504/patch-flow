@@ -30,10 +30,14 @@ import {
 import { TerminalAnimation } from "@/components/terminal-animation";
 import { FaqSection, type FaqItem } from "@/components/faq-section";
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  alternates: { canonical: "/" },
-};
+export const metadata: Metadata = pageMetadata({
+  title: "Self-Healing APIs — Chaos Testing & Auto-Fix PRs",
+  description:
+    "PatchFlow injects 18+ failure modes into your APIs, monitors production crashes, and opens compiler-verified GitHub PRs automatically. Free to start.",
+  path: "/",
+});
 
 const LANDING_FAQS: FaqItem[] = [
   {

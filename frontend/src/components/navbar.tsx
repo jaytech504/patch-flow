@@ -57,16 +57,22 @@ export default function Navbar({ variant = "landing" }: NavbarProps) {
               Features
             </Link>
             <Link
-              href="#how-it-works"
+              href="/docs"
               className="px-3.5 py-1.5 rounded-full text-[13px] font-medium text-foreground/70 hover:text-foreground hover:bg-white/60 dark:hover:bg-white/10 transition-all apple-press-subtle"
             >
-              How it works
+              Docs
             </Link>
             <Link
               href="/pricing"
               className="px-3.5 py-1.5 rounded-full text-[13px] font-medium text-foreground/70 hover:text-foreground hover:bg-white/60 dark:hover:bg-white/10 transition-all apple-press-subtle"
             >
               Pricing
+            </Link>
+            <Link
+              href="/demo"
+              className="px-3.5 py-1.5 rounded-full text-[13px] font-medium text-foreground/70 hover:text-foreground hover:bg-white/60 dark:hover:bg-white/10 transition-all apple-press-subtle"
+            >
+              Demo
             </Link>
           </nav>
         )}
