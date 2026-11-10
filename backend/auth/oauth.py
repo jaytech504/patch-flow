@@ -26,8 +26,8 @@ OAUTH_SCOPES = "repo read:user user:email"
 def get_github_login_url(state: str = "") -> str:
     """Build the URL to redirect the user to GitHub for authorization."""
     # redirect_uri must exactly match what is registered in the GitHub OAuth app.
-    # In production this must be https://patchflow.cloud/auth/callback.
-    # Set FRONTEND_URL=https://patchflow.cloud in your Render backend env vars.
+    # In production this must be https://www.patchflow.cloud/auth/callback.
+    # Set FRONTEND_URL=https://www.patchflow.cloud in your Render backend env vars.
     redirect_uri = f"{settings.frontend_url.rstrip('/')}/auth/callback"
     params = {
         "client_id": settings.github_client_id,

@@ -14,7 +14,8 @@ from backend.api import sdk as sdk_api
 settings = get_settings()
 
 # ── Allowed CORS origins ───────────────────────────────────────────────────────
-# Primary origin: FRONTEND_URL env var (must be https://patchflow.cloud in prod).
+# Primary origin: FRONTEND_URL env var (must be https://www.patchflow.cloud in prod,
+# since Render redirects the apex to www — set it to the www host).
 # Extra origins: comma-separated CORS_ORIGINS env var for staging/preview URLs.
 # Localhost variants are always allowed so local dev works without env changes.
 _frontend_url = settings.frontend_url.rstrip("/")

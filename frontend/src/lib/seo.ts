@@ -3,13 +3,14 @@ import type { Metadata } from "next";
 /**
  * Canonical production origin for PatchFlow.
  *
- * Override at build/deploy time with the NEXT_PUBLIC_SITE_URL env var (set it
- * to the final custom domain, e.g. https://patchflow.cloud).
+ * Render redirects the apex (patchflow.cloud) to www.patchflow.cloud, so
+ * www is the canonical host. All sitemap URLs, canonical tags, Open Graph
+ * urls, and JSON-LD must use this value.
  *
- * Used for metadataBase, sitemap.xml, robots.txt, canonical URLs and Open
- * Graph URLs so they all share one source of truth.
+ * Override at build/deploy time with the NEXT_PUBLIC_SITE_URL env var.
+ * Set it to https://www.patchflow.cloud on the Render frontend service.
  */
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://patchflow.cloud").replace(/\/+$/, "");
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.patchflow.cloud").replace(/\/+$/, "");
 
 export const SITE_NAME = "PatchFlow";
 export const SITE_TAGLINE = "API Reliability Testing & Auto-Fix";

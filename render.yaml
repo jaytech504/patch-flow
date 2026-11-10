@@ -8,11 +8,11 @@
 # documentation but their values are never committed.
 #
 # After setting up:
-# 1. Set the custom domain patchflow.cloud on the frontend service.
+# 1. Set the custom domain www.patchflow.cloud on the frontend service (Render redirects apex → www).
 # 2. Set the custom domain api.patchflow.cloud on the backend service.
-# 3. Update your GitHub OAuth App callback URL to https://patchflow.cloud/auth/callback
+# 3. Update your GitHub OAuth App callback URL to https://www.patchflow.cloud/auth/callback
 # 4. Set NEXT_PUBLIC_API_URL=https://api.patchflow.cloud on the frontend.
-# 5. Set FRONTEND_URL=https://patchflow.cloud on the backend.
+# 5. Set FRONTEND_URL=https://www.patchflow.cloud on the backend.
 
 services:
   # ── Frontend (Next.js) ────────────────────────────────────────────────────
@@ -31,10 +31,10 @@ services:
       - key: NEXT_PUBLIC_API_URL
         value: https://api.patchflow.cloud
       - key: NEXT_PUBLIC_SITE_URL
-        value: https://patchflow.cloud
+        value: https://www.patchflow.cloud
       # Optional — set to enable Plausible analytics
       - key: NEXT_PUBLIC_PLAUSIBLE_DOMAIN
-        value: patchflow.cloud
+        value: www.patchflow.cloud
 
   # ── Backend (FastAPI) ─────────────────────────────────────────────────────
   - type: web
@@ -50,7 +50,7 @@ services:
       - key: APP_ENV
         value: production
       - key: FRONTEND_URL
-        value: https://patchflow.cloud
+        value: https://www.patchflow.cloud
       # ── Secrets: set these manually in the Render dashboard ──────────────
       - key: DATABASE_URL
         sync: false   # Aiven PostgreSQL connection string (sslmode=require)

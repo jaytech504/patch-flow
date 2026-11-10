@@ -61,5 +61,5 @@ export function plausibleScriptSrc(): string | null {
 
 /** The domain attribute passed to the Plausible script tag. */
 export function plausibleDomain(): string {
-  return process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN || "patchflow.cloud";
+  return process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN || "www.patchflow.cloud";
 }

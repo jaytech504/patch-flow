@@ -27,8 +27,8 @@ It has two modes:
 
 It's free to start (1 site, 3 chaos scans/month). Pro is $14/mo.
 
-Live demo (no login): https://patchflow.cloud/demo
-SDK docs: https://patchflow.cloud/docs
+Live demo (no login): https://www.patchflow.cloud/demo
+SDK docs: https://www.patchflow.cloud/docs
 
 Happy to answer questions about the fix pipeline or how I built the multi-agent
 review loop.
@@ -65,7 +65,7 @@ A few things that might be worth knowing:
 Would love feedback on the SDK setup experience and the chaos report output.
 What failure modes are you most worried about in your APIs?
 
-Demo: https://patchflow.cloud/demo
+Demo: https://www.patchflow.cloud/demo
 ```
 
 **Category:** Developer Tools
@@ -97,7 +97,7 @@ MRR goal: $500 by month 3
 Stack: Next.js, FastAPI, PostgreSQL, Render
 
 Happy to share more about the multi-agent architecture if anyone's curious.
-Live demo: https://patchflow.cloud/demo
+Live demo: https://www.patchflow.cloud/demo
 ```
 
 ---
@@ -119,7 +119,7 @@ compiler-verified Draft PR with the fix. You still review and merge.
 It also has a chaos testing mode if you want to find these before production does.
 
 Would love feedback from anyone who's dealt with this kind of alert fatigue.
-Demo (no login): https://patchflow.cloud/demo
+Demo (no login): https://www.patchflow.cloud/demo
 ```
 
 ### r/node / r/Python
@@ -148,15 +148,15 @@ Direct "just shipped" post is fine here. Use the Show HN draft above, shortened.
 10. CTA: Try the demo, link to SDK docs
 
 **Internal links:** /demo, /docs, /pricing
-**Backlink target:** patchflow.cloud
+**Backlink target:** www.patchflow.cloud
 
 ---
 
 ## GitHub README badges (for the SDK repo)
 
 ```markdown
-[![PatchFlow](https://img.shields.io/badge/PatchFlow-Self--Healing_APIs-FF5A1F?style=flat-square)](https://patchflow.cloud)
-[![npm](https://img.shields.io/badge/SDK-Node.js_%26_Python-24292e?style=flat-square&logo=github)](https://patchflow.cloud/docs)
+[![PatchFlow](https://img.shields.io/badge/PatchFlow-Self--Healing_APIs-FF5A1F?style=flat-square)](https://www.patchflow.cloud)
+[![npm](https://img.shields.io/badge/SDK-Node.js_%26_Python-24292e?style=flat-square&logo=github)](https://www.patchflow.cloud/docs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](https://github.com/jaytech504/patch-flow/blob/main/LICENSE)
 ```
 
@@ -170,8 +170,8 @@ PatchFlow Agent SDK for Node.js — captures unhandled exceptions and triggers
 automatic GitHub PR fixes when the same error occurs 3+ times. Zero-config
 setup for Express, Next.js, Hono, and NestJS.
 
-Documentation: https://patchflow.cloud/docs
-Dashboard: https://patchflow.cloud
+Documentation: https://www.patchflow.cloud/docs
+Dashboard: https://www.patchflow.cloud
 ```
 
 **PyPI (patchflow-sdk):**
@@ -180,8 +180,8 @@ PatchFlow Agent SDK for Python — captures unhandled exceptions in FastAPI, Fla
 Django, and Starlette, and triggers automatic GitHub PR fixes when the same error
 occurs 3+ times in production.
 
-Documentation: https://patchflow.cloud/docs
-Dashboard: https://patchflow.cloud
+Documentation: https://www.patchflow.cloud/docs
+Dashboard: https://www.patchflow.cloud
 ```
 
 ---
@@ -226,7 +226,7 @@ Dashboard: https://patchflow.cloud
 - [ ] Submit sitemap to Bing Webmaster Tools
 - [ ] Add `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` to Render frontend env
 - [ ] Add `NEXT_PUBLIC_BING_SITE_VERIFICATION` to Render frontend env
-- [ ] Update GitHub repo description and README to link to patchflow.cloud
+- [ ] Update GitHub repo description and README to link to www.patchflow.cloud
 - [ ] Update Devpost and dev.to profile links
 
 ### Week 2 — Launch

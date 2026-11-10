@@ -78,7 +78,8 @@ late 2026. Potential confusion risks:
   pairing with a descriptor: "PatchFlow — Self-Healing APIs" rather than
   standalone.
 - The `.onrender.com` subdomain was previously indexed — ensure canonical URLs
-  all use `patchflow.cloud`.
+  all use `https://www.patchflow.cloud` (the www host is canonical; Render
+  redirects the apex to www).
 
 **Recommendation:** The homepage `<title>` and H1 should always pair the brand
 with the differentiating phrase:

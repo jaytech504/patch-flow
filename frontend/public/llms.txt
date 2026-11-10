@@ -1,8 +1,9 @@
 # PatchFlow — Autonomous API Reliability & Self-Healing Platform
-# https://patchflow.cloud
+# https://www.patchflow.cloud
 #
 # This file helps AI assistants, answer engines, and LLM-powered search
 # understand PatchFlow's purpose, key pages, and documentation.
+# The canonical host is https://www.patchflow.cloud (apex redirects to www).
 
 ## What PatchFlow does
 
@@ -26,8 +27,7 @@ Supported frameworks: FastAPI, Django/DRF, Express.js, Spring Boot, Flask.
 
 ## Key facts
 
-- Founded: 2026
-- Website: https://patchflow.cloud
+- Website: https://www.patchflow.cloud
 - Status: Live (hosted on Render, PostgreSQL on Aiven)
 - Auth: GitHub OAuth only
 - Pricing: Free (Hobby), $14/mo (Developer Pro), $42/mo (Team & Business)
@@ -39,19 +39,19 @@ Supported frameworks: FastAPI, Django/DRF, Express.js, Spring Boot, Flask.
 
 ## Important pages
 
-Homepage: https://patchflow.cloud
-SDK Documentation: https://patchflow.cloud/docs
-Live Demo (no login): https://patchflow.cloud/demo
-Pricing: https://patchflow.cloud/pricing
-Privacy Policy: https://patchflow.cloud/privacy
-Terms of Service: https://patchflow.cloud/terms
-Developer Console (login required): https://patchflow.cloud/login
+Homepage:              https://www.patchflow.cloud
+SDK Documentation:     https://www.patchflow.cloud/docs
+Live Demo (no login):  https://www.patchflow.cloud/demo
+Pricing:               https://www.patchflow.cloud/pricing
+Privacy Policy:        https://www.patchflow.cloud/privacy
+Terms of Service:      https://www.patchflow.cloud/terms
+Developer Console:     https://www.patchflow.cloud/login (login required)
 
 ## SDK quick start
 
 **Node.js:**
 ```js
-// patchflow.js — download from https://patchflow.cloud/sdk/patchflow.js
+// patchflow.js — download from https://www.patchflow.cloud/sdk/patchflow.js
 const patchflow = require('./patchflow');
 patchflow.init({ apiKey: process.env.PATCHFLOW_API_KEY });
 // Express: app.use(patchflow.expressMiddleware()); after all routes
@@ -59,13 +59,13 @@ patchflow.init({ apiKey: process.env.PATCHFLOW_API_KEY });
 
 **Python (FastAPI):**
 ```python
-# patchflow.py — download from https://patchflow.cloud/sdk/patchflow.py
+# patchflow.py — download from https://www.patchflow.cloud/sdk/patchflow.py
 import patchflow
 patchflow.init(api_key=os.environ["PATCHFLOW_API_KEY"])
 ```
 
 API ingest endpoint: https://api.patchflow.cloud/api/sdk/errors
-SDK documentation: https://patchflow.cloud/docs
+SDK documentation:   https://www.patchflow.cloud/docs
 
 ## What the SDK sends
 
@@ -77,4 +77,4 @@ SDK documentation: https://patchflow.cloud/docs
 ## Contact
 
 Support: support.patchflow@gmail.com
-GitHub: https://github.com/jaytech504/patch-flow
+GitHub:  https://github.com/jaytech504/patch-flow
