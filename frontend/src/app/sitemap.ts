@@ -19,9 +19,33 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // ── Core marketing pages ─────────────────────────────────────────────────
     {
       url: SITE_URL,
-      lastModified: new Date("2026-11-04"), // bump when homepage copy changes
+      lastModified: new Date("2026-11-12"), // bump when homepage copy changes
       changeFrequency: "weekly",
       priority: 1,
+    },
+    {
+      url: `${SITE_URL}/api-testing`,
+      lastModified: new Date("2026-11-12"),
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
+    {
+      url: `${SITE_URL}/chaos-testing`,
+      lastModified: new Date("2026-11-12"),
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
+    {
+      url: `${SITE_URL}/api-monitoring`,
+      lastModified: new Date("2026-11-12"),
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
+    {
+      url: `${SITE_URL}/ai-bug-fixing`,
+      lastModified: new Date("2026-11-12"),
+      changeFrequency: "monthly",
+      priority: 0.9,
     },
     {
       url: `${SITE_URL}/pricing`,

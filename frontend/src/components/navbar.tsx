@@ -51,7 +51,7 @@ export default function Navbar({ variant = "landing" }: NavbarProps) {
         {variant === "landing" && (
           <nav className="hidden md:flex items-center gap-1.5 p-1 rounded-full bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.04] dark:border-white/[0.06]">
             <Link
-              href="#features"
+              href="/#features"
               className="px-3.5 py-1.5 rounded-full text-[13px] font-medium text-foreground/70 hover:text-foreground hover:bg-white/60 dark:hover:bg-white/10 transition-all apple-press-subtle"
             >
               Features

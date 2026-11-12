@@ -30,6 +30,11 @@ interface PageMetadataOptions {
   noindex?: boolean;
   /** Override the OG/Twitter share image path (defaults to the root share image). */
   ogImage?: string;
+  /**
+   * When true, `title` is used as the full document title (skips the
+   * "%s — PatchFlow" template). Use for the homepage brand title.
+   */
+  absoluteTitle?: boolean;
 }
 
 /**
@@ -47,18 +52,30 @@ export function pageMetadata({
   path,
   noindex,
   ogImage = DEFAULT_OG_IMAGE,
+  absoluteTitle,
 }: PageMetadataOptions): Metadata {
+  const canonicalUrl = path === "/" ? SITE_URL : `${SITE_URL}${path}`;
   const meta: Metadata = {
     description,
     alternates: { canonical: path },
+    robots: noindex ? { index: false, follow: true } : { index: true, follow: true },
     openGraph: {
-      url: path === "/" ? SITE_URL : `${SITE_URL}${path}`,
+      url: canonicalUrl,
+      description,
       images: [
         { url: ogImage, width: 1200, height: 630, alt: OG_IMAGE_ALT, type: "image/png" },
       ],
     },
+    twitter: {
+      card: "summary_large_image",
+      description,
+    },
   };
-  if (title) meta.title = title;
-  if (noindex) meta.robots = { index: false, follow: true };
+  if (title) {
+    const resolvedTitle = absoluteTitle ? title : `${title} — ${SITE_NAME}`;
+    meta.title = absoluteTitle ? { absolute: title } : title;
+    meta.openGraph = { ...meta.openGraph, title: resolvedTitle };
+    meta.twitter = { ...meta.twitter, title: resolvedTitle };
+  }
   return meta;
 }

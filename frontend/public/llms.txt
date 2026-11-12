@@ -40,6 +40,10 @@ Supported frameworks: FastAPI, Django/DRF, Express.js, Spring Boot, Flask.
 ## Important pages
 
 Homepage:              https://www.patchflow.cloud
+API Testing:           https://www.patchflow.cloud/api-testing
+Chaos Testing:         https://www.patchflow.cloud/chaos-testing
+API Monitoring:        https://www.patchflow.cloud/api-monitoring
+AI Bug Fixing:         https://www.patchflow.cloud/ai-bug-fixing
 SDK Documentation:     https://www.patchflow.cloud/docs
 Live Demo (no login):  https://www.patchflow.cloud/demo
 Pricing:               https://www.patchflow.cloud/pricing

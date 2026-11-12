@@ -63,6 +63,26 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/api-testing" className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block">
+                  API Testing
+                </Link>
+              </li>
+              <li>
+                <Link href="/chaos-testing" className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block">
+                  Chaos Testing
+                </Link>
+              </li>
+              <li>
+                <Link href="/api-monitoring" className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block">
+                  API Monitoring
+                </Link>
+              </li>
+              <li>
+                <Link href="/ai-bug-fixing" className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block">
+                  AI Bug Fixing
+                </Link>
+              </li>
+              <li>
                 <Link href="/login" className="text-[13px] text-muted-foreground hover:text-foreground transition-colors apple-press-subtle inline-block">
                   Developer Console
                 </Link>

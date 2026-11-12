@@ -33,10 +33,11 @@ import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = pageMetadata({
-  title: "Self-Healing APIs — Chaos Testing & Auto-Fix PRs",
+  title: "PatchFlow – API Testing, Monitoring & AI-Powered Bug Fixes",
   description:
-    "PatchFlow injects 18+ failure modes into your APIs, monitors production crashes, and opens compiler-verified GitHub PRs automatically. Free to start.",
+    "Test APIs with 18+ chaos failure modes, detect production crashes, and generate verified GitHub pull requests with AI-powered fixes. Start free with PatchFlow.",
   path: "/",
+  absoluteTitle: true,
 });
 
 const LANDING_FAQS: FaqItem[] = [
@@ -106,7 +107,7 @@ export default function Home() {
               </h1>
 
               <p className="apple-body text-text-secondary max-w-xl text-[16px] sm:text-[17px] leading-relaxed">
-                Autonomous reliability for backend APIs. Proactively stress-test endpoints with 18+ chaos failure modes and monitor production crashes in real-time with compiler-verified GitHub PR fixes.
+                Automated API testing, reliability monitoring, and production error detection in one platform. Stress-test endpoints with 18+ chaos failure modes, catch live crashes with the SDK, and get compiler-verified GitHub PRs with AI-powered fixes.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-3.5 pt-2">

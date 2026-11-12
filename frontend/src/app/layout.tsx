@@ -8,11 +8,11 @@ import { SITE_URL, SITE_NAME } from "@/lib/seo";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "PatchFlow — API Reliability Testing & Auto-Fix",
+    default: "PatchFlow – API Testing, Monitoring & AI-Powered Bug Fixes",
     template: "%s — PatchFlow",
   },
   description:
-    "PatchFlow stress-tests APIs with chaos failure modes, monitors production crashes, and opens compiler-verified GitHub PRs with production-ready fixes.",
+    "Test APIs with 18+ chaos failure modes, detect production crashes, and generate verified GitHub pull requests with AI-powered fixes. Start free with PatchFlow.",
   // Google Search Console verification — set NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION in Render
   ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION && {
     verification: {
